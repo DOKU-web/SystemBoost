@@ -235,7 +235,7 @@ final class Engine {
         let meter = FrameMeter()
         meter.reset(now())
         var wasActive = false
-        var held: Capture.Frame?  // waits for the output clock (Pacer.wantsSource)
+        var held: WindowCapture.Frame?  // waits for the output clock (Pacer.wantsSource)
         Out.emit(["type": "ready", "capture": "screencapturekit", "genGpu": fg.device.name,
                   "refreshHz": refreshHz, "capture_px": [layout.capW, layout.capH],
                   "output_px": [layout.outW, layout.outH], "crossAdapterCopy": false])
