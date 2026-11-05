@@ -40,8 +40,19 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y glslang-tools spirv-cross mesa-vulkan-drivers libvulkan-dev g++-mingw-w64-x86-64-posix python3-numpy python3-scipy python3-pil
       - run: native/framegen/tests/run_all.sh
+      # The generated text differs between tool versions, so this uses the Vulkan SDK that
+      # made the committed file. Update the version here when regenerating with a newer one.
       - name: Metal shaders are up to date with the HLSL
-        run: tools/gen_metal.sh && git diff --exit-code native/framegen-mac/Sources/SBFrameGenMac/GeneratedShaders.swift
+        run: |
+          mkdir -p "$RUNNER_TEMP/vk"
+          curl -sSfL https://sdk.lunarg.com/sdk/download/1.4.363.0/linux/vulkansdk-linux-x86_64-1.4.363.0.tar.xz \
+            | tar -xJ -C "$RUNNER_TEMP/vk" --strip-components=2 --wildcards '*/x86_64/bin/*' '*/x86_64/lib/*'
+          export PATH="$RUNNER_TEMP/vk/bin:$PATH" LD_LIBRARY_PATH="$RUNNER_TEMP/vk/lib"
+          tools/gen_metal.sh
+          git diff --exit-code native/framegen-mac/Sources/SBFrameGenMac/GeneratedShaders.swift
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: GeneratedShaders, path: native/framegen-mac/Sources/SBFrameGenMac/GeneratedShaders.swift }
 
   windows:
     runs-on: windows-2022
@@ -97,6 +108,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '8.0.x' }
+      - name: Generated Metal shaders compile
+        run: python3 tools/check_metal.py
       - name: Refresh Wine runtime manifest (URLs + SHA-256 from the GitHub API)
         env: { GH_TOKEN: '${{ github.token }}' }
         run: tools/update_wine_manifest.sh

@@ -62,46 +62,48 @@ kernel void interpolate_main(constant FgConstants& _37 [[buffer(0)]], const devi
             break;
         }
         float2 _929 = float2(_37.procSize) / float2(_37.capSize);
-        uint2 _940 = uint2(FieldF.get_width(), FieldF.get_height());
+        uint2 _917 = uint2(FieldF.get_width(), FieldF.get_height());
         float2 _976 = float2(_37.procSize) / float2(_37.capSize);
-        uint2 _987 = uint2(FieldB.get_width(), FieldB.get_height());
-        float2 _1302;
-        float2 _1303;
-        _1303 = FieldB.sample(LinearClamp, ((((_614 + float2(0.5)) * _976) * float2(0.125)) / float2(float(_987.x), float(_987.y))), level(0.0)).xy / _976;
-        _1302 = FieldF.sample(LinearClamp, ((((_614 + float2(0.5)) * _929) * float2(0.125)) / float2(float(_940.x), float(_940.y))), level(0.0)).xy / _929;
-        for (uint _1301 = 0u; _1301 < _37.fpIters; )
+        uint2 _964 = uint2(FieldB.get_width(), FieldB.get_height());
+        float2 _1272;
+        float2 _1273;
+        _1273 = FieldB.sample(LinearClamp, ((((_614 + float2(0.5)) * _976) * float2(0.125)) / float2(float(_964.x), float(_964.y))), level(0.0)).xy / _976;
+        _1272 = FieldF.sample(LinearClamp, ((((_614 + float2(0.5)) * _929) * float2(0.125)) / float2(float(_917.x), float(_917.y))), level(0.0)).xy / _929;
+        float2 _1055;
+        float2 _1102;
+        for (uint _1271 = 0u; _1271 < _37.fpIters; _1273 = _1102, _1272 = _1055, _1271++)
         {
             float2 _1023 = float2(_37.procSize) / float2(_37.capSize);
-            uint2 _1034 = uint2(FieldF.get_width(), FieldF.get_height());
+            uint2 _1011 = uint2(FieldF.get_width(), FieldF.get_height());
+            _1055 = FieldF.sample(LinearClamp, (((((_614 - (_1272 * _37.t)) + float2(0.5)) * _1023) * float2(0.125)) / float2(float(_1011.x), float(_1011.y))), level(0.0)).xy / _1023;
             float2 _1070 = float2(_37.procSize) / float2(_37.capSize);
-            uint2 _1081 = uint2(FieldB.get_width(), FieldB.get_height());
-            _1303 = FieldB.sample(LinearClamp, (((((_614 - (_1303 * (1.0 - _37.t))) + float2(0.5)) * _1070) * float2(0.125)) / float2(float(_1081.x), float(_1081.y))), level(0.0)).xy / _1070;
-            _1302 = FieldF.sample(LinearClamp, (((((_614 - (_1302 * _37.t)) + float2(0.5)) * _1023) * float2(0.125)) / float2(float(_1034.x), float(_1034.y))), level(0.0)).xy / _1023;
-            _1301++;
-            continue;
+            uint2 _1058 = uint2(FieldB.get_width(), FieldB.get_height());
+            _1102 = FieldB.sample(LinearClamp, (((((_614 - (_1273 * (1.0 - _37.t))) + float2(0.5)) * _1070) * float2(0.125)) / float2(float(_1058.x), float(_1058.y))), level(0.0)).xy / _1070;
         }
-        float2 _726 = _614 - (_1302 * _37.t);
-        float2 _733 = _614 - (_1303 * (1.0 - _37.t));
+        float2 _726 = _614 - (_1272 * _37.t);
+        float2 _733 = _614 - (_1273 * (1.0 - _37.t));
+        float2 _572 = _726;
+        float2 _577 = _733;
         float2 _1191 = float2(_37.procSize) / float2(_37.capSize);
-        uint2 _1202 = uint2(FieldB.get_width(), FieldB.get_height());
+        uint2 _1179 = uint2(FieldB.get_width(), FieldB.get_height());
         float2 _1238 = float2(_37.procSize) / float2(_37.capSize);
-        uint2 _1249 = uint2(FieldF.get_width(), FieldF.get_height());
-        float _755 = length(_1302 + (FieldB.sample(LinearClamp, (((((_726 + _1302) + float2(0.5)) * _1191) * float2(0.125)) / float2(float(_1202.x), float(_1202.y))), level(0.0)).xy / _1191));
-        float _759 = length(_1303 + (FieldF.sample(LinearClamp, (((((_733 + _1303) + float2(0.5)) * _1238) * float2(0.125)) / float2(float(_1249.x), float(_1249.y))), level(0.0)).xy / _1238));
-        float _767 = _37.fbSigma + (_37.fbSigmaK * length(_1302));
-        float _775 = _37.fbSigma + (_37.fbSigmaK * length(_1303));
-        float _854 = ((1.0 - _37.t) * ((exp((-(_755 / _767)) * (_755 / _767)) * float((((_726.x >= 0.0) && (_726.y >= 0.0)) && (_726.x <= float(_37.capSize.x - 1u))) && (_726.y <= float(_37.capSize.y - 1u)))) * (1.0 - (StaticMap.sample(LinearClamp, ((_726 + float2(0.5)) / float2(_37.capSize)), level(0.0)).x * fast::min(length(_1302) * _37.t, 1.0))))) + (0.001000000047497451305389404296875 * (1.0 - _37.t));
-        float _862 = (_37.t * ((exp((-(_759 / _775)) * (_759 / _775)) * float((((_733.x >= 0.0) && (_733.y >= 0.0)) && (_733.x <= float(_37.capSize.x - 1u))) && (_733.y <= float(_37.capSize.y - 1u)))) * (1.0 - (StaticMap.sample(LinearClamp, ((_733 + float2(0.5)) / float2(_37.capSize)), level(0.0)).x * fast::min(length(_1303) * (1.0 - _37.t), 1.0))))) + (0.001000000047497451305389404296875 * _37.t);
-        float4 _1304;
+        uint2 _1226 = uint2(FieldF.get_width(), FieldF.get_height());
+        float _755 = length(_1272 + (FieldB.sample(LinearClamp, (((((_726 + _1272) + float2(0.5)) * _1191) * float2(0.125)) / float2(float(_1179.x), float(_1179.y))), level(0.0)).xy / _1191));
+        float _759 = length(_1273 + (FieldF.sample(LinearClamp, (((((_733 + _1273) + float2(0.5)) * _1238) * float2(0.125)) / float2(float(_1226.x), float(_1226.y))), level(0.0)).xy / _1238));
+        float _767 = _37.fbSigma + (_37.fbSigmaK * length(_1272));
+        float _775 = _37.fbSigma + (_37.fbSigmaK * length(_1273));
+        float _854 = ((1.0 - _37.t) * ((exp((-(_755 / _767)) * (_755 / _767)) * float((((_572.x >= 0.0) && (_572.y >= 0.0)) && (_572.x <= float(_37.capSize.x - 1u))) && (_572.y <= float(_37.capSize.y - 1u)))) * (1.0 - (StaticMap.sample(LinearClamp, ((_726 + float2(0.5)) / float2(_37.capSize)), level(0.0)).x * fast::min(length(_1272) * _37.t, 1.0))))) + (0.001000000047497451305389404296875 * (1.0 - _37.t));
+        float _862 = (_37.t * ((exp((-(_759 / _775)) * (_759 / _775)) * float((((_577.x >= 0.0) && (_577.y >= 0.0)) && (_577.x <= float(_37.capSize.x - 1u))) && (_577.y <= float(_37.capSize.y - 1u)))) * (1.0 - (StaticMap.sample(LinearClamp, ((_733 + float2(0.5)) / float2(_37.capSize)), level(0.0)).x * fast::min(length(_1273) * (1.0 - _37.t), 1.0))))) + (0.001000000047497451305389404296875 * _37.t);
+        float4 _1274;
         if (StaticMap.read(uint2(int3(int2(gl_GlobalInvocationID.xy), 0).xy), 0).x > 0.5)
         {
-            _1304 = mix(_630, _646, float4(_37.t));
+            _1274 = mix(_630, _646, float4(_37.t));
         }
         else
         {
-            _1304 = ((FrameA.sample(LinearClamp, ((_726 + float2(0.5)) / float2(_37.capSize)), level(0.0)) * _854) + (FrameB.sample(LinearClamp, ((_733 + float2(0.5)) / float2(_37.capSize)), level(0.0)) * _862)) / float4(_854 + _862);
+            _1274 = ((FrameA.sample(LinearClamp, ((_726 + float2(0.5)) / float2(_37.capSize)), level(0.0)) * _854) + (FrameB.sample(LinearClamp, ((_733 + float2(0.5)) / float2(_37.capSize)), level(0.0)) * _862)) / float4(_854 + _862);
         }
-        Out.write(fast::clamp(float4(_1304.xyz, 1.0), float4(0.0), float4(1.0)), uint2(gl_GlobalInvocationID.xy));
+        Out.write(fast::clamp(float4(_1274.xyz, 1.0), float4(0.0), float4(1.0)), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }
@@ -154,31 +156,28 @@ kernel void luma_down_main(constant FgConstants& _24 [[buffer(0)]], texture2d<fl
         }
         uint _184 = _24.capSize.x / _24.procSize.x;
         uint _189 = _24.capSize.y / _24.procSize.y;
-        uint _265;
-        float _266;
-        _266 = 0.0;
-        _265 = 0u;
-        float _269;
-        for (; _265 < _189; _266 = _269, _265++)
+        float _260;
+        _260 = 0.0;
+        float _263;
+        for (uint _259 = 0u; _259 < _189; _260 = _263, _259++)
         {
-            _269 = _266;
-            for (uint _267 = 0u; _267 < _184; )
+            _263 = _260;
+            float _239;
+            for (uint _261 = 0u; _261 < _184; _263 = _239, _261++)
             {
-                _269 += dot(Src.read(uint2(int3(int((gl_GlobalInvocationID.x * _184) + _267), int((gl_GlobalInvocationID.y * _189) + _265), 0).xy), 0).xyz, float3(0.2989999949932098388671875, 0.58700001239776611328125, 0.114000000059604644775390625));
-                _267++;
-                continue;
+                _239 = _263 + dot(Src.read(uint2(int3(int((gl_GlobalInvocationID.x * _184) + _261), int((gl_GlobalInvocationID.y * _189) + _259), 0).xy), 0).xyz, float3(0.2989999949932098388671875, 0.58700001239776611328125, 0.114000000059604644775390625));
             }
         }
-        Dst.write(float4(_266 / float(_184 * _189)), uint2(gl_GlobalInvocationID.xy));
+        Dst.write(float4(_260 / float(_184 * _189)), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }
 
 """#,
         "motion_median": #"""
+#pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -264,256 +263,688 @@ kernel void motion_median_main(constant FgConstants& _66 [[buffer(0)]], device S
 {
     do
     {
-        if ((gl_GlobalInvocationID.x >= _66.gridSize.x) || (gl_GlobalInvocationID.y >= _66.gridSize.y))
+        uint2 _446 = gl_GlobalInvocationID.xy;
+        if ((_446.x >= _66.gridSize.x) || (_446.y >= _66.gridSize.y))
         {
             break;
         }
-        int _1299;
-        _1299 = -1;
+        float2 _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(-1), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
         spvUnsafeArray<float, 9> _452;
+        _452[0] = _451.x;
         spvUnsafeArray<float, 9> _453;
-        int _1379;
-        for (int _1380 = 0; _1299 <= 1; _1299++, _1380 = _1379)
+        _453[0] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(0, -1), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[1] = _451.x;
+        _453[1] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(1, -1), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[2] = _451.x;
+        _453[2] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(-1, 0), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[3] = _451.x;
+        _453[3] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[4] = _451.x;
+        _453[4] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(1, 0), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[5] = _451.x;
+        _453[5] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(-1, 1), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[6] = _451.x;
+        _453[6] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(0, 1), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[7] = _451.x;
+        _453[7] = _451.y;
+        _451 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(1), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0).xy;
+        _452[8] = _451.x;
+        _453[8] = _451.y;
+        spvUnsafeArray<float, 9> _455 = _452;
+        for (int _1286 = 0; _1286 <= 4; _1286++)
         {
-            _1379 = _1380;
-            for (int _1377 = -1; _1377 <= 1; )
+            int _664 = _1286 + 1;
+            int _1352;
+            _1352 = _1286;
+            int _1379;
+            for (int _1350 = _664; _1350 < 9; _1352 = _1379, _1350++)
             {
-                float4 _527 = InField.read(uint2(int3(clamp(int2(gl_GlobalInvocationID.xy) + int2(_1377, _1299), int2(0), int2(_66.gridSize) - int2(1)), 0).xy), 0);
-                _452[_1379] = _527.x;
-                _453[_1379] = _527.y;
-                _1379++;
-                _1377++;
-                continue;
-            }
-        }
-        spvUnsafeArray<float, 9> _455;
-        _455 = _452;
-        for (int _1300 = 0; _1300 <= 4; _1300++)
-        {
-            int _664 = _1300 + 1;
-            int _1375;
-            _1375 = _1300;
-            int _1413;
-            for (int _1373 = _664; _1373 < 9; _1375 = _1413, _1373++)
-            {
-                _1413 = (_455[_1373] < _455[_1375]) ? _1373 : _1375;
-            }
-            float _686 = _455[_1300];
-            _455[_1300] = _455[_1375];
-            _455[_1375] = _686;
-        }
-        spvUnsafeArray<float, 9> _456;
-        _456 = _453;
-        for (int _1301 = 0; _1301 <= 4; _1301++)
-        {
-            int _714 = _1301 + 1;
-            int _1371;
-            _1371 = _1301;
-            int _1414;
-            for (int _1369 = _714; _1369 < 9; _1371 = _1414, _1369++)
-            {
-                _1414 = (_456[_1369] < _456[_1371]) ? _1369 : _1371;
-            }
-            float _736 = _456[_1301];
-            _456[_1301] = _456[_1371];
-            _456[_1371] = _736;
-        }
-        int2 _553 = int2(rint(float2(_455[4], _456[4])));
-        float _1303;
-        _1303 = 0.0;
-        float _1367;
-        for (uint _1302 = 0u; _1302 < 8u; _1303 = _1367, _1302++)
-        {
-            _1367 = _1303;
-            float _829;
-            for (uint _1363 = 0u; _1363 < 8u; _1367 = _829, _1363++)
-            {
-                int2 _782 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_1363, _1302)), (int2(_66.lvlSize) - int2(1)));
-                int2 _785 = _782 + _553;
-                float _1365;
-                if (any(_785 < int2(0)) || any(_785 >= int2(_66.lvlSize)))
+                if (_455[_1350] < _455[_1352])
                 {
-                    _1365 = 0.25;
+                    _1379 = _1350;
                 }
                 else
                 {
-                    _1365 = abs(SrcL.read(uint2(int3(_782, 0).xy), 0).x - DstL.read(uint2(int3(_785, 0).xy), 0).x);
+                    _1379 = _1352;
                 }
-                _829 = _1367 + _1365;
             }
+            float _686 = _455[_1286];
+            _455[_1286] = _455[_1352];
+            _455[_1352] = _686;
         }
-        float2 _558 = float2(_553);
-        float2 _1321;
-        float _1325;
+        spvUnsafeArray<float, 9> _456 = _453;
+        for (int _1287 = 0; _1287 <= 4; _1287++)
+        {
+            int _714 = _1287 + 1;
+            int _1348;
+            _1348 = _1287;
+            int _1377;
+            for (int _1346 = _714; _1346 < 9; _1348 = _1377, _1346++)
+            {
+                if (_456[_1346] < _456[_1348])
+                {
+                    _1377 = _1346;
+                }
+                else
+                {
+                    _1377 = _1348;
+                }
+            }
+            float _736 = _456[_1287];
+            _456[_1287] = _456[_1348];
+            _456[_1348] = _736;
+        }
+        int2 _553 = int2(rint(float2(_455[4], _456[4])));
+        float _1289;
+        _1289 = 0.0;
+        float _3776;
+        for (uint _1288 = 0u; _1288 < 8u; _1289 = _3776, _1288++)
+        {
+            int2 _782 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _785 = _782 + _553;
+            float _1342;
+            if (any(_785 < int2(0)) || any(_785 >= int2(_66.lvlSize)))
+            {
+                _1342 = 0.25;
+            }
+            else
+            {
+                _1342 = abs(SrcL.read(uint2(int3(_782, 0).xy), 0).x - DstL.read(uint2(int3(_785, 0).xy), 0).x);
+            }
+            int2 _3396 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _3397 = _3396 + _553;
+            float _3433;
+            if (any(_3397 < int2(0)) || any(_3397 >= int2(_66.lvlSize)))
+            {
+                _3433 = 0.25;
+            }
+            else
+            {
+                _3433 = abs(SrcL.read(uint2(int3(_3396, 0).xy), 0).x - DstL.read(uint2(int3(_3397, 0).xy), 0).x);
+            }
+            int2 _3453 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _3454 = _3453 + _553;
+            float _3490;
+            if (any(_3454 < int2(0)) || any(_3454 >= int2(_66.lvlSize)))
+            {
+                _3490 = 0.25;
+            }
+            else
+            {
+                _3490 = abs(SrcL.read(uint2(int3(_3453, 0).xy), 0).x - DstL.read(uint2(int3(_3454, 0).xy), 0).x);
+            }
+            int2 _3510 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _3511 = _3510 + _553;
+            float _3547;
+            if (any(_3511 < int2(0)) || any(_3511 >= int2(_66.lvlSize)))
+            {
+                _3547 = 0.25;
+            }
+            else
+            {
+                _3547 = abs(SrcL.read(uint2(int3(_3510, 0).xy), 0).x - DstL.read(uint2(int3(_3511, 0).xy), 0).x);
+            }
+            int2 _3567 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _3568 = _3567 + _553;
+            float _3604;
+            if (any(_3568 < int2(0)) || any(_3568 >= int2(_66.lvlSize)))
+            {
+                _3604 = 0.25;
+            }
+            else
+            {
+                _3604 = abs(SrcL.read(uint2(int3(_3567, 0).xy), 0).x - DstL.read(uint2(int3(_3568, 0).xy), 0).x);
+            }
+            int2 _3624 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _3625 = _3624 + _553;
+            float _3661;
+            if (any(_3625 < int2(0)) || any(_3625 >= int2(_66.lvlSize)))
+            {
+                _3661 = 0.25;
+            }
+            else
+            {
+                _3661 = abs(SrcL.read(uint2(int3(_3624, 0).xy), 0).x - DstL.read(uint2(int3(_3625, 0).xy), 0).x);
+            }
+            int2 _3681 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _3682 = _3681 + _553;
+            float _3718;
+            if (any(_3682 < int2(0)) || any(_3682 >= int2(_66.lvlSize)))
+            {
+                _3718 = 0.25;
+            }
+            else
+            {
+                _3718 = abs(SrcL.read(uint2(int3(_3681, 0).xy), 0).x - DstL.read(uint2(int3(_3682, 0).xy), 0).x);
+            }
+            int2 _3738 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _1288)), (int2(_66.lvlSize) - int2(1)));
+            int2 _3739 = _3738 + _553;
+            float _3775;
+            if (any(_3739 < int2(0)) || any(_3739 >= int2(_66.lvlSize)))
+            {
+                _3775 = 0.25;
+            }
+            else
+            {
+                _3775 = abs(SrcL.read(uint2(int3(_3738, 0).xy), 0).x - DstL.read(uint2(int3(_3739, 0).xy), 0).x);
+            }
+            _3776 = (((((((_1289 + _1342) + _3433) + _3490) + _3547) + _3604) + _3661) + _3718) + _3775;
+        }
+        float2 _460 = float2(_553);
+        float _1302;
         if (_66.isFinest != 0u)
         {
             int2 _564 = _553 - int2(1, 0);
-            float _1305;
-            _1305 = 0.0;
-            float _1361;
-            for (uint _1304 = 0u; _1304 < 8u; _1305 = _1361, _1304++)
+            float _1291;
+            _1291 = 0.0;
+            float _3377;
+            for (uint _1290 = 0u; _1290 < 8u; _1291 = _3377, _1290++)
             {
-                _1361 = _1305;
-                float _918;
-                for (uint _1357 = 0u; _1357 < 8u; _1361 = _918, _1357++)
+                int2 _871 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _874 = _871 + _564;
+                float _1336;
+                if (any(_874 < int2(0)) || any(_874 >= int2(_66.lvlSize)))
                 {
-                    int2 _871 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_1357, _1304)), (int2(_66.lvlSize) - int2(1)));
-                    int2 _874 = _871 + _564;
-                    float _1359;
-                    if (any(_874 < int2(0)) || any(_874 >= int2(_66.lvlSize)))
-                    {
-                        _1359 = 0.25;
-                    }
-                    else
-                    {
-                        _1359 = abs(SrcL.read(uint2(int3(_871, 0).xy), 0).x - DstL.read(uint2(int3(_874, 0).xy), 0).x);
-                    }
-                    _918 = _1361 + _1359;
+                    _1336 = 0.25;
                 }
+                else
+                {
+                    _1336 = abs(SrcL.read(uint2(int3(_871, 0).xy), 0).x - DstL.read(uint2(int3(_874, 0).xy), 0).x);
+                }
+                int2 _2997 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2998 = _2997 + _564;
+                float _3034;
+                if (any(_2998 < int2(0)) || any(_2998 >= int2(_66.lvlSize)))
+                {
+                    _3034 = 0.25;
+                }
+                else
+                {
+                    _3034 = abs(SrcL.read(uint2(int3(_2997, 0).xy), 0).x - DstL.read(uint2(int3(_2998, 0).xy), 0).x);
+                }
+                int2 _3054 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _3055 = _3054 + _564;
+                float _3091;
+                if (any(_3055 < int2(0)) || any(_3055 >= int2(_66.lvlSize)))
+                {
+                    _3091 = 0.25;
+                }
+                else
+                {
+                    _3091 = abs(SrcL.read(uint2(int3(_3054, 0).xy), 0).x - DstL.read(uint2(int3(_3055, 0).xy), 0).x);
+                }
+                int2 _3111 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _3112 = _3111 + _564;
+                float _3148;
+                if (any(_3112 < int2(0)) || any(_3112 >= int2(_66.lvlSize)))
+                {
+                    _3148 = 0.25;
+                }
+                else
+                {
+                    _3148 = abs(SrcL.read(uint2(int3(_3111, 0).xy), 0).x - DstL.read(uint2(int3(_3112, 0).xy), 0).x);
+                }
+                int2 _3168 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _3169 = _3168 + _564;
+                float _3205;
+                if (any(_3169 < int2(0)) || any(_3169 >= int2(_66.lvlSize)))
+                {
+                    _3205 = 0.25;
+                }
+                else
+                {
+                    _3205 = abs(SrcL.read(uint2(int3(_3168, 0).xy), 0).x - DstL.read(uint2(int3(_3169, 0).xy), 0).x);
+                }
+                int2 _3225 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _3226 = _3225 + _564;
+                float _3262;
+                if (any(_3226 < int2(0)) || any(_3226 >= int2(_66.lvlSize)))
+                {
+                    _3262 = 0.25;
+                }
+                else
+                {
+                    _3262 = abs(SrcL.read(uint2(int3(_3225, 0).xy), 0).x - DstL.read(uint2(int3(_3226, 0).xy), 0).x);
+                }
+                int2 _3282 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _3283 = _3282 + _564;
+                float _3319;
+                if (any(_3283 < int2(0)) || any(_3283 >= int2(_66.lvlSize)))
+                {
+                    _3319 = 0.25;
+                }
+                else
+                {
+                    _3319 = abs(SrcL.read(uint2(int3(_3282, 0).xy), 0).x - DstL.read(uint2(int3(_3283, 0).xy), 0).x);
+                }
+                int2 _3339 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _1290)), (int2(_66.lvlSize) - int2(1)));
+                int2 _3340 = _3339 + _564;
+                float _3376;
+                if (any(_3340 < int2(0)) || any(_3340 >= int2(_66.lvlSize)))
+                {
+                    _3376 = 0.25;
+                }
+                else
+                {
+                    _3376 = abs(SrcL.read(uint2(int3(_3339, 0).xy), 0).x - DstL.read(uint2(int3(_3340, 0).xy), 0).x);
+                }
+                _3377 = (((((((_1291 + _1336) + _3034) + _3091) + _3148) + _3205) + _3262) + _3319) + _3376;
             }
-            float _928 = _1305 * 0.015625;
+            float _928 = _1291 * 0.015625;
             int2 _568 = _553 + int2(1, 0);
-            float _1307;
-            _1307 = 0.0;
-            float _1355;
-            for (uint _1306 = 0u; _1306 < 8u; _1307 = _1355, _1306++)
+            float _1293;
+            _1293 = 0.0;
+            float _2978;
+            for (uint _1292 = 0u; _1292 < 8u; _1293 = _2978, _1292++)
             {
-                _1355 = _1307;
-                float _1007;
-                for (uint _1351 = 0u; _1351 < 8u; _1355 = _1007, _1351++)
+                int2 _960 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _963 = _960 + _568;
+                float _1330;
+                if (any(_963 < int2(0)) || any(_963 >= int2(_66.lvlSize)))
                 {
-                    int2 _960 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_1351, _1306)), (int2(_66.lvlSize) - int2(1)));
-                    int2 _963 = _960 + _568;
-                    float _1353;
-                    if (any(_963 < int2(0)) || any(_963 >= int2(_66.lvlSize)))
-                    {
-                        _1353 = 0.25;
-                    }
-                    else
-                    {
-                        _1353 = abs(SrcL.read(uint2(int3(_960, 0).xy), 0).x - DstL.read(uint2(int3(_963, 0).xy), 0).x);
-                    }
-                    _1007 = _1355 + _1353;
+                    _1330 = 0.25;
                 }
+                else
+                {
+                    _1330 = abs(SrcL.read(uint2(int3(_960, 0).xy), 0).x - DstL.read(uint2(int3(_963, 0).xy), 0).x);
+                }
+                int2 _2598 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2599 = _2598 + _568;
+                float _2635;
+                if (any(_2599 < int2(0)) || any(_2599 >= int2(_66.lvlSize)))
+                {
+                    _2635 = 0.25;
+                }
+                else
+                {
+                    _2635 = abs(SrcL.read(uint2(int3(_2598, 0).xy), 0).x - DstL.read(uint2(int3(_2599, 0).xy), 0).x);
+                }
+                int2 _2655 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2656 = _2655 + _568;
+                float _2692;
+                if (any(_2656 < int2(0)) || any(_2656 >= int2(_66.lvlSize)))
+                {
+                    _2692 = 0.25;
+                }
+                else
+                {
+                    _2692 = abs(SrcL.read(uint2(int3(_2655, 0).xy), 0).x - DstL.read(uint2(int3(_2656, 0).xy), 0).x);
+                }
+                int2 _2712 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2713 = _2712 + _568;
+                float _2749;
+                if (any(_2713 < int2(0)) || any(_2713 >= int2(_66.lvlSize)))
+                {
+                    _2749 = 0.25;
+                }
+                else
+                {
+                    _2749 = abs(SrcL.read(uint2(int3(_2712, 0).xy), 0).x - DstL.read(uint2(int3(_2713, 0).xy), 0).x);
+                }
+                int2 _2769 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2770 = _2769 + _568;
+                float _2806;
+                if (any(_2770 < int2(0)) || any(_2770 >= int2(_66.lvlSize)))
+                {
+                    _2806 = 0.25;
+                }
+                else
+                {
+                    _2806 = abs(SrcL.read(uint2(int3(_2769, 0).xy), 0).x - DstL.read(uint2(int3(_2770, 0).xy), 0).x);
+                }
+                int2 _2826 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2827 = _2826 + _568;
+                float _2863;
+                if (any(_2827 < int2(0)) || any(_2827 >= int2(_66.lvlSize)))
+                {
+                    _2863 = 0.25;
+                }
+                else
+                {
+                    _2863 = abs(SrcL.read(uint2(int3(_2826, 0).xy), 0).x - DstL.read(uint2(int3(_2827, 0).xy), 0).x);
+                }
+                int2 _2883 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2884 = _2883 + _568;
+                float _2920;
+                if (any(_2884 < int2(0)) || any(_2884 >= int2(_66.lvlSize)))
+                {
+                    _2920 = 0.25;
+                }
+                else
+                {
+                    _2920 = abs(SrcL.read(uint2(int3(_2883, 0).xy), 0).x - DstL.read(uint2(int3(_2884, 0).xy), 0).x);
+                }
+                int2 _2940 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _1292)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2941 = _2940 + _568;
+                float _2977;
+                if (any(_2941 < int2(0)) || any(_2941 >= int2(_66.lvlSize)))
+                {
+                    _2977 = 0.25;
+                }
+                else
+                {
+                    _2977 = abs(SrcL.read(uint2(int3(_2940, 0).xy), 0).x - DstL.read(uint2(int3(_2941, 0).xy), 0).x);
+                }
+                _2978 = (((((((_1293 + _1330) + _2635) + _2692) + _2749) + _2806) + _2863) + _2920) + _2977;
             }
-            float _1017 = _1307 * 0.015625;
-            float _576 = (_928 - (_1303 * 0.03125)) + _1017;
-            float2 _1318;
+            float _1017 = _1293 * 0.015625;
+            float _576 = (_928 - (_1289 * 0.03125)) + _1017;
             if (_576 > 9.9999999747524270787835121154785e-07)
             {
-                float2 _1291 = _558;
-                _1291.x = _558.x + fast::clamp((0.5 * (_928 - _1017)) / _576, -0.5, 0.5);
-                _1318 = _1291;
-            }
-            else
-            {
-                _1318 = _558;
+                _460.x += fast::clamp((0.5 * (_928 - _1017)) / _576, -0.5, 0.5);
             }
             int2 _593 = _553 - int2(0, 1);
-            float _1312;
-            _1312 = 0.0;
-            float _1349;
-            for (uint _1311 = 0u; _1311 < 8u; _1312 = _1349, _1311++)
+            float _1296;
+            _1296 = 0.0;
+            float _2579;
+            for (uint _1295 = 0u; _1295 < 8u; _1296 = _2579, _1295++)
             {
-                _1349 = _1312;
-                float _1096;
-                for (uint _1345 = 0u; _1345 < 8u; _1349 = _1096, _1345++)
+                int2 _1049 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _1052 = _1049 + _593;
+                float _1324;
+                if (any(_1052 < int2(0)) || any(_1052 >= int2(_66.lvlSize)))
                 {
-                    int2 _1049 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_1345, _1311)), (int2(_66.lvlSize) - int2(1)));
-                    int2 _1052 = _1049 + _593;
-                    float _1347;
-                    if (any(_1052 < int2(0)) || any(_1052 >= int2(_66.lvlSize)))
-                    {
-                        _1347 = 0.25;
-                    }
-                    else
-                    {
-                        _1347 = abs(SrcL.read(uint2(int3(_1049, 0).xy), 0).x - DstL.read(uint2(int3(_1052, 0).xy), 0).x);
-                    }
-                    _1096 = _1349 + _1347;
+                    _1324 = 0.25;
                 }
+                else
+                {
+                    _1324 = abs(SrcL.read(uint2(int3(_1049, 0).xy), 0).x - DstL.read(uint2(int3(_1052, 0).xy), 0).x);
+                }
+                int2 _2199 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2200 = _2199 + _593;
+                float _2236;
+                if (any(_2200 < int2(0)) || any(_2200 >= int2(_66.lvlSize)))
+                {
+                    _2236 = 0.25;
+                }
+                else
+                {
+                    _2236 = abs(SrcL.read(uint2(int3(_2199, 0).xy), 0).x - DstL.read(uint2(int3(_2200, 0).xy), 0).x);
+                }
+                int2 _2256 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2257 = _2256 + _593;
+                float _2293;
+                if (any(_2257 < int2(0)) || any(_2257 >= int2(_66.lvlSize)))
+                {
+                    _2293 = 0.25;
+                }
+                else
+                {
+                    _2293 = abs(SrcL.read(uint2(int3(_2256, 0).xy), 0).x - DstL.read(uint2(int3(_2257, 0).xy), 0).x);
+                }
+                int2 _2313 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2314 = _2313 + _593;
+                float _2350;
+                if (any(_2314 < int2(0)) || any(_2314 >= int2(_66.lvlSize)))
+                {
+                    _2350 = 0.25;
+                }
+                else
+                {
+                    _2350 = abs(SrcL.read(uint2(int3(_2313, 0).xy), 0).x - DstL.read(uint2(int3(_2314, 0).xy), 0).x);
+                }
+                int2 _2370 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2371 = _2370 + _593;
+                float _2407;
+                if (any(_2371 < int2(0)) || any(_2371 >= int2(_66.lvlSize)))
+                {
+                    _2407 = 0.25;
+                }
+                else
+                {
+                    _2407 = abs(SrcL.read(uint2(int3(_2370, 0).xy), 0).x - DstL.read(uint2(int3(_2371, 0).xy), 0).x);
+                }
+                int2 _2427 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2428 = _2427 + _593;
+                float _2464;
+                if (any(_2428 < int2(0)) || any(_2428 >= int2(_66.lvlSize)))
+                {
+                    _2464 = 0.25;
+                }
+                else
+                {
+                    _2464 = abs(SrcL.read(uint2(int3(_2427, 0).xy), 0).x - DstL.read(uint2(int3(_2428, 0).xy), 0).x);
+                }
+                int2 _2484 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2485 = _2484 + _593;
+                float _2521;
+                if (any(_2485 < int2(0)) || any(_2485 >= int2(_66.lvlSize)))
+                {
+                    _2521 = 0.25;
+                }
+                else
+                {
+                    _2521 = abs(SrcL.read(uint2(int3(_2484, 0).xy), 0).x - DstL.read(uint2(int3(_2485, 0).xy), 0).x);
+                }
+                int2 _2541 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _1295)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2542 = _2541 + _593;
+                float _2578;
+                if (any(_2542 < int2(0)) || any(_2542 >= int2(_66.lvlSize)))
+                {
+                    _2578 = 0.25;
+                }
+                else
+                {
+                    _2578 = abs(SrcL.read(uint2(int3(_2541, 0).xy), 0).x - DstL.read(uint2(int3(_2542, 0).xy), 0).x);
+                }
+                _2579 = (((((((_1296 + _1324) + _2236) + _2293) + _2350) + _2407) + _2464) + _2521) + _2578;
             }
-            float _1106 = _1312 * 0.015625;
+            float _1106 = _1296 * 0.015625;
             int2 _597 = _553 + int2(0, 1);
-            float _1314;
-            _1314 = 0.0;
-            float _1343;
-            for (uint _1313 = 0u; _1313 < 8u; _1314 = _1343, _1313++)
+            float _1298;
+            _1298 = 0.0;
+            float _2180;
+            for (uint _1297 = 0u; _1297 < 8u; _1298 = _2180, _1297++)
             {
-                _1343 = _1314;
-                float _1185;
-                for (uint _1339 = 0u; _1339 < 8u; _1343 = _1185, _1339++)
+                int2 _1138 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _1141 = _1138 + _597;
+                float _1318;
+                if (any(_1141 < int2(0)) || any(_1141 >= int2(_66.lvlSize)))
                 {
-                    int2 _1138 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_1339, _1313)), (int2(_66.lvlSize) - int2(1)));
-                    int2 _1141 = _1138 + _597;
-                    float _1341;
-                    if (any(_1141 < int2(0)) || any(_1141 >= int2(_66.lvlSize)))
-                    {
-                        _1341 = 0.25;
-                    }
-                    else
-                    {
-                        _1341 = abs(SrcL.read(uint2(int3(_1138, 0).xy), 0).x - DstL.read(uint2(int3(_1141, 0).xy), 0).x);
-                    }
-                    _1185 = _1343 + _1341;
+                    _1318 = 0.25;
                 }
+                else
+                {
+                    _1318 = abs(SrcL.read(uint2(int3(_1138, 0).xy), 0).x - DstL.read(uint2(int3(_1141, 0).xy), 0).x);
+                }
+                int2 _1800 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _1801 = _1800 + _597;
+                float _1837;
+                if (any(_1801 < int2(0)) || any(_1801 >= int2(_66.lvlSize)))
+                {
+                    _1837 = 0.25;
+                }
+                else
+                {
+                    _1837 = abs(SrcL.read(uint2(int3(_1800, 0).xy), 0).x - DstL.read(uint2(int3(_1801, 0).xy), 0).x);
+                }
+                int2 _1857 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _1858 = _1857 + _597;
+                float _1894;
+                if (any(_1858 < int2(0)) || any(_1858 >= int2(_66.lvlSize)))
+                {
+                    _1894 = 0.25;
+                }
+                else
+                {
+                    _1894 = abs(SrcL.read(uint2(int3(_1857, 0).xy), 0).x - DstL.read(uint2(int3(_1858, 0).xy), 0).x);
+                }
+                int2 _1914 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _1915 = _1914 + _597;
+                float _1951;
+                if (any(_1915 < int2(0)) || any(_1915 >= int2(_66.lvlSize)))
+                {
+                    _1951 = 0.25;
+                }
+                else
+                {
+                    _1951 = abs(SrcL.read(uint2(int3(_1914, 0).xy), 0).x - DstL.read(uint2(int3(_1915, 0).xy), 0).x);
+                }
+                int2 _1971 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _1972 = _1971 + _597;
+                float _2008;
+                if (any(_1972 < int2(0)) || any(_1972 >= int2(_66.lvlSize)))
+                {
+                    _2008 = 0.25;
+                }
+                else
+                {
+                    _2008 = abs(SrcL.read(uint2(int3(_1971, 0).xy), 0).x - DstL.read(uint2(int3(_1972, 0).xy), 0).x);
+                }
+                int2 _2028 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2029 = _2028 + _597;
+                float _2065;
+                if (any(_2029 < int2(0)) || any(_2029 >= int2(_66.lvlSize)))
+                {
+                    _2065 = 0.25;
+                }
+                else
+                {
+                    _2065 = abs(SrcL.read(uint2(int3(_2028, 0).xy), 0).x - DstL.read(uint2(int3(_2029, 0).xy), 0).x);
+                }
+                int2 _2085 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2086 = _2085 + _597;
+                float _2122;
+                if (any(_2086 < int2(0)) || any(_2086 >= int2(_66.lvlSize)))
+                {
+                    _2122 = 0.25;
+                }
+                else
+                {
+                    _2122 = abs(SrcL.read(uint2(int3(_2085, 0).xy), 0).x - DstL.read(uint2(int3(_2086, 0).xy), 0).x);
+                }
+                int2 _2142 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _1297)), (int2(_66.lvlSize) - int2(1)));
+                int2 _2143 = _2142 + _597;
+                float _2179;
+                if (any(_2143 < int2(0)) || any(_2143 >= int2(_66.lvlSize)))
+                {
+                    _2179 = 0.25;
+                }
+                else
+                {
+                    _2179 = abs(SrcL.read(uint2(int3(_2142, 0).xy), 0).x - DstL.read(uint2(int3(_2143, 0).xy), 0).x);
+                }
+                _2180 = (((((((_1298 + _1318) + _1837) + _1894) + _1951) + _2008) + _2065) + _2122) + _2179;
             }
-            float _1195 = _1314 * 0.015625;
-            float _605 = (_1106 - (_1303 * 0.03125)) + _1195;
-            float2 _1323;
+            float _1195 = _1298 * 0.015625;
+            float _605 = (_1106 - (_1289 * 0.03125)) + _1195;
             if (_605 > 9.9999999747524270787835121154785e-07)
             {
-                float2 _1294 = _1318;
-                _1294.y = _1318.y + fast::clamp((0.5 * (_1106 - _1195)) / _605, -0.5, 0.5);
-                _1323 = _1294;
+                _460.y += fast::clamp((0.5 * (_1106 - _1195)) / _605, -0.5, 0.5);
             }
-            else
-            {
-                _1323 = _1318;
-            }
-            float _1326;
+            float _1303;
             if (_66.accumStats != 0u)
             {
-                float _1320;
-                _1320 = 0.0;
-                float _1337;
-                for (uint _1319 = 0u; _1319 < 8u; _1320 = _1337, _1319++)
+                float _1301;
+                _1301 = 0.0;
+                float _1781;
+                for (uint _1300 = 0u; _1300 < 8u; _1301 = _1781, _1300++)
                 {
-                    _1337 = _1320;
-                    float _1274;
-                    for (uint _1333 = 0u; _1333 < 8u; _1337 = _1274, _1333++)
+                    int2 _1227 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1312;
+                    if (any(_1227 < int2(0)) || any(_1227 >= int2(_66.lvlSize)))
                     {
-                        int2 _1227 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_1333, _1319)), (int2(_66.lvlSize) - int2(1)));
-                        float _1335;
-                        if (any(_1227 < int2(0)) || any(_1227 >= int2(_66.lvlSize)))
-                        {
-                            _1335 = 0.25;
-                        }
-                        else
-                        {
-                            _1335 = abs(SrcL.read(uint2(int3(_1227, 0).xy), 0).x - DstL.read(uint2(int3(_1227, 0).xy), 0).x);
-                        }
-                        _1274 = _1337 + _1335;
+                        _1312 = 0.25;
                     }
+                    else
+                    {
+                        _1312 = abs(SrcL.read(uint2(int3(_1227, 0).xy), 0).x - DstL.read(uint2(int3(_1227, 0).xy), 0).x);
+                    }
+                    int2 _1401 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1438;
+                    if (any(_1401 < int2(0)) || any(_1401 >= int2(_66.lvlSize)))
+                    {
+                        _1438 = 0.25;
+                    }
+                    else
+                    {
+                        _1438 = abs(SrcL.read(uint2(int3(_1401, 0).xy), 0).x - DstL.read(uint2(int3(_1401, 0).xy), 0).x);
+                    }
+                    int2 _1458 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1495;
+                    if (any(_1458 < int2(0)) || any(_1458 >= int2(_66.lvlSize)))
+                    {
+                        _1495 = 0.25;
+                    }
+                    else
+                    {
+                        _1495 = abs(SrcL.read(uint2(int3(_1458, 0).xy), 0).x - DstL.read(uint2(int3(_1458, 0).xy), 0).x);
+                    }
+                    int2 _1515 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1552;
+                    if (any(_1515 < int2(0)) || any(_1515 >= int2(_66.lvlSize)))
+                    {
+                        _1552 = 0.25;
+                    }
+                    else
+                    {
+                        _1552 = abs(SrcL.read(uint2(int3(_1515, 0).xy), 0).x - DstL.read(uint2(int3(_1515, 0).xy), 0).x);
+                    }
+                    int2 _1572 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1609;
+                    if (any(_1572 < int2(0)) || any(_1572 >= int2(_66.lvlSize)))
+                    {
+                        _1609 = 0.25;
+                    }
+                    else
+                    {
+                        _1609 = abs(SrcL.read(uint2(int3(_1572, 0).xy), 0).x - DstL.read(uint2(int3(_1572, 0).xy), 0).x);
+                    }
+                    int2 _1629 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1666;
+                    if (any(_1629 < int2(0)) || any(_1629 >= int2(_66.lvlSize)))
+                    {
+                        _1666 = 0.25;
+                    }
+                    else
+                    {
+                        _1666 = abs(SrcL.read(uint2(int3(_1629, 0).xy), 0).x - DstL.read(uint2(int3(_1629, 0).xy), 0).x);
+                    }
+                    int2 _1686 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1723;
+                    if (any(_1686 < int2(0)) || any(_1686 >= int2(_66.lvlSize)))
+                    {
+                        _1723 = 0.25;
+                    }
+                    else
+                    {
+                        _1723 = abs(SrcL.read(uint2(int3(_1686, 0).xy), 0).x - DstL.read(uint2(int3(_1686, 0).xy), 0).x);
+                    }
+                    int2 _1743 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _1300)), (int2(_66.lvlSize) - int2(1)));
+                    float _1780;
+                    if (any(_1743 < int2(0)) || any(_1743 >= int2(_66.lvlSize)))
+                    {
+                        _1780 = 0.25;
+                    }
+                    else
+                    {
+                        _1780 = abs(SrcL.read(uint2(int3(_1743, 0).xy), 0).x - DstL.read(uint2(int3(_1743, 0).xy), 0).x);
+                    }
+                    _1781 = (((((((_1301 + _1312) + _1438) + _1495) + _1552) + _1609) + _1666) + _1723) + _1780;
                 }
-                uint _631 = atomic_fetch_add_explicit((device atomic_uint*)&SceneStats_1._data[0], uint(_1303 * 1024.0), memory_order_relaxed);
-                uint _636 = atomic_fetch_add_explicit((device atomic_uint*)&SceneStats_1._data[1], uint(_1320 * 1024.0), memory_order_relaxed);
+                uint _631 = atomic_fetch_add_explicit((device atomic_uint*)&SceneStats_1._data[0], uint(_1289 * 1024.0), memory_order_relaxed);
+                uint _636 = atomic_fetch_add_explicit((device atomic_uint*)&SceneStats_1._data[1], uint(_1301 * 1024.0), memory_order_relaxed);
                 uint _638 = atomic_fetch_add_explicit((device atomic_uint*)&SceneStats_1._data[2], 1u, memory_order_relaxed);
-                _1326 = _1320 * 0.015625;
+                _1303 = _1301 * 0.015625;
             }
             else
             {
-                _1326 = 0.0;
+                _1303 = 0.0;
             }
-            _1325 = _1326;
-            _1321 = _1323;
+            _1302 = _1303;
         }
         else
         {
-            _1325 = 0.0;
-            _1321 = _558;
+            _1302 = 0.0;
         }
-        OutField.write(float4(_1321, _1303 * 0.015625, _1325), uint2(gl_GlobalInvocationID.xy));
+        OutField.write(float4(_460, _1289 * 0.015625, _1302), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }
@@ -560,384 +991,1236 @@ kernel void motion_search_main(constant FgConstants& _77 [[buffer(0)]], texture2
 {
     do
     {
-        if ((gl_GlobalInvocationID.x >= _77.gridSize.x) || (gl_GlobalInvocationID.y >= _77.gridSize.y))
+        uint2 _640 = gl_GlobalInvocationID.xy;
+        if ((_640.x >= _77.gridSize.x) || (_640.y >= _77.gridSize.y))
         {
             break;
         }
-        bool _749 = _77.isCoarse != 0u;
-        int2 _2813;
-        float _2817;
-        int2 _2830;
-        if (_749)
+        uint _2711;
+        int2 _2742;
+        float _2746;
+        int2 _2759;
+        if (_77.isCoarse != 0u)
         {
             int _753 = -_77.radius;
-            int2 _2769;
-            float _2770;
-            float _2771;
-            _2771 = 1000000015047466219876688855040.0;
-            _2770 = 1000000015047466219876688855040.0;
-            _2769 = int2(0);
-            int2 _2867;
-            float _2868;
-            float _2869;
-            for (int _2767 = _753; _2767 <= _77.radius; _2771 = _2869, _2770 = _2868, _2769 = _2867, _2767++)
+            int2 _2698;
+            float _2699;
+            float _2700;
+            _2700 = 1000000015047466219876688855040.0;
+            _2699 = 1000000015047466219876688855040.0;
+            _2698 = int2(0);
+            int2 _2796;
+            float _2797;
+            float _2798;
+            for (int _2696 = _753; _2696 <= _77.radius; _2700 = _2798, _2699 = _2797, _2698 = _2796, _2696++)
             {
                 int _763 = -_77.radius;
-                _2869 = _2771;
-                _2868 = _2770;
-                _2867 = _2769;
-                float _3001;
-                float _3002;
-                int2 _3004;
-                for (int _2864 = _763; _2864 <= _77.radius; _2869 = _3001, _2868 = _3002, _2867 = _3004, _2864++)
+                _2798 = _2700;
+                _2797 = _2699;
+                _2796 = _2698;
+                int2 _2802;
+                float _2804;
+                float _2805;
+                for (int _2793 = _763; _2793 <= _77.radius; _2798 = _2805, _2797 = _2804, _2796 = _2802, _2793++)
                 {
-                    int2 _773 = int2(_2864, _2767);
-                    float _2871;
-                    _2871 = 0.0;
-                    float _2884;
-                    for (uint _2870 = 0u; _2870 < 8u; _2871 = _2884, _2870++)
+                    int2 _773 = int2(_2793, _2696);
+                    int2 _649 = _773;
+                    int2 _650 = int2(0);
+                    float _2800;
+                    _2800 = 0.0;
+                    float _4132;
+                    for (uint _2799 = 0u; _2799 < 8u; _2800 = _4132, _2799++)
                     {
-                        _2884 = _2871;
-                        float _1072;
-                        for (uint _2880 = 0u; _2880 < 8u; _2884 = _1072, _2880++)
+                        int2 _1025 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _1028 = _1025 + _773;
+                        float _2811;
+                        if (any(_1028 < int2(0)) || any(_1028 >= int2(_77.lvlSize)))
                         {
-                            int2 _1025 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2880, _2870)), (int2(_77.lvlSize) - int2(1)));
-                            int2 _1028 = _1025 + _773;
-                            float _2882;
-                            if (any(_1028 < int2(0)) || any(_1028 >= int2(_77.lvlSize)))
-                            {
-                                _2882 = 0.25;
-                            }
-                            else
-                            {
-                                _2882 = abs(SrcL.read(uint2(int3(_1025, 0).xy), 0).x - DstL.read(uint2(int3(_1028, 0).xy), 0).x);
-                            }
-                            _1072 = _2884 + _2882;
-                        }
-                    }
-                    float _1082 = _2871 * 0.015625;
-                    float _985 = (_1082 + (_77.lam * float(abs(_2864 - 0) + abs(_2767 - 0)))) + (_77.zeroBias * float((_2864 != 0) || (_2767 != 0)));
-                    bool _988 = _985 < _2868;
-                    _3001 = _988 ? _1082 : _2869;
-                    _3002 = _988 ? _985 : _2868;
-                    _3004 = select(_2867, _773, bool2(_988));
-                }
-            }
-            int2 _2814;
-            float _2818;
-            if (_77.hasTemporal != 0u)
-            {
-                uint _1098 = 1u << _77.temporalShift;
-                int2 _1129 = int2(rint(Temporal.read(uint2(int3(int2(min((gl_GlobalInvocationID.xy * uint2(_1098)), (uint2(Temporal.get_width(), Temporal.get_height()) - uint2(1u)))), 0).xy), 0).xy / float2(float(_1098))));
-                float _2773;
-                _2773 = 0.0;
-                float _2862;
-                for (uint _2772 = 0u; _2772 < 8u; _2773 = _2862, _2772++)
-                {
-                    _2862 = _2773;
-                    float _1255;
-                    for (uint _2858 = 0u; _2858 < 8u; _2862 = _1255, _2858++)
-                    {
-                        int2 _1208 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2858, _2772)), (int2(_77.lvlSize) - int2(1)));
-                        int2 _1211 = _1208 + _1129;
-                        float _2860;
-                        if (any(_1211 < int2(0)) || any(_1211 >= int2(_77.lvlSize)))
-                        {
-                            _2860 = 0.25;
+                            _2811 = 0.25;
                         }
                         else
                         {
-                            _2860 = abs(SrcL.read(uint2(int3(_1208, 0).xy), 0).x - DstL.read(uint2(int3(_1211, 0).xy), 0).x);
+                            _2811 = abs(SrcL.read(uint2(int3(_1025, 0).xy), 0).x - DstL.read(uint2(int3(_1028, 0).xy), 0).x);
                         }
-                        _1255 = _2862 + _2860;
+                        int2 _3752 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3753 = _3752 + _773;
+                        float _3789;
+                        if (any(_3753 < int2(0)) || any(_3753 >= int2(_77.lvlSize)))
+                        {
+                            _3789 = 0.25;
+                        }
+                        else
+                        {
+                            _3789 = abs(SrcL.read(uint2(int3(_3752, 0).xy), 0).x - DstL.read(uint2(int3(_3753, 0).xy), 0).x);
+                        }
+                        int2 _3809 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3810 = _3809 + _773;
+                        float _3846;
+                        if (any(_3810 < int2(0)) || any(_3810 >= int2(_77.lvlSize)))
+                        {
+                            _3846 = 0.25;
+                        }
+                        else
+                        {
+                            _3846 = abs(SrcL.read(uint2(int3(_3809, 0).xy), 0).x - DstL.read(uint2(int3(_3810, 0).xy), 0).x);
+                        }
+                        int2 _3866 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3867 = _3866 + _773;
+                        float _3903;
+                        if (any(_3867 < int2(0)) || any(_3867 >= int2(_77.lvlSize)))
+                        {
+                            _3903 = 0.25;
+                        }
+                        else
+                        {
+                            _3903 = abs(SrcL.read(uint2(int3(_3866, 0).xy), 0).x - DstL.read(uint2(int3(_3867, 0).xy), 0).x);
+                        }
+                        int2 _3923 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3924 = _3923 + _773;
+                        float _3960;
+                        if (any(_3924 < int2(0)) || any(_3924 >= int2(_77.lvlSize)))
+                        {
+                            _3960 = 0.25;
+                        }
+                        else
+                        {
+                            _3960 = abs(SrcL.read(uint2(int3(_3923, 0).xy), 0).x - DstL.read(uint2(int3(_3924, 0).xy), 0).x);
+                        }
+                        int2 _3980 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3981 = _3980 + _773;
+                        float _4017;
+                        if (any(_3981 < int2(0)) || any(_3981 >= int2(_77.lvlSize)))
+                        {
+                            _4017 = 0.25;
+                        }
+                        else
+                        {
+                            _4017 = abs(SrcL.read(uint2(int3(_3980, 0).xy), 0).x - DstL.read(uint2(int3(_3981, 0).xy), 0).x);
+                        }
+                        int2 _4037 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _4038 = _4037 + _773;
+                        float _4074;
+                        if (any(_4038 < int2(0)) || any(_4038 >= int2(_77.lvlSize)))
+                        {
+                            _4074 = 0.25;
+                        }
+                        else
+                        {
+                            _4074 = abs(SrcL.read(uint2(int3(_4037, 0).xy), 0).x - DstL.read(uint2(int3(_4038, 0).xy), 0).x);
+                        }
+                        int2 _4094 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2799)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _4095 = _4094 + _773;
+                        float _4131;
+                        if (any(_4095 < int2(0)) || any(_4095 >= int2(_77.lvlSize)))
+                        {
+                            _4131 = 0.25;
+                        }
+                        else
+                        {
+                            _4131 = abs(SrcL.read(uint2(int3(_4094, 0).xy), 0).x - DstL.read(uint2(int3(_4095, 0).xy), 0).x);
+                        }
+                        _4132 = (((((((_2800 + _2811) + _3789) + _3846) + _3903) + _3960) + _4017) + _4074) + _4131;
+                    }
+                    float _1082 = _2800 * 0.015625;
+                    float _985 = (_1082 + (_77.lam * float(abs(_649.x - _650.x) + abs(_649.y - _650.y)))) + (_77.zeroBias * float((_649.x != 0) || (_649.y != 0)));
+                    if (_985 < _2797)
+                    {
+                        _2805 = _1082;
+                        _2804 = _985;
+                        _2802 = _773;
+                    }
+                    else
+                    {
+                        _2805 = _2798;
+                        _2804 = _2797;
+                        _2802 = _2796;
                     }
                 }
-                float _1265 = _2773 * 0.015625;
-                bool _1171 = ((_1265 + (_77.lam * float(abs(_1129.x - 0) + abs(_1129.y - 0)))) + (_77.zeroBias * float((_1129.x != 0) || (_1129.y != 0)))) < _2770;
-                _2818 = _1171 ? _1265 : _2771;
-                _2814 = select(_2769, _1129, bool2(_1171));
+            }
+            int2 _2743;
+            float _2747;
+            if (_77.hasTemporal != 0u)
+            {
+                uint2 _1083 = uint2(Temporal.get_width(), Temporal.get_height());
+                uint _1098 = 1u << _77.temporalShift;
+                int2 _1129 = int2(rint(Temporal.read(uint2(int3(int2(min((gl_GlobalInvocationID.xy * uint2(_1098)), (uint2(_1083.x, _1083.y) - uint2(1u)))), 0).xy), 0).xy / float2(float(_1098))));
+                int2 _656 = _1129;
+                int2 _657 = int2(0);
+                float _2702;
+                _2702 = 0.0;
+                float _3733;
+                for (uint _2701 = 0u; _2701 < 8u; _2702 = _3733, _2701++)
+                {
+                    int2 _1208 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _1211 = _1208 + _1129;
+                    float _2789;
+                    if (any(_1211 < int2(0)) || any(_1211 >= int2(_77.lvlSize)))
+                    {
+                        _2789 = 0.25;
+                    }
+                    else
+                    {
+                        _2789 = abs(SrcL.read(uint2(int3(_1208, 0).xy), 0).x - DstL.read(uint2(int3(_1211, 0).xy), 0).x);
+                    }
+                    int2 _3353 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _3354 = _3353 + _1129;
+                    float _3390;
+                    if (any(_3354 < int2(0)) || any(_3354 >= int2(_77.lvlSize)))
+                    {
+                        _3390 = 0.25;
+                    }
+                    else
+                    {
+                        _3390 = abs(SrcL.read(uint2(int3(_3353, 0).xy), 0).x - DstL.read(uint2(int3(_3354, 0).xy), 0).x);
+                    }
+                    int2 _3410 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _3411 = _3410 + _1129;
+                    float _3447;
+                    if (any(_3411 < int2(0)) || any(_3411 >= int2(_77.lvlSize)))
+                    {
+                        _3447 = 0.25;
+                    }
+                    else
+                    {
+                        _3447 = abs(SrcL.read(uint2(int3(_3410, 0).xy), 0).x - DstL.read(uint2(int3(_3411, 0).xy), 0).x);
+                    }
+                    int2 _3467 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _3468 = _3467 + _1129;
+                    float _3504;
+                    if (any(_3468 < int2(0)) || any(_3468 >= int2(_77.lvlSize)))
+                    {
+                        _3504 = 0.25;
+                    }
+                    else
+                    {
+                        _3504 = abs(SrcL.read(uint2(int3(_3467, 0).xy), 0).x - DstL.read(uint2(int3(_3468, 0).xy), 0).x);
+                    }
+                    int2 _3524 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _3525 = _3524 + _1129;
+                    float _3561;
+                    if (any(_3525 < int2(0)) || any(_3525 >= int2(_77.lvlSize)))
+                    {
+                        _3561 = 0.25;
+                    }
+                    else
+                    {
+                        _3561 = abs(SrcL.read(uint2(int3(_3524, 0).xy), 0).x - DstL.read(uint2(int3(_3525, 0).xy), 0).x);
+                    }
+                    int2 _3581 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _3582 = _3581 + _1129;
+                    float _3618;
+                    if (any(_3582 < int2(0)) || any(_3582 >= int2(_77.lvlSize)))
+                    {
+                        _3618 = 0.25;
+                    }
+                    else
+                    {
+                        _3618 = abs(SrcL.read(uint2(int3(_3581, 0).xy), 0).x - DstL.read(uint2(int3(_3582, 0).xy), 0).x);
+                    }
+                    int2 _3638 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _3639 = _3638 + _1129;
+                    float _3675;
+                    if (any(_3639 < int2(0)) || any(_3639 >= int2(_77.lvlSize)))
+                    {
+                        _3675 = 0.25;
+                    }
+                    else
+                    {
+                        _3675 = abs(SrcL.read(uint2(int3(_3638, 0).xy), 0).x - DstL.read(uint2(int3(_3639, 0).xy), 0).x);
+                    }
+                    int2 _3695 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2701)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _3696 = _3695 + _1129;
+                    float _3732;
+                    if (any(_3696 < int2(0)) || any(_3696 >= int2(_77.lvlSize)))
+                    {
+                        _3732 = 0.25;
+                    }
+                    else
+                    {
+                        _3732 = abs(SrcL.read(uint2(int3(_3695, 0).xy), 0).x - DstL.read(uint2(int3(_3696, 0).xy), 0).x);
+                    }
+                    _3733 = (((((((_2702 + _2789) + _3390) + _3447) + _3504) + _3561) + _3618) + _3675) + _3732;
+                }
+                float _1265 = _2702 * 0.015625;
+                int2 _2704;
+                float _2707;
+                if (((_1265 + (_77.lam * float(abs(_656.x - _657.x) + abs(_656.y - _657.y)))) + (_77.zeroBias * float((_656.x != 0) || (_656.y != 0)))) < _2699)
+                {
+                    _2707 = _1265;
+                    _2704 = _1129;
+                }
+                else
+                {
+                    _2707 = _2700;
+                    _2704 = _2698;
+                }
+                _2747 = _2707;
+                _2743 = _2704;
             }
             else
             {
-                _2818 = _2771;
-                _2814 = _2769;
+                _2747 = _2700;
+                _2743 = _2698;
             }
-            _2830 = int2(0);
-            _2817 = _2818;
-            _2813 = _2814;
+            _2759 = int2(0);
+            _2746 = _2747;
+            _2742 = _2743;
+            _2711 = 1u;
         }
         else
         {
             int2 _1302 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
-            float _2658;
-            _2658 = 0.0;
-            float _2765;
-            for (uint _2657 = 0u; _2657 < 8u; _2658 = _2765, _2657++)
+            int2 _664 = _1302;
+            int2 _665 = _1302;
+            float _2587;
+            _2587 = 0.0;
+            float _6925;
+            for (uint _2586 = 0u; _2586 < 8u; _2587 = _6925, _2586++)
             {
-                _2765 = _2658;
-                float _1428;
-                for (uint _2761 = 0u; _2761 < 8u; _2765 = _1428, _2761++)
+                int2 _1381 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _1384 = _1381 + _1302;
+                float _2692;
+                if (any(_1384 < int2(0)) || any(_1384 >= int2(_77.lvlSize)))
                 {
-                    int2 _1381 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2761, _2657)), (int2(_77.lvlSize) - int2(1)));
-                    int2 _1384 = _1381 + _1302;
-                    float _2763;
-                    if (any(_1384 < int2(0)) || any(_1384 >= int2(_77.lvlSize)))
-                    {
-                        _2763 = 0.25;
-                    }
-                    else
-                    {
-                        _2763 = abs(SrcL.read(uint2(int3(_1381, 0).xy), 0).x - DstL.read(uint2(int3(_1384, 0).xy), 0).x);
-                    }
-                    _1428 = _2765 + _2763;
+                    _2692 = 0.25;
                 }
+                else
+                {
+                    _2692 = abs(SrcL.read(uint2(int3(_1381, 0).xy), 0).x - DstL.read(uint2(int3(_1384, 0).xy), 0).x);
+                }
+                int2 _6545 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6546 = _6545 + _1302;
+                float _6582;
+                if (any(_6546 < int2(0)) || any(_6546 >= int2(_77.lvlSize)))
+                {
+                    _6582 = 0.25;
+                }
+                else
+                {
+                    _6582 = abs(SrcL.read(uint2(int3(_6545, 0).xy), 0).x - DstL.read(uint2(int3(_6546, 0).xy), 0).x);
+                }
+                int2 _6602 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6603 = _6602 + _1302;
+                float _6639;
+                if (any(_6603 < int2(0)) || any(_6603 >= int2(_77.lvlSize)))
+                {
+                    _6639 = 0.25;
+                }
+                else
+                {
+                    _6639 = abs(SrcL.read(uint2(int3(_6602, 0).xy), 0).x - DstL.read(uint2(int3(_6603, 0).xy), 0).x);
+                }
+                int2 _6659 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6660 = _6659 + _1302;
+                float _6696;
+                if (any(_6660 < int2(0)) || any(_6660 >= int2(_77.lvlSize)))
+                {
+                    _6696 = 0.25;
+                }
+                else
+                {
+                    _6696 = abs(SrcL.read(uint2(int3(_6659, 0).xy), 0).x - DstL.read(uint2(int3(_6660, 0).xy), 0).x);
+                }
+                int2 _6716 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6717 = _6716 + _1302;
+                float _6753;
+                if (any(_6717 < int2(0)) || any(_6717 >= int2(_77.lvlSize)))
+                {
+                    _6753 = 0.25;
+                }
+                else
+                {
+                    _6753 = abs(SrcL.read(uint2(int3(_6716, 0).xy), 0).x - DstL.read(uint2(int3(_6717, 0).xy), 0).x);
+                }
+                int2 _6773 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6774 = _6773 + _1302;
+                float _6810;
+                if (any(_6774 < int2(0)) || any(_6774 >= int2(_77.lvlSize)))
+                {
+                    _6810 = 0.25;
+                }
+                else
+                {
+                    _6810 = abs(SrcL.read(uint2(int3(_6773, 0).xy), 0).x - DstL.read(uint2(int3(_6774, 0).xy), 0).x);
+                }
+                int2 _6830 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6831 = _6830 + _1302;
+                float _6867;
+                if (any(_6831 < int2(0)) || any(_6831 >= int2(_77.lvlSize)))
+                {
+                    _6867 = 0.25;
+                }
+                else
+                {
+                    _6867 = abs(SrcL.read(uint2(int3(_6830, 0).xy), 0).x - DstL.read(uint2(int3(_6831, 0).xy), 0).x);
+                }
+                int2 _6887 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2586)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6888 = _6887 + _1302;
+                float _6924;
+                if (any(_6888 < int2(0)) || any(_6888 >= int2(_77.lvlSize)))
+                {
+                    _6924 = 0.25;
+                }
+                else
+                {
+                    _6924 = abs(SrcL.read(uint2(int3(_6887, 0).xy), 0).x - DstL.read(uint2(int3(_6888, 0).xy), 0).x);
+                }
+                _6925 = (((((((_2587 + _2692) + _6582) + _6639) + _6696) + _6753) + _6810) + _6867) + _6924;
             }
-            float _1438 = _2658 * 0.015625;
-            float _1341 = (_1438 + (_77.lam * float(abs(_1302.x - _1302.x) + abs(_1302.y - _1302.y)))) + (_77.zeroBias * float((_1302.x != 0) || (_1302.y != 0)));
-            bool _1344 = _1341 < 1000000015047466219876688855040.0;
-            float _3010 = _1344 ? _1341 : 1000000015047466219876688855040.0;
-            float _2668;
-            _2668 = 0.0;
-            float _2759;
-            for (uint _2667 = 0u; _2667 < 8u; _2668 = _2759, _2667++)
+            float _1438 = _2587 * 0.015625;
+            float _1341 = (_1438 + (_77.lam * float(abs(_664.x - _665.x) + abs(_664.y - _665.y)))) + (_77.zeroBias * float((_664.x != 0) || (_664.y != 0)));
+            int2 _2589;
+            float _2591;
+            float _2592;
+            if (_1341 < 1000000015047466219876688855040.0)
             {
-                _2759 = _2668;
-                float _1564;
-                for (uint _2755 = 0u; _2755 < 8u; _2759 = _1564, _2755++)
-                {
-                    int2 _1517 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2755, _2667)), (int2(_77.lvlSize) - int2(1)));
-                    float _2757;
-                    if (any(_1517 < int2(0)) || any(_1517 >= int2(_77.lvlSize)))
-                    {
-                        _2757 = 0.25;
-                    }
-                    else
-                    {
-                        _2757 = abs(SrcL.read(uint2(int3(_1517, 0).xy), 0).x - DstL.read(uint2(int3(_1517, 0).xy), 0).x);
-                    }
-                    _1564 = _2759 + _2757;
-                }
-            }
-            float _1574 = _2668 * 0.015625;
-            float _1465 = _1574 + (_77.lam * float(abs(0 - _1302.x) + abs(0 - _1302.y)));
-            bool _1480 = _1465 < _3010;
-            float _3014 = _1480 ? _1465 : _3010;
-            int2 _1611 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(0, -1), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
-            float _2678;
-            _2678 = 0.0;
-            float _2753;
-            for (uint _2677 = 0u; _2677 < 8u; _2678 = _2753, _2677++)
-            {
-                _2753 = _2678;
-                float _1737;
-                for (uint _2749 = 0u; _2749 < 8u; _2753 = _1737, _2749++)
-                {
-                    int2 _1690 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2749, _2677)), (int2(_77.lvlSize) - int2(1)));
-                    int2 _1693 = _1690 + _1611;
-                    float _2751;
-                    if (any(_1693 < int2(0)) || any(_1693 >= int2(_77.lvlSize)))
-                    {
-                        _2751 = 0.25;
-                    }
-                    else
-                    {
-                        _2751 = abs(SrcL.read(uint2(int3(_1690, 0).xy), 0).x - DstL.read(uint2(int3(_1693, 0).xy), 0).x);
-                    }
-                    _1737 = _2753 + _2751;
-                }
-            }
-            float _1747 = _2678 * 0.015625;
-            float _1650 = (_1747 + (_77.lam * float(abs(_1611.x - _1302.x) + abs(_1611.y - _1302.y)))) + (_77.zeroBias * float((_1611.x != 0) || (_1611.y != 0)));
-            bool _1653 = _1650 < _3014;
-            float _3018 = _1653 ? _1650 : _3014;
-            int2 _1784 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(0, 1), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
-            float _2688;
-            _2688 = 0.0;
-            float _2747;
-            for (uint _2687 = 0u; _2687 < 8u; _2688 = _2747, _2687++)
-            {
-                _2747 = _2688;
-                float _1910;
-                for (uint _2743 = 0u; _2743 < 8u; _2747 = _1910, _2743++)
-                {
-                    int2 _1863 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2743, _2687)), (int2(_77.lvlSize) - int2(1)));
-                    int2 _1866 = _1863 + _1784;
-                    float _2745;
-                    if (any(_1866 < int2(0)) || any(_1866 >= int2(_77.lvlSize)))
-                    {
-                        _2745 = 0.25;
-                    }
-                    else
-                    {
-                        _2745 = abs(SrcL.read(uint2(int3(_1863, 0).xy), 0).x - DstL.read(uint2(int3(_1866, 0).xy), 0).x);
-                    }
-                    _1910 = _2747 + _2745;
-                }
-            }
-            float _1920 = _2688 * 0.015625;
-            float _1823 = (_1920 + (_77.lam * float(abs(_1784.x - _1302.x) + abs(_1784.y - _1302.y)))) + (_77.zeroBias * float((_1784.x != 0) || (_1784.y != 0)));
-            bool _1826 = _1823 < _3018;
-            float _3022 = _1826 ? _1823 : _3018;
-            int2 _1957 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(-1, 0), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
-            float _2698;
-            _2698 = 0.0;
-            float _2741;
-            for (uint _2697 = 0u; _2697 < 8u; _2698 = _2741, _2697++)
-            {
-                _2741 = _2698;
-                float _2083;
-                for (uint _2737 = 0u; _2737 < 8u; _2741 = _2083, _2737++)
-                {
-                    int2 _2036 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2737, _2697)), (int2(_77.lvlSize) - int2(1)));
-                    int2 _2039 = _2036 + _1957;
-                    float _2739;
-                    if (any(_2039 < int2(0)) || any(_2039 >= int2(_77.lvlSize)))
-                    {
-                        _2739 = 0.25;
-                    }
-                    else
-                    {
-                        _2739 = abs(SrcL.read(uint2(int3(_2036, 0).xy), 0).x - DstL.read(uint2(int3(_2039, 0).xy), 0).x);
-                    }
-                    _2083 = _2741 + _2739;
-                }
-            }
-            float _2093 = _2698 * 0.015625;
-            float _1996 = (_2093 + (_77.lam * float(abs(_1957.x - _1302.x) + abs(_1957.y - _1302.y)))) + (_77.zeroBias * float((_1957.x != 0) || (_1957.y != 0)));
-            bool _1999 = _1996 < _3022;
-            float _3026 = _1999 ? _1996 : _3022;
-            int2 _2130 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(1, 0), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
-            float _2708;
-            _2708 = 0.0;
-            float _2735;
-            for (uint _2707 = 0u; _2707 < 8u; _2708 = _2735, _2707++)
-            {
-                _2735 = _2708;
-                float _2256;
-                for (uint _2731 = 0u; _2731 < 8u; _2735 = _2256, _2731++)
-                {
-                    int2 _2209 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2731, _2707)), (int2(_77.lvlSize) - int2(1)));
-                    int2 _2212 = _2209 + _2130;
-                    float _2733;
-                    if (any(_2212 < int2(0)) || any(_2212 >= int2(_77.lvlSize)))
-                    {
-                        _2733 = 0.25;
-                    }
-                    else
-                    {
-                        _2733 = abs(SrcL.read(uint2(int3(_2209, 0).xy), 0).x - DstL.read(uint2(int3(_2212, 0).xy), 0).x);
-                    }
-                    _2256 = _2735 + _2733;
-                }
-            }
-            float _2266 = _2708 * 0.015625;
-            float _2169 = (_2266 + (_77.lam * float(abs(_2130.x - _1302.x) + abs(_2130.y - _1302.y)))) + (_77.zeroBias * float((_2130.x != 0) || (_2130.y != 0)));
-            bool _2172 = _2169 < _3026;
-            float _3029 = _2172 ? _2266 : (_1999 ? _2093 : (_1826 ? _1920 : (_1653 ? _1747 : (_1480 ? _1574 : (_1344 ? _1438 : 1000000015047466219876688855040.0)))));
-            int2 _3032 = select(select(select(select(select(select(int2(0), _1302, bool2(_1344)), int2(0), bool2(_1480)), _1611, bool2(_1653)), _1784, bool2(_1826)), _1957, bool2(_1999)), _2130, bool2(_2172));
-            int2 _2815;
-            float _2819;
-            if (_77.hasTemporal != 0u)
-            {
-                uint _2282 = 1u << _77.temporalShift;
-                int2 _2313 = int2(rint(Temporal.read(uint2(int3(int2(min((gl_GlobalInvocationID.xy * uint2(_2282)), (uint2(Temporal.get_width(), Temporal.get_height()) - uint2(1u)))), 0).xy), 0).xy / float2(float(_2282))));
-                float _2718;
-                _2718 = 0.0;
-                float _2729;
-                for (uint _2717 = 0u; _2717 < 8u; _2718 = _2729, _2717++)
-                {
-                    _2729 = _2718;
-                    float _2439;
-                    for (uint _2725 = 0u; _2725 < 8u; _2729 = _2439, _2725++)
-                    {
-                        int2 _2392 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2725, _2717)), (int2(_77.lvlSize) - int2(1)));
-                        int2 _2395 = _2392 + _2313;
-                        float _2727;
-                        if (any(_2395 < int2(0)) || any(_2395 >= int2(_77.lvlSize)))
-                        {
-                            _2727 = 0.25;
-                        }
-                        else
-                        {
-                            _2727 = abs(SrcL.read(uint2(int3(_2392, 0).xy), 0).x - DstL.read(uint2(int3(_2395, 0).xy), 0).x);
-                        }
-                        _2439 = _2729 + _2727;
-                    }
-                }
-                float _2449 = _2718 * 0.015625;
-                bool _2355 = ((_2449 + (_77.lam * float(abs(_2313.x - _1302.x) + abs(_2313.y - _1302.y)))) + (_77.zeroBias * float((_2313.x != 0) || (_2313.y != 0)))) < (_2172 ? _2169 : _3026);
-                _2819 = _2355 ? _2449 : _3029;
-                _2815 = select(_3032, _2313, bool2(_2355));
+                _2592 = _1438;
+                _2591 = _1341;
+                _2589 = _1302;
             }
             else
             {
-                _2819 = _3029;
-                _2815 = _3032;
+                _2592 = 1000000015047466219876688855040.0;
+                _2591 = 1000000015047466219876688855040.0;
+                _2589 = int2(0);
             }
-            _2830 = _1302;
-            _2817 = _2819;
-            _2813 = _2815;
-        }
-        uint _3037 = _749 ? 1u : _77.refineIters;
-        int2 _2812;
-        float _2816;
-        _2816 = _2817;
-        _2812 = _2813;
-        int2 _2821;
-        float _2823;
-        for (uint _2780 = 0u; _2780 < _3037; _2816 = _2823, _2812 = _2821, _2780++)
-        {
-            _2823 = 1000000015047466219876688855040.0;
-            _2821 = _2812;
-            int2 _2839;
-            float _2840;
-            float _2841;
-            int _2820 = -1;
-            float _2822 = 1000000015047466219876688855040.0;
-            for (; _2820 <= 1; _2823 = _2841, _2822 = _2840, _2821 = _2839, _2820++)
+            int2 _670 = int2(0);
+            int2 _671 = _1302;
+            float _2597;
+            _2597 = 0.0;
+            float _6526;
+            for (uint _2596 = 0u; _2596 < 8u; _2597 = _6526, _2596++)
             {
-                _2841 = _2823;
-                _2840 = _2822;
-                _2839 = _2821;
-                float _3038;
-                float _3039;
-                int2 _3041;
-                for (int _2825 = -1; _2825 <= 1; _2841 = _3038, _2840 = _3039, _2839 = _3041, _2825++)
+                int2 _1517 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _2686;
+                if (any(_1517 < int2(0)) || any(_1517 >= int2(_77.lvlSize)))
                 {
-                    int2 _912 = _2812 + int2(_2825, _2820);
-                    float _2843;
-                    _2843 = 0.0;
-                    float _2856;
-                    for (uint _2842 = 0u; _2842 < 8u; _2843 = _2856, _2842++)
+                    _2686 = 0.25;
+                }
+                else
+                {
+                    _2686 = abs(SrcL.read(uint2(int3(_1517, 0).xy), 0).x - DstL.read(uint2(int3(_1517, 0).xy), 0).x);
+                }
+                int2 _6146 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _6183;
+                if (any(_6146 < int2(0)) || any(_6146 >= int2(_77.lvlSize)))
+                {
+                    _6183 = 0.25;
+                }
+                else
+                {
+                    _6183 = abs(SrcL.read(uint2(int3(_6146, 0).xy), 0).x - DstL.read(uint2(int3(_6146, 0).xy), 0).x);
+                }
+                int2 _6203 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _6240;
+                if (any(_6203 < int2(0)) || any(_6203 >= int2(_77.lvlSize)))
+                {
+                    _6240 = 0.25;
+                }
+                else
+                {
+                    _6240 = abs(SrcL.read(uint2(int3(_6203, 0).xy), 0).x - DstL.read(uint2(int3(_6203, 0).xy), 0).x);
+                }
+                int2 _6260 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _6297;
+                if (any(_6260 < int2(0)) || any(_6260 >= int2(_77.lvlSize)))
+                {
+                    _6297 = 0.25;
+                }
+                else
+                {
+                    _6297 = abs(SrcL.read(uint2(int3(_6260, 0).xy), 0).x - DstL.read(uint2(int3(_6260, 0).xy), 0).x);
+                }
+                int2 _6317 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _6354;
+                if (any(_6317 < int2(0)) || any(_6317 >= int2(_77.lvlSize)))
+                {
+                    _6354 = 0.25;
+                }
+                else
+                {
+                    _6354 = abs(SrcL.read(uint2(int3(_6317, 0).xy), 0).x - DstL.read(uint2(int3(_6317, 0).xy), 0).x);
+                }
+                int2 _6374 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _6411;
+                if (any(_6374 < int2(0)) || any(_6374 >= int2(_77.lvlSize)))
+                {
+                    _6411 = 0.25;
+                }
+                else
+                {
+                    _6411 = abs(SrcL.read(uint2(int3(_6374, 0).xy), 0).x - DstL.read(uint2(int3(_6374, 0).xy), 0).x);
+                }
+                int2 _6431 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _6468;
+                if (any(_6431 < int2(0)) || any(_6431 >= int2(_77.lvlSize)))
+                {
+                    _6468 = 0.25;
+                }
+                else
+                {
+                    _6468 = abs(SrcL.read(uint2(int3(_6431, 0).xy), 0).x - DstL.read(uint2(int3(_6431, 0).xy), 0).x);
+                }
+                int2 _6488 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2596)), (int2(_77.lvlSize) - int2(1)));
+                float _6525;
+                if (any(_6488 < int2(0)) || any(_6488 >= int2(_77.lvlSize)))
+                {
+                    _6525 = 0.25;
+                }
+                else
+                {
+                    _6525 = abs(SrcL.read(uint2(int3(_6488, 0).xy), 0).x - DstL.read(uint2(int3(_6488, 0).xy), 0).x);
+                }
+                _6526 = (((((((_2597 + _2686) + _6183) + _6240) + _6297) + _6354) + _6411) + _6468) + _6525;
+            }
+            float _1574 = _2597 * 0.015625;
+            float _1477 = (_1574 + (_77.lam * float(abs(_670.x - _671.x) + abs(_670.y - _671.y)))) + (_77.zeroBias * float((_670.x != 0) || (_670.y != 0)));
+            int2 _2599;
+            float _2601;
+            float _2602;
+            if (_1477 < _2591)
+            {
+                _2602 = _1574;
+                _2601 = _1477;
+                _2599 = int2(0);
+            }
+            else
+            {
+                _2602 = _2592;
+                _2601 = _2591;
+                _2599 = _2589;
+            }
+            int2 _1611 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(0, -1), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
+            int2 _678 = _1611;
+            int2 _679 = _1302;
+            float _2607;
+            _2607 = 0.0;
+            float _6127;
+            for (uint _2606 = 0u; _2606 < 8u; _2607 = _6127, _2606++)
+            {
+                int2 _1690 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _1693 = _1690 + _1611;
+                float _2680;
+                if (any(_1693 < int2(0)) || any(_1693 >= int2(_77.lvlSize)))
+                {
+                    _2680 = 0.25;
+                }
+                else
+                {
+                    _2680 = abs(SrcL.read(uint2(int3(_1690, 0).xy), 0).x - DstL.read(uint2(int3(_1693, 0).xy), 0).x);
+                }
+                int2 _5747 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5748 = _5747 + _1611;
+                float _5784;
+                if (any(_5748 < int2(0)) || any(_5748 >= int2(_77.lvlSize)))
+                {
+                    _5784 = 0.25;
+                }
+                else
+                {
+                    _5784 = abs(SrcL.read(uint2(int3(_5747, 0).xy), 0).x - DstL.read(uint2(int3(_5748, 0).xy), 0).x);
+                }
+                int2 _5804 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5805 = _5804 + _1611;
+                float _5841;
+                if (any(_5805 < int2(0)) || any(_5805 >= int2(_77.lvlSize)))
+                {
+                    _5841 = 0.25;
+                }
+                else
+                {
+                    _5841 = abs(SrcL.read(uint2(int3(_5804, 0).xy), 0).x - DstL.read(uint2(int3(_5805, 0).xy), 0).x);
+                }
+                int2 _5861 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5862 = _5861 + _1611;
+                float _5898;
+                if (any(_5862 < int2(0)) || any(_5862 >= int2(_77.lvlSize)))
+                {
+                    _5898 = 0.25;
+                }
+                else
+                {
+                    _5898 = abs(SrcL.read(uint2(int3(_5861, 0).xy), 0).x - DstL.read(uint2(int3(_5862, 0).xy), 0).x);
+                }
+                int2 _5918 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5919 = _5918 + _1611;
+                float _5955;
+                if (any(_5919 < int2(0)) || any(_5919 >= int2(_77.lvlSize)))
+                {
+                    _5955 = 0.25;
+                }
+                else
+                {
+                    _5955 = abs(SrcL.read(uint2(int3(_5918, 0).xy), 0).x - DstL.read(uint2(int3(_5919, 0).xy), 0).x);
+                }
+                int2 _5975 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5976 = _5975 + _1611;
+                float _6012;
+                if (any(_5976 < int2(0)) || any(_5976 >= int2(_77.lvlSize)))
+                {
+                    _6012 = 0.25;
+                }
+                else
+                {
+                    _6012 = abs(SrcL.read(uint2(int3(_5975, 0).xy), 0).x - DstL.read(uint2(int3(_5976, 0).xy), 0).x);
+                }
+                int2 _6032 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6033 = _6032 + _1611;
+                float _6069;
+                if (any(_6033 < int2(0)) || any(_6033 >= int2(_77.lvlSize)))
+                {
+                    _6069 = 0.25;
+                }
+                else
+                {
+                    _6069 = abs(SrcL.read(uint2(int3(_6032, 0).xy), 0).x - DstL.read(uint2(int3(_6033, 0).xy), 0).x);
+                }
+                int2 _6089 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2606)), (int2(_77.lvlSize) - int2(1)));
+                int2 _6090 = _6089 + _1611;
+                float _6126;
+                if (any(_6090 < int2(0)) || any(_6090 >= int2(_77.lvlSize)))
+                {
+                    _6126 = 0.25;
+                }
+                else
+                {
+                    _6126 = abs(SrcL.read(uint2(int3(_6089, 0).xy), 0).x - DstL.read(uint2(int3(_6090, 0).xy), 0).x);
+                }
+                _6127 = (((((((_2607 + _2680) + _5784) + _5841) + _5898) + _5955) + _6012) + _6069) + _6126;
+            }
+            float _1747 = _2607 * 0.015625;
+            float _1650 = (_1747 + (_77.lam * float(abs(_678.x - _679.x) + abs(_678.y - _679.y)))) + (_77.zeroBias * float((_678.x != 0) || (_678.y != 0)));
+            int2 _2609;
+            float _2611;
+            float _2612;
+            if (_1650 < _2601)
+            {
+                _2612 = _1747;
+                _2611 = _1650;
+                _2609 = _1611;
+            }
+            else
+            {
+                _2612 = _2602;
+                _2611 = _2601;
+                _2609 = _2599;
+            }
+            int2 _1784 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(0, 1), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
+            int2 _686 = _1784;
+            int2 _687 = _1302;
+            float _2617;
+            _2617 = 0.0;
+            float _5728;
+            for (uint _2616 = 0u; _2616 < 8u; _2617 = _5728, _2616++)
+            {
+                int2 _1863 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _1866 = _1863 + _1784;
+                float _2674;
+                if (any(_1866 < int2(0)) || any(_1866 >= int2(_77.lvlSize)))
+                {
+                    _2674 = 0.25;
+                }
+                else
+                {
+                    _2674 = abs(SrcL.read(uint2(int3(_1863, 0).xy), 0).x - DstL.read(uint2(int3(_1866, 0).xy), 0).x);
+                }
+                int2 _5348 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5349 = _5348 + _1784;
+                float _5385;
+                if (any(_5349 < int2(0)) || any(_5349 >= int2(_77.lvlSize)))
+                {
+                    _5385 = 0.25;
+                }
+                else
+                {
+                    _5385 = abs(SrcL.read(uint2(int3(_5348, 0).xy), 0).x - DstL.read(uint2(int3(_5349, 0).xy), 0).x);
+                }
+                int2 _5405 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5406 = _5405 + _1784;
+                float _5442;
+                if (any(_5406 < int2(0)) || any(_5406 >= int2(_77.lvlSize)))
+                {
+                    _5442 = 0.25;
+                }
+                else
+                {
+                    _5442 = abs(SrcL.read(uint2(int3(_5405, 0).xy), 0).x - DstL.read(uint2(int3(_5406, 0).xy), 0).x);
+                }
+                int2 _5462 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5463 = _5462 + _1784;
+                float _5499;
+                if (any(_5463 < int2(0)) || any(_5463 >= int2(_77.lvlSize)))
+                {
+                    _5499 = 0.25;
+                }
+                else
+                {
+                    _5499 = abs(SrcL.read(uint2(int3(_5462, 0).xy), 0).x - DstL.read(uint2(int3(_5463, 0).xy), 0).x);
+                }
+                int2 _5519 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5520 = _5519 + _1784;
+                float _5556;
+                if (any(_5520 < int2(0)) || any(_5520 >= int2(_77.lvlSize)))
+                {
+                    _5556 = 0.25;
+                }
+                else
+                {
+                    _5556 = abs(SrcL.read(uint2(int3(_5519, 0).xy), 0).x - DstL.read(uint2(int3(_5520, 0).xy), 0).x);
+                }
+                int2 _5576 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5577 = _5576 + _1784;
+                float _5613;
+                if (any(_5577 < int2(0)) || any(_5577 >= int2(_77.lvlSize)))
+                {
+                    _5613 = 0.25;
+                }
+                else
+                {
+                    _5613 = abs(SrcL.read(uint2(int3(_5576, 0).xy), 0).x - DstL.read(uint2(int3(_5577, 0).xy), 0).x);
+                }
+                int2 _5633 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5634 = _5633 + _1784;
+                float _5670;
+                if (any(_5634 < int2(0)) || any(_5634 >= int2(_77.lvlSize)))
+                {
+                    _5670 = 0.25;
+                }
+                else
+                {
+                    _5670 = abs(SrcL.read(uint2(int3(_5633, 0).xy), 0).x - DstL.read(uint2(int3(_5634, 0).xy), 0).x);
+                }
+                int2 _5690 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2616)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5691 = _5690 + _1784;
+                float _5727;
+                if (any(_5691 < int2(0)) || any(_5691 >= int2(_77.lvlSize)))
+                {
+                    _5727 = 0.25;
+                }
+                else
+                {
+                    _5727 = abs(SrcL.read(uint2(int3(_5690, 0).xy), 0).x - DstL.read(uint2(int3(_5691, 0).xy), 0).x);
+                }
+                _5728 = (((((((_2617 + _2674) + _5385) + _5442) + _5499) + _5556) + _5613) + _5670) + _5727;
+            }
+            float _1920 = _2617 * 0.015625;
+            float _1823 = (_1920 + (_77.lam * float(abs(_686.x - _687.x) + abs(_686.y - _687.y)))) + (_77.zeroBias * float((_686.x != 0) || (_686.y != 0)));
+            int2 _2619;
+            float _2621;
+            float _2622;
+            if (_1823 < _2611)
+            {
+                _2622 = _1920;
+                _2621 = _1823;
+                _2619 = _1784;
+            }
+            else
+            {
+                _2622 = _2612;
+                _2621 = _2611;
+                _2619 = _2609;
+            }
+            int2 _1957 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(-1, 0), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
+            int2 _694 = _1957;
+            int2 _695 = _1302;
+            float _2627;
+            _2627 = 0.0;
+            float _5329;
+            for (uint _2626 = 0u; _2626 < 8u; _2627 = _5329, _2626++)
+            {
+                int2 _2036 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _2039 = _2036 + _1957;
+                float _2668;
+                if (any(_2039 < int2(0)) || any(_2039 >= int2(_77.lvlSize)))
+                {
+                    _2668 = 0.25;
+                }
+                else
+                {
+                    _2668 = abs(SrcL.read(uint2(int3(_2036, 0).xy), 0).x - DstL.read(uint2(int3(_2039, 0).xy), 0).x);
+                }
+                int2 _4949 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4950 = _4949 + _1957;
+                float _4986;
+                if (any(_4950 < int2(0)) || any(_4950 >= int2(_77.lvlSize)))
+                {
+                    _4986 = 0.25;
+                }
+                else
+                {
+                    _4986 = abs(SrcL.read(uint2(int3(_4949, 0).xy), 0).x - DstL.read(uint2(int3(_4950, 0).xy), 0).x);
+                }
+                int2 _5006 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5007 = _5006 + _1957;
+                float _5043;
+                if (any(_5007 < int2(0)) || any(_5007 >= int2(_77.lvlSize)))
+                {
+                    _5043 = 0.25;
+                }
+                else
+                {
+                    _5043 = abs(SrcL.read(uint2(int3(_5006, 0).xy), 0).x - DstL.read(uint2(int3(_5007, 0).xy), 0).x);
+                }
+                int2 _5063 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5064 = _5063 + _1957;
+                float _5100;
+                if (any(_5064 < int2(0)) || any(_5064 >= int2(_77.lvlSize)))
+                {
+                    _5100 = 0.25;
+                }
+                else
+                {
+                    _5100 = abs(SrcL.read(uint2(int3(_5063, 0).xy), 0).x - DstL.read(uint2(int3(_5064, 0).xy), 0).x);
+                }
+                int2 _5120 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5121 = _5120 + _1957;
+                float _5157;
+                if (any(_5121 < int2(0)) || any(_5121 >= int2(_77.lvlSize)))
+                {
+                    _5157 = 0.25;
+                }
+                else
+                {
+                    _5157 = abs(SrcL.read(uint2(int3(_5120, 0).xy), 0).x - DstL.read(uint2(int3(_5121, 0).xy), 0).x);
+                }
+                int2 _5177 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5178 = _5177 + _1957;
+                float _5214;
+                if (any(_5178 < int2(0)) || any(_5178 >= int2(_77.lvlSize)))
+                {
+                    _5214 = 0.25;
+                }
+                else
+                {
+                    _5214 = abs(SrcL.read(uint2(int3(_5177, 0).xy), 0).x - DstL.read(uint2(int3(_5178, 0).xy), 0).x);
+                }
+                int2 _5234 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5235 = _5234 + _1957;
+                float _5271;
+                if (any(_5235 < int2(0)) || any(_5235 >= int2(_77.lvlSize)))
+                {
+                    _5271 = 0.25;
+                }
+                else
+                {
+                    _5271 = abs(SrcL.read(uint2(int3(_5234, 0).xy), 0).x - DstL.read(uint2(int3(_5235, 0).xy), 0).x);
+                }
+                int2 _5291 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2626)), (int2(_77.lvlSize) - int2(1)));
+                int2 _5292 = _5291 + _1957;
+                float _5328;
+                if (any(_5292 < int2(0)) || any(_5292 >= int2(_77.lvlSize)))
+                {
+                    _5328 = 0.25;
+                }
+                else
+                {
+                    _5328 = abs(SrcL.read(uint2(int3(_5291, 0).xy), 0).x - DstL.read(uint2(int3(_5292, 0).xy), 0).x);
+                }
+                _5329 = (((((((_2627 + _2668) + _4986) + _5043) + _5100) + _5157) + _5214) + _5271) + _5328;
+            }
+            float _2093 = _2627 * 0.015625;
+            float _1996 = (_2093 + (_77.lam * float(abs(_694.x - _695.x) + abs(_694.y - _695.y)))) + (_77.zeroBias * float((_694.x != 0) || (_694.y != 0)));
+            int2 _2629;
+            float _2631;
+            float _2632;
+            if (_1996 < _2621)
+            {
+                _2632 = _2093;
+                _2631 = _1996;
+                _2629 = _1957;
+            }
+            else
+            {
+                _2632 = _2622;
+                _2631 = _2621;
+                _2629 = _2619;
+            }
+            int2 _2130 = int2(rint(Parent.read(uint2(int3(clamp(int2(min((gl_GlobalInvocationID.xy / uint2(2u)), (_77.parentGrid - uint2(1u)))) + int2(1, 0), int2(0), int2(_77.parentGrid) - int2(1)), 0).xy), 0).xy)) * int2(2);
+            int2 _702 = _2130;
+            int2 _703 = _1302;
+            float _2637;
+            _2637 = 0.0;
+            float _4930;
+            for (uint _2636 = 0u; _2636 < 8u; _2637 = _4930, _2636++)
+            {
+                int2 _2209 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _2212 = _2209 + _2130;
+                float _2662;
+                if (any(_2212 < int2(0)) || any(_2212 >= int2(_77.lvlSize)))
+                {
+                    _2662 = 0.25;
+                }
+                else
+                {
+                    _2662 = abs(SrcL.read(uint2(int3(_2209, 0).xy), 0).x - DstL.read(uint2(int3(_2212, 0).xy), 0).x);
+                }
+                int2 _4550 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4551 = _4550 + _2130;
+                float _4587;
+                if (any(_4551 < int2(0)) || any(_4551 >= int2(_77.lvlSize)))
+                {
+                    _4587 = 0.25;
+                }
+                else
+                {
+                    _4587 = abs(SrcL.read(uint2(int3(_4550, 0).xy), 0).x - DstL.read(uint2(int3(_4551, 0).xy), 0).x);
+                }
+                int2 _4607 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4608 = _4607 + _2130;
+                float _4644;
+                if (any(_4608 < int2(0)) || any(_4608 >= int2(_77.lvlSize)))
+                {
+                    _4644 = 0.25;
+                }
+                else
+                {
+                    _4644 = abs(SrcL.read(uint2(int3(_4607, 0).xy), 0).x - DstL.read(uint2(int3(_4608, 0).xy), 0).x);
+                }
+                int2 _4664 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4665 = _4664 + _2130;
+                float _4701;
+                if (any(_4665 < int2(0)) || any(_4665 >= int2(_77.lvlSize)))
+                {
+                    _4701 = 0.25;
+                }
+                else
+                {
+                    _4701 = abs(SrcL.read(uint2(int3(_4664, 0).xy), 0).x - DstL.read(uint2(int3(_4665, 0).xy), 0).x);
+                }
+                int2 _4721 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4722 = _4721 + _2130;
+                float _4758;
+                if (any(_4722 < int2(0)) || any(_4722 >= int2(_77.lvlSize)))
+                {
+                    _4758 = 0.25;
+                }
+                else
+                {
+                    _4758 = abs(SrcL.read(uint2(int3(_4721, 0).xy), 0).x - DstL.read(uint2(int3(_4722, 0).xy), 0).x);
+                }
+                int2 _4778 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4779 = _4778 + _2130;
+                float _4815;
+                if (any(_4779 < int2(0)) || any(_4779 >= int2(_77.lvlSize)))
+                {
+                    _4815 = 0.25;
+                }
+                else
+                {
+                    _4815 = abs(SrcL.read(uint2(int3(_4778, 0).xy), 0).x - DstL.read(uint2(int3(_4779, 0).xy), 0).x);
+                }
+                int2 _4835 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4836 = _4835 + _2130;
+                float _4872;
+                if (any(_4836 < int2(0)) || any(_4836 >= int2(_77.lvlSize)))
+                {
+                    _4872 = 0.25;
+                }
+                else
+                {
+                    _4872 = abs(SrcL.read(uint2(int3(_4835, 0).xy), 0).x - DstL.read(uint2(int3(_4836, 0).xy), 0).x);
+                }
+                int2 _4892 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2636)), (int2(_77.lvlSize) - int2(1)));
+                int2 _4893 = _4892 + _2130;
+                float _4929;
+                if (any(_4893 < int2(0)) || any(_4893 >= int2(_77.lvlSize)))
+                {
+                    _4929 = 0.25;
+                }
+                else
+                {
+                    _4929 = abs(SrcL.read(uint2(int3(_4892, 0).xy), 0).x - DstL.read(uint2(int3(_4893, 0).xy), 0).x);
+                }
+                _4930 = (((((((_2637 + _2662) + _4587) + _4644) + _4701) + _4758) + _4815) + _4872) + _4929;
+            }
+            float _2266 = _2637 * 0.015625;
+            float _2169 = (_2266 + (_77.lam * float(abs(_702.x - _703.x) + abs(_702.y - _703.y)))) + (_77.zeroBias * float((_702.x != 0) || (_702.y != 0)));
+            int2 _2639;
+            float _2641;
+            float _2642;
+            if (_2169 < _2631)
+            {
+                _2642 = _2266;
+                _2641 = _2169;
+                _2639 = _2130;
+            }
+            else
+            {
+                _2642 = _2632;
+                _2641 = _2631;
+                _2639 = _2629;
+            }
+            int2 _2744;
+            float _2748;
+            if (_77.hasTemporal != 0u)
+            {
+                uint2 _2267 = uint2(Temporal.get_width(), Temporal.get_height());
+                uint _2282 = 1u << _77.temporalShift;
+                int2 _2313 = int2(rint(Temporal.read(uint2(int3(int2(min((gl_GlobalInvocationID.xy * uint2(_2282)), (uint2(_2267.x, _2267.y) - uint2(1u)))), 0).xy), 0).xy / float2(float(_2282))));
+                int2 _709 = _2313;
+                int2 _710 = _1302;
+                float _2647;
+                _2647 = 0.0;
+                float _4531;
+                for (uint _2646 = 0u; _2646 < 8u; _2647 = _4531, _2646++)
+                {
+                    int2 _2392 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _2395 = _2392 + _2313;
+                    float _2656;
+                    if (any(_2395 < int2(0)) || any(_2395 >= int2(_77.lvlSize)))
                     {
-                        _2856 = _2843;
-                        float _2575;
-                        for (uint _2852 = 0u; _2852 < 8u; _2856 = _2575, _2852++)
-                        {
-                            int2 _2528 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(_2852, _2842)), (int2(_77.lvlSize) - int2(1)));
-                            int2 _2531 = _2528 + _912;
-                            float _2854;
-                            if (any(_2531 < int2(0)) || any(_2531 >= int2(_77.lvlSize)))
-                            {
-                                _2854 = 0.25;
-                            }
-                            else
-                            {
-                                _2854 = abs(SrcL.read(uint2(int3(_2528, 0).xy), 0).x - DstL.read(uint2(int3(_2531, 0).xy), 0).x);
-                            }
-                            _2575 = _2856 + _2854;
-                        }
+                        _2656 = 0.25;
                     }
-                    float _2585 = _2843 * 0.015625;
-                    float _2488 = (_2585 + (_77.lam * float(abs(_912.x - _2830.x) + abs(_912.y - _2830.y)))) + (_77.zeroBias * float((_912.x != 0) || (_912.y != 0)));
-                    bool _2491 = _2488 < _2840;
-                    _3038 = _2491 ? _2585 : _2841;
-                    _3039 = _2491 ? _2488 : _2840;
-                    _3041 = select(_2839, _912, bool2(_2491));
+                    else
+                    {
+                        _2656 = abs(SrcL.read(uint2(int3(_2392, 0).xy), 0).x - DstL.read(uint2(int3(_2395, 0).xy), 0).x);
+                    }
+                    int2 _4151 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _4152 = _4151 + _2313;
+                    float _4188;
+                    if (any(_4152 < int2(0)) || any(_4152 >= int2(_77.lvlSize)))
+                    {
+                        _4188 = 0.25;
+                    }
+                    else
+                    {
+                        _4188 = abs(SrcL.read(uint2(int3(_4151, 0).xy), 0).x - DstL.read(uint2(int3(_4152, 0).xy), 0).x);
+                    }
+                    int2 _4208 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _4209 = _4208 + _2313;
+                    float _4245;
+                    if (any(_4209 < int2(0)) || any(_4209 >= int2(_77.lvlSize)))
+                    {
+                        _4245 = 0.25;
+                    }
+                    else
+                    {
+                        _4245 = abs(SrcL.read(uint2(int3(_4208, 0).xy), 0).x - DstL.read(uint2(int3(_4209, 0).xy), 0).x);
+                    }
+                    int2 _4265 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _4266 = _4265 + _2313;
+                    float _4302;
+                    if (any(_4266 < int2(0)) || any(_4266 >= int2(_77.lvlSize)))
+                    {
+                        _4302 = 0.25;
+                    }
+                    else
+                    {
+                        _4302 = abs(SrcL.read(uint2(int3(_4265, 0).xy), 0).x - DstL.read(uint2(int3(_4266, 0).xy), 0).x);
+                    }
+                    int2 _4322 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _4323 = _4322 + _2313;
+                    float _4359;
+                    if (any(_4323 < int2(0)) || any(_4323 >= int2(_77.lvlSize)))
+                    {
+                        _4359 = 0.25;
+                    }
+                    else
+                    {
+                        _4359 = abs(SrcL.read(uint2(int3(_4322, 0).xy), 0).x - DstL.read(uint2(int3(_4323, 0).xy), 0).x);
+                    }
+                    int2 _4379 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _4380 = _4379 + _2313;
+                    float _4416;
+                    if (any(_4380 < int2(0)) || any(_4380 >= int2(_77.lvlSize)))
+                    {
+                        _4416 = 0.25;
+                    }
+                    else
+                    {
+                        _4416 = abs(SrcL.read(uint2(int3(_4379, 0).xy), 0).x - DstL.read(uint2(int3(_4380, 0).xy), 0).x);
+                    }
+                    int2 _4436 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _4437 = _4436 + _2313;
+                    float _4473;
+                    if (any(_4437 < int2(0)) || any(_4437 >= int2(_77.lvlSize)))
+                    {
+                        _4473 = 0.25;
+                    }
+                    else
+                    {
+                        _4473 = abs(SrcL.read(uint2(int3(_4436, 0).xy), 0).x - DstL.read(uint2(int3(_4437, 0).xy), 0).x);
+                    }
+                    int2 _4493 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2646)), (int2(_77.lvlSize) - int2(1)));
+                    int2 _4494 = _4493 + _2313;
+                    float _4530;
+                    if (any(_4494 < int2(0)) || any(_4494 >= int2(_77.lvlSize)))
+                    {
+                        _4530 = 0.25;
+                    }
+                    else
+                    {
+                        _4530 = abs(SrcL.read(uint2(int3(_4493, 0).xy), 0).x - DstL.read(uint2(int3(_4494, 0).xy), 0).x);
+                    }
+                    _4531 = (((((((_2647 + _2656) + _4188) + _4245) + _4302) + _4359) + _4416) + _4473) + _4530;
+                }
+                float _2449 = _2647 * 0.015625;
+                int2 _2649;
+                float _2652;
+                if (((_2449 + (_77.lam * float(abs(_709.x - _710.x) + abs(_709.y - _710.y)))) + (_77.zeroBias * float((_709.x != 0) || (_709.y != 0)))) < _2641)
+                {
+                    _2652 = _2449;
+                    _2649 = _2313;
+                }
+                else
+                {
+                    _2652 = _2642;
+                    _2649 = _2639;
+                }
+                _2748 = _2652;
+                _2744 = _2649;
+            }
+            else
+            {
+                _2748 = _2642;
+                _2744 = _2639;
+            }
+            _2759 = _1302;
+            _2746 = _2748;
+            _2742 = _2744;
+            _2711 = _77.refineIters;
+        }
+        int2 _2741;
+        float _2745;
+        _2745 = _2746;
+        _2741 = _2742;
+        int2 _2750;
+        float _2752;
+        for (uint _2709 = 0u; _2709 < _2711; _2745 = _2752, _2741 = _2750, _2709++)
+        {
+            _2752 = 1000000015047466219876688855040.0;
+            _2750 = _2741;
+            int2 _2768;
+            float _2769;
+            float _2770;
+            int _2749 = -1;
+            float _2751 = 1000000015047466219876688855040.0;
+            for (; _2749 <= 1; _2752 = _2770, _2751 = _2769, _2750 = _2768, _2749++)
+            {
+                _2770 = _2752;
+                _2769 = _2751;
+                _2768 = _2750;
+                int2 _2774;
+                float _2776;
+                float _2777;
+                for (int _2754 = -1; _2754 <= 1; _2770 = _2777, _2769 = _2776, _2768 = _2774, _2754++)
+                {
+                    int2 _912 = _2741 + int2(_2754, _2749);
+                    int2 _722 = _912;
+                    int2 _723 = _2759;
+                    float _2772;
+                    _2772 = 0.0;
+                    float _3334;
+                    for (uint _2771 = 0u; _2771 < 8u; _2772 = _3334, _2771++)
+                    {
+                        int2 _2528 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(0u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _2531 = _2528 + _912;
+                        float _2783;
+                        if (any(_2531 < int2(0)) || any(_2531 >= int2(_77.lvlSize)))
+                        {
+                            _2783 = 0.25;
+                        }
+                        else
+                        {
+                            _2783 = abs(SrcL.read(uint2(int3(_2528, 0).xy), 0).x - DstL.read(uint2(int3(_2531, 0).xy), 0).x);
+                        }
+                        int2 _2954 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(1u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _2955 = _2954 + _912;
+                        float _2991;
+                        if (any(_2955 < int2(0)) || any(_2955 >= int2(_77.lvlSize)))
+                        {
+                            _2991 = 0.25;
+                        }
+                        else
+                        {
+                            _2991 = abs(SrcL.read(uint2(int3(_2954, 0).xy), 0).x - DstL.read(uint2(int3(_2955, 0).xy), 0).x);
+                        }
+                        int2 _3011 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(2u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3012 = _3011 + _912;
+                        float _3048;
+                        if (any(_3012 < int2(0)) || any(_3012 >= int2(_77.lvlSize)))
+                        {
+                            _3048 = 0.25;
+                        }
+                        else
+                        {
+                            _3048 = abs(SrcL.read(uint2(int3(_3011, 0).xy), 0).x - DstL.read(uint2(int3(_3012, 0).xy), 0).x);
+                        }
+                        int2 _3068 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(3u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3069 = _3068 + _912;
+                        float _3105;
+                        if (any(_3069 < int2(0)) || any(_3069 >= int2(_77.lvlSize)))
+                        {
+                            _3105 = 0.25;
+                        }
+                        else
+                        {
+                            _3105 = abs(SrcL.read(uint2(int3(_3068, 0).xy), 0).x - DstL.read(uint2(int3(_3069, 0).xy), 0).x);
+                        }
+                        int2 _3125 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(4u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3126 = _3125 + _912;
+                        float _3162;
+                        if (any(_3126 < int2(0)) || any(_3126 >= int2(_77.lvlSize)))
+                        {
+                            _3162 = 0.25;
+                        }
+                        else
+                        {
+                            _3162 = abs(SrcL.read(uint2(int3(_3125, 0).xy), 0).x - DstL.read(uint2(int3(_3126, 0).xy), 0).x);
+                        }
+                        int2 _3182 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(5u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3183 = _3182 + _912;
+                        float _3219;
+                        if (any(_3183 < int2(0)) || any(_3183 >= int2(_77.lvlSize)))
+                        {
+                            _3219 = 0.25;
+                        }
+                        else
+                        {
+                            _3219 = abs(SrcL.read(uint2(int3(_3182, 0).xy), 0).x - DstL.read(uint2(int3(_3183, 0).xy), 0).x);
+                        }
+                        int2 _3239 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(6u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3240 = _3239 + _912;
+                        float _3276;
+                        if (any(_3240 < int2(0)) || any(_3240 >= int2(_77.lvlSize)))
+                        {
+                            _3276 = 0.25;
+                        }
+                        else
+                        {
+                            _3276 = abs(SrcL.read(uint2(int3(_3239, 0).xy), 0).x - DstL.read(uint2(int3(_3240, 0).xy), 0).x);
+                        }
+                        int2 _3296 = min(int2((gl_GlobalInvocationID.xy * uint2(8u)) + uint2(7u, _2771)), (int2(_77.lvlSize) - int2(1)));
+                        int2 _3297 = _3296 + _912;
+                        float _3333;
+                        if (any(_3297 < int2(0)) || any(_3297 >= int2(_77.lvlSize)))
+                        {
+                            _3333 = 0.25;
+                        }
+                        else
+                        {
+                            _3333 = abs(SrcL.read(uint2(int3(_3296, 0).xy), 0).x - DstL.read(uint2(int3(_3297, 0).xy), 0).x);
+                        }
+                        _3334 = (((((((_2772 + _2783) + _2991) + _3048) + _3105) + _3162) + _3219) + _3276) + _3333;
+                    }
+                    float _2585 = _2772 * 0.015625;
+                    float _2488 = (_2585 + (_77.lam * float(abs(_722.x - _723.x) + abs(_722.y - _723.y)))) + (_77.zeroBias * float((_722.x != 0) || (_722.y != 0)));
+                    if (_2488 < _2769)
+                    {
+                        _2777 = _2585;
+                        _2776 = _2488;
+                        _2774 = _912;
+                    }
+                    else
+                    {
+                        _2777 = _2770;
+                        _2776 = _2769;
+                        _2774 = _2768;
+                    }
                 }
             }
         }
-        OutField.write(float4(float2(_2812), _2816, 0.0), uint2(gl_GlobalInvocationID.xy));
+        OutField.write(float4(float2(_2741), _2745, 0.0), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }
@@ -1043,71 +2326,150 @@ kernel void sharpen_main(constant FgConstants& _24 [[buffer(0)]], texture2d<floa
         int2 _376 = int2(gl_GlobalInvocationID.xy);
         int2 _381 = int2(_24.outSize) - int2(1);
         float3 _394 = Src.read(uint2(int3(_376, 0).xy), 0).xyz;
-        float3 _614;
-        float3 _615;
-        float3 _616;
-        _616 = _394;
-        _615 = _394;
-        _614 = float3(0.0);
-        float3 _622;
-        float3 _623;
-        float3 _624;
-        for (int _613 = -1; _613 <= 1; _616 = _622, _615 = _623, _614 = _624, _613++)
+        float3 _343 = _394;
+        float3 _344 = _394;
+        float3 _431 = Src.read(uint2(int3(clamp(_376 + int2(-1), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _431);
+        _344 = fast::max(_344, _431);
+        float3 _607;
+        if (false)
         {
-            _624 = _614;
-            _623 = _615;
-            _622 = _616;
-            float3 _434;
-            float3 _437;
-            float3 _629;
-            for (int _620 = -1; _620 <= 1; _624 = _629, _623 = _437, _622 = _434, _620++)
-            {
-                float3 _431 = Src.read(uint2(int3(clamp(_376 + int2(_620, _613), int2(0), _381), 0).xy), 0).xyz;
-                _434 = fast::min(_622, _431);
-                _437 = fast::max(_623, _431);
-                if ((_620 == 0) != (_613 == 0))
-                {
-                    _629 = _624 + _431;
-                }
-                else
-                {
-                    _629 = _624;
-                }
-            }
-        }
-        float _475 = fast::clamp(fast::max(_615.x - _616.x, fast::max(_615.y - _616.y, _615.z - _616.z)), 0.0, 1.0);
-        float3 _494 = fast::clamp(_394 + ((_394 - (_614 * 0.25)) * (((_24.sharpness * 1.5) * (1.0 - _475)) * (1.0 - _475))), _616, _615);
-        float3 _617;
-        if (_24.cursorOn != 0u)
-        {
-            int2 _502 = _376 - _24.cursorPos;
-            float3 _618;
-            if (all(_502 >= int2(0)) && all(_502 < int2(_24.cursorSize)))
-            {
-                uint2 _515 = uint2(CursorImg.get_width(), CursorImg.get_height());
-                float4 _567 = CursorImg.read(uint2(int3(int2(min(uint2(((float2(_502) + float2(0.5)) / float2(_24.cursorSize)) * float2(float(_515.x), float(_515.y))), (_515 - uint2(1u)))), 0).xy), 0);
-                float3 _619;
-                if (_567.w < 0.0)
-                {
-                    _619 = float3(1.0) - _494;
-                }
-                else
-                {
-                    _619 = mix(_494, _567.xyz, float3(fast::clamp(_567.w, 0.0, 1.0)));
-                }
-                _618 = _619;
-            }
-            else
-            {
-                _618 = _494;
-            }
-            _617 = _618;
+            _607 = _431;
         }
         else
         {
-            _617 = _494;
+            _607 = float3(0.0);
         }
-        Dst.write(float4(_617, 1.0), uint2(gl_GlobalInvocationID.xy));
+        float3 _637 = Src.read(uint2(int3(clamp(_376 + int2(0, -1), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _637);
+        _344 = fast::max(_344, _637);
+        float3 _648;
+        if (true)
+        {
+            _648 = _607 + _637;
+        }
+        else
+        {
+            _648 = _607;
+        }
+        float3 _673 = Src.read(uint2(int3(clamp(_376 + int2(1, -1), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _673);
+        _344 = fast::max(_344, _673);
+        float3 _684;
+        if (false)
+        {
+            _684 = _648 + _673;
+        }
+        else
+        {
+            _684 = _648;
+        }
+        float3 _713 = Src.read(uint2(int3(clamp(_376 + int2(-1, 0), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _713);
+        _344 = fast::max(_344, _713);
+        float3 _724;
+        if (true)
+        {
+            _724 = _684 + _713;
+        }
+        else
+        {
+            _724 = _684;
+        }
+        float3 _747 = Src.read(uint2(int3(clamp(_376, int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _747);
+        _344 = fast::max(_344, _747);
+        float3 _758;
+        if (false)
+        {
+            _758 = _724 + _747;
+        }
+        else
+        {
+            _758 = _724;
+        }
+        float3 _781 = Src.read(uint2(int3(clamp(_376 + int2(1, 0), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _781);
+        _344 = fast::max(_344, _781);
+        float3 _792;
+        if (true)
+        {
+            _792 = _758 + _781;
+        }
+        else
+        {
+            _792 = _758;
+        }
+        float3 _824 = Src.read(uint2(int3(clamp(_376 + int2(-1, 1), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _824);
+        _344 = fast::max(_344, _824);
+        float3 _835;
+        if (false)
+        {
+            _835 = _792 + _824;
+        }
+        else
+        {
+            _835 = _792;
+        }
+        float3 _858 = Src.read(uint2(int3(clamp(_376 + int2(0, 1), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _858);
+        _344 = fast::max(_344, _858);
+        float3 _869;
+        if (true)
+        {
+            _869 = _835 + _858;
+        }
+        else
+        {
+            _869 = _835;
+        }
+        float3 _892 = Src.read(uint2(int3(clamp(_376 + int2(1), int2(0), _381), 0).xy), 0).xyz;
+        _343 = fast::min(_343, _892);
+        _344 = fast::max(_344, _892);
+        float3 _903;
+        if (false)
+        {
+            _903 = _869 + _892;
+        }
+        else
+        {
+            _903 = _869;
+        }
+        float _475 = fast::clamp(fast::max(_344.x - _343.x, fast::max(_344.y - _343.y, _344.z - _343.z)), 0.0, 1.0);
+        float3 _494 = fast::clamp(_394 + ((_394 - (_903 * 0.25)) * (((_24.sharpness * 1.5) * (1.0 - _475)) * (1.0 - _475))), _343, _344);
+        float3 _599;
+        if (_24.cursorOn != 0u)
+        {
+            int2 _502 = _376 - _24.cursorPos;
+            float3 _600;
+            if (all(_502 >= int2(0)) && all(_502 < int2(_24.cursorSize)))
+            {
+                uint2 _353 = uint2(CursorImg.get_width(), CursorImg.get_height());
+                float4 _567 = CursorImg.read(uint2(int3(int2(min(uint2(((float2(_502) + float2(0.5)) / float2(_24.cursorSize)) * float2(float(_353.x), float(_353.y))), (uint2(_353.x, _353.y) - uint2(1u)))), 0).xy), 0);
+                float4 _357 = _567;
+                float3 _601;
+                if (_357.w < 0.0)
+                {
+                    _601 = float3(1.0) - _494;
+                }
+                else
+                {
+                    _601 = mix(_494, _567.xyz, float3(fast::clamp(_357.w, 0.0, 1.0)));
+                }
+                _600 = _601;
+            }
+            else
+            {
+                _600 = _494;
+            }
+            _599 = _600;
+        }
+        else
+        {
+            _599 = _494;
+        }
+        Dst.write(float4(_599, 1.0), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }
@@ -1158,8 +2520,8 @@ kernel void static_map_main(constant FgConstants& _24 [[buffer(0)]], texture2d<f
         {
             break;
         }
-        float3 _185 = abs(FrameA.read(uint2(int3(int2(gl_GlobalInvocationID.xy), 0).xy), 0).xyz - FrameB.read(uint2(int3(int2(gl_GlobalInvocationID.xy), 0).xy), 0).xyz);
-        StaticMap.write(float4(float(fast::max(_185.x, fast::max(_185.y, _185.z)) < _24.staticThr)), uint2(gl_GlobalInvocationID.xy));
+        float3 _133 = abs(FrameA.read(uint2(int3(int2(gl_GlobalInvocationID.xy), 0).xy), 0).xyz - FrameB.read(uint2(int3(int2(gl_GlobalInvocationID.xy), 0).xy), 0).xyz);
+        StaticMap.write(float4(float(fast::max(_133.x, fast::max(_133.y, _133.z)) < _24.staticThr)), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }
@@ -1253,53 +2615,237 @@ kernel void upscale_main(constant FgConstants& _80 [[buffer(0)]], texture2d<floa
         }
         float2 _345 = (((float2(gl_GlobalInvocationID.xy) + float2(0.5)) * float2(_80.capSize)) / float2(_80.outSize)) - float2(0.5);
         int2 _348 = int2(floor(_345));
-        float2 _352 = _345 - float2(_348);
-        float _354 = _352.x;
-        float _471 = _354 * _354;
-        float _474 = _471 * _354;
-        float _358 = _352.y;
-        float _510 = _358 * _358;
-        float _513 = _510 * _358;
-        spvUnsafeArray<float, 4> _369 = spvUnsafeArray<float, 4>({ (((-0.5) * _474) + _471) - (0.5 * _354), ((1.5 * _474) - (2.5 * _471)) + 1.0, (((-1.5) * _474) + (2.0 * _471)) + (0.5 * _354), (0.5 * _474) - (0.5 * _471) });
-        spvUnsafeArray<float, 4> _306;
-        _306 = _369;
-        spvUnsafeArray<float, 4> _378 = spvUnsafeArray<float, 4>({ (((-0.5) * _513) + _510) - (0.5 * _358), ((1.5 * _513) - (2.5 * _510)) + 1.0, (((-1.5) * _513) + (2.0 * _510)) + (0.5 * _358), (0.5 * _513) - (0.5 * _510) });
-        spvUnsafeArray<float, 4> _307;
-        _307 = _378;
-        float3 _577;
-        float3 _578;
-        float3 _579;
-        _579 = float3(-1000000000.0);
-        _578 = float3(1000000000.0);
-        _577 = float3(0.0);
-        float3 _582;
-        float3 _583;
-        float3 _584;
-        for (int _576 = 0; _576 < 4; _579 = _584, _578 = _583, _577 = _582, _576++)
+        float2 _299 = _345 - float2(_348);
+        float _471 = _299.x * _299.x;
+        float _474 = _471 * _299.x;
+        float4 _302;
+        _302.x = (((-0.5) * _474) + _471) - (0.5 * _299.x);
+        _302.y = ((1.5 * _474) - (2.5 * _471)) + 1.0;
+        _302.z = (((-1.5) * _474) + (2.0 * _471)) + (0.5 * _299.x);
+        _302.w = 0.5 * (_474 - _471);
+        float4 _300 = _302;
+        float _510 = _299.y * _299.y;
+        float _513 = _510 * _299.y;
+        float4 _305;
+        _305.x = (((-0.5) * _513) + _510) - (0.5 * _299.y);
+        _305.y = ((1.5 * _513) - (2.5 * _510)) + 1.0;
+        _305.z = (((-1.5) * _513) + (2.0 * _510)) + (0.5 * _299.y);
+        _305.w = 0.5 * (_513 - _510);
+        float4 _303 = _305;
+        spvUnsafeArray<float, 4> _369 = spvUnsafeArray<float, 4>({ _300.x, _300.y, _300.z, _300.w });
+        spvUnsafeArray<float, 4> _306 = _369;
+        spvUnsafeArray<float, 4> _378 = spvUnsafeArray<float, 4>({ _303.x, _303.y, _303.z, _303.w });
+        spvUnsafeArray<float, 4> _307 = _378;
+        float3 _414 = Src.read(uint2(int3(clamp(_348 + int2(-1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _556;
+        float3 _557;
+        if (false)
         {
-            _584 = _579;
-            _583 = _578;
-            _582 = _577;
-            float3 _425;
-            float3 _588;
-            float3 _589;
-            for (int _580 = 0; _580 < 4; _584 = _589, _583 = _588, _582 = _425, _580++)
-            {
-                float3 _414 = Src.read(uint2(int3(clamp(_348 + int2(_580 - 1, _576 - 1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
-                _425 = _582 + (_414 * (_307[_576] * _306[_580]));
-                if ((((_580 >= 1) && (_580 <= 2)) && (_576 >= 1)) && (_576 <= 2))
-                {
-                    _589 = fast::max(_584, _414);
-                    _588 = fast::min(_583, _414);
-                }
-                else
-                {
-                    _589 = _584;
-                    _588 = _583;
-                }
-            }
+            _557 = fast::max(float3(-1000000000.0), _414);
+            _556 = fast::min(float3(1000000000.0), _414);
         }
-        Dst.write(float4(fast::clamp(_577, _578, _579), 1.0), uint2(gl_GlobalInvocationID.xy));
+        else
+        {
+            _557 = float3(-1000000000.0);
+            _556 = float3(1000000000.0);
+        }
+        float3 _592 = Src.read(uint2(int3(clamp(_348 + int2(0, -1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _611;
+        float3 _612;
+        if (false)
+        {
+            _611 = fast::max(_557, _592);
+            _612 = fast::min(_556, _592);
+        }
+        else
+        {
+            _611 = _557;
+            _612 = _556;
+        }
+        float3 _643 = Src.read(uint2(int3(clamp(_348 + int2(1, -1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _662;
+        float3 _663;
+        if (false)
+        {
+            _662 = fast::max(_611, _643);
+            _663 = fast::min(_612, _643);
+        }
+        else
+        {
+            _662 = _611;
+            _663 = _612;
+        }
+        float3 _694 = Src.read(uint2(int3(clamp(_348 + int2(2, -1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _713;
+        float3 _714;
+        if (false)
+        {
+            _713 = fast::max(_662, _694);
+            _714 = fast::min(_663, _694);
+        }
+        else
+        {
+            _713 = _662;
+            _714 = _663;
+        }
+        float3 _749 = Src.read(uint2(int3(clamp(_348 + int2(-1, 0), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _768;
+        float3 _769;
+        if (false)
+        {
+            _768 = fast::max(_713, _749);
+            _769 = fast::min(_714, _749);
+        }
+        else
+        {
+            _768 = _713;
+            _769 = _714;
+        }
+        float3 _796 = Src.read(uint2(int3(clamp(_348, int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _815;
+        float3 _816;
+        if (true)
+        {
+            _815 = fast::max(_768, _796);
+            _816 = fast::min(_769, _796);
+        }
+        else
+        {
+            _815 = _768;
+            _816 = _769;
+        }
+        float3 _843 = Src.read(uint2(int3(clamp(_348 + int2(1, 0), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _862;
+        float3 _863;
+        if (true)
+        {
+            _862 = fast::max(_815, _843);
+            _863 = fast::min(_816, _843);
+        }
+        else
+        {
+            _862 = _815;
+            _863 = _816;
+        }
+        float3 _890 = Src.read(uint2(int3(clamp(_348 + int2(2, 0), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _909;
+        float3 _910;
+        if (false)
+        {
+            _909 = fast::max(_862, _890);
+            _910 = fast::min(_863, _890);
+        }
+        else
+        {
+            _909 = _862;
+            _910 = _863;
+        }
+        float3 _948 = Src.read(uint2(int3(clamp(_348 + int2(-1, 1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _967;
+        float3 _968;
+        if (false)
+        {
+            _967 = fast::max(_909, _948);
+            _968 = fast::min(_910, _948);
+        }
+        else
+        {
+            _967 = _909;
+            _968 = _910;
+        }
+        float3 _995 = Src.read(uint2(int3(clamp(_348 + int2(0, 1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _1002 = (((((((((_414 * (_307[0] * _306[0])) + (_592 * (_307[0] * _306[1]))) + (_643 * (_307[0] * _306[2]))) + (_694 * (_307[0] * _306[3]))) + (_749 * (_307[1] * _306[0]))) + (_796 * (_307[1] * _306[1]))) + (_843 * (_307[1] * _306[2]))) + (_890 * (_307[1] * _306[3]))) + (_948 * (_307[2] * _306[0]))) + (_995 * (_307[2] * _306[1]));
+        float3 _1014;
+        float3 _1015;
+        if (true)
+        {
+            _1014 = fast::max(_967, _995);
+            _1015 = fast::min(_968, _995);
+        }
+        else
+        {
+            _1014 = _967;
+            _1015 = _968;
+        }
+        float3 _1042 = Src.read(uint2(int3(clamp(_348 + int2(1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _1061;
+        float3 _1062;
+        if (true)
+        {
+            _1061 = fast::max(_1014, _1042);
+            _1062 = fast::min(_1015, _1042);
+        }
+        else
+        {
+            _1061 = _1014;
+            _1062 = _1015;
+        }
+        float3 _1089 = Src.read(uint2(int3(clamp(_348 + int2(2, 1), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _1108;
+        float3 _1109;
+        if (false)
+        {
+            _1108 = fast::max(_1061, _1089);
+            _1109 = fast::min(_1062, _1089);
+        }
+        else
+        {
+            _1108 = _1061;
+            _1109 = _1062;
+        }
+        float3 _1147 = Src.read(uint2(int3(clamp(_348 + int2(-1, 2), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _1166;
+        float3 _1167;
+        if (false)
+        {
+            _1166 = fast::max(_1108, _1147);
+            _1167 = fast::min(_1109, _1147);
+        }
+        else
+        {
+            _1166 = _1108;
+            _1167 = _1109;
+        }
+        float3 _1194 = Src.read(uint2(int3(clamp(_348 + int2(0, 2), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _1213;
+        float3 _1214;
+        if (false)
+        {
+            _1213 = fast::max(_1166, _1194);
+            _1214 = fast::min(_1167, _1194);
+        }
+        else
+        {
+            _1213 = _1166;
+            _1214 = _1167;
+        }
+        float3 _1241 = Src.read(uint2(int3(clamp(_348 + int2(1, 2), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _1260;
+        float3 _1261;
+        if (false)
+        {
+            _1260 = fast::max(_1213, _1241);
+            _1261 = fast::min(_1214, _1241);
+        }
+        else
+        {
+            _1260 = _1213;
+            _1261 = _1214;
+        }
+        float3 _1288 = Src.read(uint2(int3(clamp(_348 + int2(2), int2(0), int2(_80.capSize) - int2(1)), 0).xy), 0).xyz;
+        float3 _1307;
+        float3 _1308;
+        if (false)
+        {
+            _1307 = fast::max(_1260, _1288);
+            _1308 = fast::min(_1261, _1288);
+        }
+        else
+        {
+            _1307 = _1260;
+            _1308 = _1261;
+        }
+        Dst.write(float4(fast::clamp((((((_1002 + (_1042 * (_307[2] * _306[2]))) + (_1089 * (_307[2] * _306[3]))) + (_1147 * (_307[3] * _306[0]))) + (_1194 * (_307[3] * _306[1]))) + (_1241 * (_307[3] * _306[2]))) + (_1288 * (_307[3] * _306[3])), _1308, _1307), 1.0), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }
