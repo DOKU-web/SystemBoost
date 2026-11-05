@@ -12,8 +12,12 @@
 //
 // D cannot be smaller than one source interval + processing time (frame B must
 // exist before anything between A and B can be shown); that is the latency
-// cost of interpolation. D adapts: it grows when a frame was late and slowly
-// shrinks back while frames are on time.
+// cost of interpolation. D glides toward a long recent interval, so ordinary
+// jitter does not leave the output waiting for a frame that has not arrived.
+//
+// Capture timestamps land on vblanks: 40 fps on 144 Hz reads as a mix of 20.8 and
+// 27.8 ms. Their median is one of those two, so the rate has to come from the
+// mean, whose sum still spans the true time.
 #pragma once
 #include <algorithm>
 #include <array>
@@ -57,6 +61,8 @@ public:
         divider_ = 1;
         candidate_ = 0;
         D_ = -1;
+        serial_ = 0;
+        lastPos_ = -1;
     }
 
     // New captured frame at time `now`; procSec = GPU time per generated frame.
@@ -64,15 +70,21 @@ public:
         if (tB_ > 0) pushInterval(now - tB_);
         tA_ = tB_;
         tB_ = now;
+        ++serial_;
         if (procSec > 0) proc_ = proc_ * 0.8 + procSec * 0.2;
         // D: newest frame must be available when its content time is shown
-        const double target = interval() + proc_ + cfg_.marginSec;
+        const double target = percentile(0.8) + proc_ + cfg_.marginSec;
         D_ = D_ < 0 ? target : D_ + (target - D_) * 0.1;  // glide, no sudden jumps
         updateDivider(now);
         if (nextDisplay_ < 0) nextDisplay_ = snapUp(now + proc_ + vsync());
     }
 
     bool active() const { return tA_ > 0; }
+
+    // A new frame turns the pair (A,B) into (B,new). With D longer than the last
+    // interval the next slot may still belong between A and B, so the new frame
+    // waits until the output clock has passed B.
+    bool wantsSource() const { return !active() || nextDisplay_ - D_ >= tB_; }
 
     // Next output slot (does not advance).
     OutputSlot next() const {
@@ -95,6 +107,15 @@ public:
         return float(t);
     }
 
+    // True if the image for t is the one already on screen: t=1 held on a late
+    // pair, or t=0 on a new pair right after t=1 on the previous one. Call once per slot.
+    bool repeats(float t) {
+        const double pos = double(serial_) + t;
+        const bool same = lastPos_ >= 0 && std::abs(pos - lastPos_) < 1e-3;
+        lastPos_ = pos;
+        return same;
+    }
+
     // Move the output clock to the next slot.
     void advance(double now) {
         const double step = outputStep();
@@ -107,7 +128,17 @@ public:
         if (cfg_.mode == MulMode::Auto) nextDisplay_ = snapNear(nextDisplay_);
     }
 
-    double interval() const { return percentile(0.5); }
+    // Mean of recent intervals. A hitch is left out so that one stall does not
+    // cut the output rate for the next second.
+    double interval() const {
+        if (count_ == 0) return 1.0 / 30.0;
+        const double limit = percentile(0.5) * kHitchFactor;
+        double sum = 0;
+        int n = 0;
+        for (int i = 0; i < count_; ++i)
+            if (hist_[i] <= limit) { sum += hist_[i]; ++n; }
+        return sum / n;
+    }
     double percentile(double q) const {
         if (count_ == 0) return 1.0 / 30.0;
         std::array<double, kHist> tmp{};
@@ -131,13 +162,15 @@ public:
     } stats;
 
 private:
-    static constexpr int kHist = 15;
+    static constexpr int kHist = 30;
+    static constexpr double kHitchFactor = 4.0;
 
     double outputStep() const {
         switch (cfg_.mode) {
         case MulMode::Auto: return divider_ * vsync();
         case MulMode::Off: return interval();
-        default: return interval() / double(int(cfg_.mode));
+        // the display cannot show more than one image per vblank
+        default: return std::max(interval() / double(int(cfg_.mode)), vsync());
         }
     }
 
@@ -182,6 +215,8 @@ private:
     int divider_ = 1;
     int candidate_ = 0;
     double candidateSince_ = 0;
+    uint64_t serial_ = 0;   // source frames seen; serial_ + t identifies the image shown
+    double lastPos_ = -1;
 };
 
 }  // namespace sbfg

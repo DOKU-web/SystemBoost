@@ -11,7 +11,7 @@ namespace sbfg {
 
 class Overlay {
 public:
-    Overlay(ID3D11Device* dev, ID3D11DeviceContext* ctx);
+    Overlay(ID3D11Device* dev, ID3D11DeviceContext* ctx, bool showInCapture = false);
     ~Overlay();
 
     // Place the window over `r` (screen coords) with a back buffer of that size.
@@ -25,6 +25,8 @@ public:
 
     void Show(bool on);
     bool Visible() const { return visible_; }
+    // Running count of images that reached the screen; false if the OS does not report it.
+    bool ShownCount(UINT& count);
     HWND Hwnd() const { return hwnd_; }
     HANDLE FrameLatencyWaitable() const { return waitable_; }
 

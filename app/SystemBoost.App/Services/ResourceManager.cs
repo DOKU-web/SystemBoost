@@ -51,6 +51,26 @@ public static class ResourceManagers
     public static IResourceManager Create() =>
         OperatingSystem.IsWindows() ? new WinResourceManager() : new MacResourceManager();
 
+    /// Process of the window frame generation is attached to, while it runs.
+    public static string? GameProcess { get; set; }
+
+    public static bool IsProtected(string name) =>
+        Protected.Contains(name) || string.Equals(name, GameProcess, StringComparison.OrdinalIgnoreCase);
+
+    public static string? ProcessOfWindow(GameWindow w)
+    {
+        if (!OperatingSystem.IsWindows()) return string.IsNullOrEmpty(w.App) ? null : w.App;
+        try
+        {
+            GetWindowThreadProcessId((IntPtr)w.Id, out var pid);
+            using var p = Process.GetProcessById((int)pid);
+            return p.ProcessName;
+        }
+        catch (Exception) { return null; }
+    }
+
+    [DllImport("user32", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+
     // Never touch these (system, the game we capture, ourselves).
     public static readonly HashSet<string> Protected = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -72,6 +92,7 @@ public sealed class WinResourceManager : IResourceManager
     private readonly Dictionary<int, (TimeSpan cpu, DateTime t)> _last = new();
     private readonly Dictionary<int, (ProcessPriorityClass prio, string name, string? exe)> _changed = new();
     private readonly Dictionary<int, IntPtr> _jobs = new();
+    private readonly Dictionary<string, string?> _gpuOrig = new(StringComparer.OrdinalIgnoreCase);
     private readonly GpuCounters? _gpu = GpuCounters.TryCreate();
 
     public Task<List<AppSample>> SampleAsync() => Task.Run(() =>
@@ -84,7 +105,7 @@ public sealed class WinResourceManager : IResourceManager
         {
             try
             {
-                if (p.Id == me || p.SessionId != session || ResourceManagers.Protected.Contains(p.ProcessName)) continue;
+                if (p.Id == me || p.SessionId != session || ResourceManagers.IsProtected(p.ProcessName)) continue;
                 var cpu = p.TotalProcessorTime;
                 double pct = 0;
                 if (_last.TryGetValue(p.Id, out var prev))
@@ -106,6 +127,7 @@ public sealed class WinResourceManager : IResourceManager
 
     public Task<string> SetLevelAsync(AppSample app, ShareLevel level, int cap = 25) => Task.Run(() =>
     {
+        if (ResourceManagers.IsProtected(app.Name)) return $"{app.Name}: 게임과 시스템 프로세스는 바꾸지 않아요";
         int done = 0, failed = 0;
         foreach (var p in Process.GetProcessesByName(app.Name))
         {
@@ -141,15 +163,15 @@ public sealed class WinResourceManager : IResourceManager
                 break;
             case ShareLevel.Normal:
                 p.PriorityClass = orig.prio;
-                SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p, 0); SetGpuPref(orig.exe, null);
+                SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p, 0); SetGpuPref(orig.exe, false);
                 break;
             case ShareLevel.Lower:
                 p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p, 0); SetGpuPref(orig.exe, 1);
+                SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p, 0); SetGpuPref(orig.exe, true);
                 break;
             case ShareLevel.Limit:
                 p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p, Math.Clamp(cap, 5, 90)); SetGpuPref(orig.exe, 1);
+                SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p, Math.Clamp(cap, 5, 90)); SetGpuPref(orig.exe, true);
                 break;
         }
     }
@@ -165,7 +187,7 @@ public sealed class WinResourceManager : IResourceManager
                 SetEco(p.Handle, false); SetMemPrio(p.Handle, 5); SetCpuCap(p, 0);
             }
             catch (Exception) { }
-            SetGpuPref(orig.exe, null);
+            SetGpuPref(orig.exe, false);
         }
         _changed.Clear();
         foreach (var j in _jobs.Values) CloseHandle(j);
@@ -204,13 +226,20 @@ public sealed class WinResourceManager : IResourceManager
         SetProcessInformation(h, 0 /* ProcessMemoryPriority */, ref m, (uint)Marshal.SizeOf(m));
     }
 
-    // GpuPreference=1 power saving (iGPU), 2 high performance; null = remove our entry
-    private static void SetGpuPref(string? exe, int? pref)
+    // lowered: GpuPreference=1 (power saving, iGPU), keeping the value the user had; otherwise put it back
+    private void SetGpuPref(string? exe, bool lowered)
     {
         if (exe == null || !OperatingSystem.IsWindows()) return;
         using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences");
-        if (pref is int v) k.SetValue(exe, $"GpuPreference={v};");
-        else if (k.GetValue(exe) is string cur && cur.StartsWith("GpuPreference=1")) k.DeleteValue(exe, false);
+        if (lowered)
+        {
+            _gpuOrig.TryAdd(exe, k.GetValue(exe) as string);
+            k.SetValue(exe, "GpuPreference=1;");
+        }
+        else if (_gpuOrig.Remove(exe, out var orig))
+        {
+            if (orig != null) k.SetValue(exe, orig); else k.DeleteValue(exe, false);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct JOBOBJECT_CPU_RATE_CONTROL_INFORMATION { public uint ControlFlags; public uint CpuRate; }
@@ -288,7 +317,7 @@ public sealed class MacResourceManager : IResourceManager
             var p = line.Trim().Split(' ', 5, StringSplitOptions.RemoveEmptyEntries);
             if (p.Length < 5 || p[3] != user || !int.TryParse(p[0], out var pid) || pid == Environment.ProcessId) continue;
             var name = p[4].Trim();
-            if (ResourceManagers.Protected.Contains(name)) continue;
+            if (ResourceManagers.IsProtected(name)) continue;
             double.TryParse(p[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var cpu);
             double.TryParse(p[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var rss);
             list.Add(new AppSample { Pid = pid, Name = name, Cpu = cpu / cores, RamMB = rss / 1024 });

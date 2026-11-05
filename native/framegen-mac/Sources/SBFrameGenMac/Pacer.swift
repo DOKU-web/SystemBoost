@@ -17,7 +17,7 @@ struct OutputSlot { var presentAt: Double; var displayAt: Double }
 
 final class Pacer {
     private(set) var cfg: PacerConfig
-    private var hist = [Double](repeating: 0, count: 15)
+    private var hist = [Double](repeating: 0, count: 30)
     private var pos = 0, count = 0
     private var tA = -1.0, tB = -1.0
     private var proc = 0.002
@@ -26,6 +26,8 @@ final class Pacer {
     private(set) var divider = 1
     private var candidate = 0
     private var candidateSince = 0.0
+    private var serial: UInt64 = 0
+    private var lastPos = -1.0
     private(set) var late: UInt64 = 0
     private(set) var skipped: UInt64 = 0
 
@@ -36,16 +38,19 @@ final class Pacer {
 
     func reset() {
         pos = 0; count = 0; tA = -1; tB = -1; nextDisplay = -1; divider = 1; candidate = 0; D = -1
+        serial = 0; lastPos = -1
     }
 
     var active: Bool { tA > 0 }
+    var wantsSource: Bool { !active || nextDisplay - D >= tB }
     var vsync: Double { 1.0 / max(1.0, cfg.refreshHz) }
 
     func onSource(_ now: Double, procSec: Double) {
         if tB > 0 { pushInterval(now - tB) }
         tA = tB; tB = now
+        serial += 1
         if procSec > 0 { proc = proc * 0.8 + procSec * 0.2 }
-        let target = interval + proc + cfg.marginSec
+        let target = percentile(0.8) + proc + cfg.marginSec
         D = D < 0 ? target : D + (target - D) * 0.1
         updateDivider(now)
         if nextDisplay < 0 { nextDisplay = snapUp(now + proc + vsync) }
@@ -63,6 +68,13 @@ final class Pacer {
         return Float(t)
     }
 
+    func repeats(_ t: Float) -> Bool {
+        let p = Double(serial) + Double(t)
+        let same = lastPos >= 0 && abs(p - lastPos) < 1e-3
+        lastPos = p
+        return same
+    }
+
     func advance(_ now: Double) {
         nextDisplay += outputStep
         if nextDisplay < now + proc {
@@ -72,7 +84,12 @@ final class Pacer {
         if cfg.mode == .auto { nextDisplay = snapNear(nextDisplay) }
     }
 
-    var interval: Double { percentile(0.5) }
+    var interval: Double {
+        if count == 0 { return 1.0 / 30.0 }
+        let limit = percentile(0.5) * 4
+        let kept = hist[0..<count].filter { $0 <= limit }
+        return kept.reduce(0, +) / Double(kept.count)
+    }
     func percentile(_ q: Double) -> Double {
         if count == 0 { return 1.0 / 30.0 }
         let s = hist[0..<count].sorted()
@@ -87,7 +104,7 @@ final class Pacer {
         switch cfg.mode {
         case .auto: return Double(divider) * vsync
         case .off: return interval
-        default: return interval / Double(cfg.mode.rawValue)
+        default: return max(interval / Double(cfg.mode.rawValue), vsync)
         }
     }
 

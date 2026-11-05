@@ -27,6 +27,8 @@ struct Settings {
     int statsMs = 500;                 // stats line interval (stdout JSON)
     bool listGpus = false;
     bool listWindows = false;
+    bool alwaysActive = false;         // tests only: keep generating when the window is not in front
+    bool showInCapture = false;        // tests only: let screenshots see the overlay
     std::string shaderDir;             // default: <exe dir>\shaders
 
     // Pipeline parameters derived from quality (mirror ref PARAMS)
@@ -47,6 +49,8 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
         if (k == "--capture-cursor") { s.captureCursor = true; continue; }
         if (k == "--no-clip-cursor") { s.clipCursor = false; continue; }
         if (k == "--upscale") { s.upscale = true; continue; }
+        if (k == "--always-active") { s.alwaysActive = true; continue; }
+        if (k == "--show-in-capture") { s.showInCapture = true; continue; }
         if (!(v = need(i))) return "missing value for " + k;
         if (k == "--hwnd") s.hwnd = std::strtoull(v->c_str(), nullptr, 0);
         else if (k == "--mode") {

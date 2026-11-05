@@ -1,0 +1,43 @@
+Multiplier on the real engine (tests/measure_multiplier.py, RTX 3060, 144 Hz).
+rate = test window fps; src/out = engine counters over the same seconds; shown = swap chain
+count; screen = distinct images from Desktop Duplication, outside the engine.
+
+multiplier before fix (median step)
+rate mode |    src     out     x  target   err% |   shown  screen | repeat late/s skip/s |   p10   p50   p90    est
+  30   x2 |   30.0    38.8  1.29    60.0  -35.4 |    38.9    38.6 |     86    0.0    0.0 |  20.8  41.7  41.7  41.66  FAIL
+  30   x3 |   30.8    59.1  1.92    90.0  -34.3 |    59.0    58.6 |    156    1.0    0.0 |  20.8  41.7  41.7  41.66  FAIL
+  30   x4 |   29.9    65.7  2.20   120.0  -45.2 |    65.8    65.2 |    242    0.0    0.0 |  20.8  41.7  41.7  41.67  FAIL
+  30 auto |   30.1    54.5  1.81    72.0  -24.3 |    54.6    54.9 |    140    0.0    0.0 |  20.8  41.7  41.7  41.67  FAIL
+  40   x2 |   40.0    89.4  2.23    80.0  +11.8 |    89.4    77.2 |     53    6.7    0.0 |  20.8  20.8  41.7  20.83  FAIL
+  40   x3 |   40.0   111.7  2.79   120.0   -6.9 |   111.7    99.3 |    259    8.1    0.0 |  20.8  20.8  41.7  20.83  FAIL
+  40   x4 |   40.0   132.5  3.31   144.0   -8.0 |   132.5   128.4 |    350    8.6   11.7 |  20.8  20.8  41.7  20.83  FAIL
+  40 auto |   40.2   111.7  2.78   144.0  -22.5 |   111.7    95.4 |    256    7.9    0.4 |  20.8  20.8  41.7  20.83  FAIL
+  60   x2 |   47.5    57.2  1.20   120.0  -52.3 |    57.2    57.3 |    311    0.5    0.0 |  20.8  20.8  20.8  20.83  FAIL
+  60   x3 |   48.0    95.8  1.99   144.0  -33.5 |    95.7    95.4 |    385    0.2    0.1 |  20.8  20.8  20.8  20.83  FAIL
+  60   x4 |   48.0   106.1  2.21   144.0  -26.3 |   105.9   106.9 |    689    0.0    0.0 |  20.8  20.8  20.8  20.83  FAIL
+  60 auto |   48.0    95.8  1.99   144.0  -33.5 |    95.8    95.6 |    387    0.1    0.0 |  20.8  20.8  20.8  20.83  FAIL
+refresh 144.00 Hz, 8 s per case, tolerance 5%, failed 12
+
+multiplier after fix
+rate mode |    src     out     x  target   err% |   shown  screen | repeat late/s skip/s |   p10   p50   p90    est
+  30   x2 |   29.9    60.0  2.00    60.0   -0.0 |    60.0    60.0 |      0    0.0    0.0 |  27.8  34.7  34.7  33.33
+  30   x3 |   30.1    89.9  2.99    90.0   -0.1 |    90.0    87.5 |      0    0.0    0.0 |  27.8  34.7  34.7  33.33
+  30   x4 |   29.9   119.9  4.00   120.0   -0.1 |   119.9   120.0 |      0    0.0    0.1 |  27.8  34.7  34.7  33.33
+  30 auto |   30.1    72.0  2.39    72.0   -0.0 |    72.0    72.0 |      0    0.0    0.0 |  27.8  34.7  34.7  33.33
+  40   x2 |   40.0    80.9  2.02    80.0   +1.2 |    80.8    80.4 |      0    0.0    0.0 |  20.8  27.8  27.8  25.00
+  40   x3 |   39.9   120.1  3.01   120.0   +0.1 |   120.1   119.5 |      0    0.0    0.0 |  20.8  27.8  27.8  25.00
+  40   x4 |   40.0   143.8  3.59   144.0   -0.2 |   143.8   143.1 |      0    0.0    0.1 |  20.8  27.8  27.8  25.23
+  40 auto |   40.0   144.1  3.60   144.0   +0.0 |   144.1   143.4 |      0    0.0    0.0 |  20.8  27.8  27.8  25.00
+  60   x2 |   59.9   119.9  2.00   120.0   -0.1 |   120.0   119.6 |      0    0.0    0.0 |  13.9  13.9  20.8  16.67
+  60   x3 |   60.6   143.9  2.37   144.0   -0.1 |   143.9   143.4 |      0    0.0    0.1 |  13.9  13.9  20.8  16.67
+  60   x4 |   61.5   143.7  2.34   144.0   -0.2 |   143.3    97.1 |      0    0.0    0.4 |  13.9  13.9  20.8  16.67
+  60 auto |   60.0   143.8  2.40   144.0   -0.1 |   143.8   143.1 |      0    0.0    0.1 |  13.9  13.9  20.8  16.67
+refresh 144.00 Hz, 8 s per case, tolerance 5%, failed 0
+
+Before: window drew with GDI, capture still limited to about 60 updates per second.
+After: window presents through a flip-model swap chain like a game.
+Above the refresh rate the target is the refresh rate: 40 x4, 60 x3, 60 x4 stop at 144.
+30 auto stops at 72 (144 / 2) because 30 x 4 = 120 is below 144 and 120 is not a whole
+divisor of the refresh rate.
+The screen column read low on 60 x4 in this table (97.1) and on 2 of 5 repeat runs
+(about 95, 143.3 in the others) while the swap chain count stayed at 143. The cause is not known.

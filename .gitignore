@@ -8,4 +8,5 @@ native/framegen-mac/.build/
 app/**/bin/
 app/**/obj/
 node_modules/
+.wrangler/
 __pycache__/

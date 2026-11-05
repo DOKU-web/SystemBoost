@@ -231,9 +231,11 @@ final class Engine {
     }
 
     func run() {
-        var lastStats = now(), lastLayout = now(), lastDisplay = now()
-        var srcCount = 0, outCount = 0
+        var lastLayout = now(), lastDisplay = now()
+        let meter = FrameMeter()
+        meter.reset(now())
         var wasActive = false
+        var held: Capture.Frame?  // waits for the output clock (Pacer.wantsSource)
         Out.emit(["type": "ready", "capture": "screencapturekit", "genGpu": fg.device.name,
                   "refreshHz": refreshHz, "capture_px": [layout.capW, layout.capH],
                   "output_px": [layout.outW, layout.outH], "crossAdapterCopy": false])
@@ -252,6 +254,7 @@ final class Engine {
             if !active {
                 if wasActive { setOverlay(false); wasActive = false }
                 _ = capture.take()
+                held = nil
                 Thread.sleep(forTimeInterval: 0.02)
                 continue
             }
@@ -273,24 +276,29 @@ final class Engine {
             if t0 - lastDisplay > 1 { lastDisplay = t0; updateDisplay() }
             if !wasActive {
                 pacer.reset(); fg.resetHistory()
+                meter.reset(t0)
                 if mode != .off || s.upscale { setOverlay(true) }
                 wasActive = true
             }
             confineCursor()
 
-            if let f = capture.take() {
+            if held == nil { held = capture.take() }
+            if let f = held, mode == .off || pacer.wantsSource {
+                held = nil
                 fg.pushFrame(f.texture)
-                srcCount += 1
+                meter.onSource()
                 pacer.onSource(f.time > 0 ? f.time : t0, procSec: fg.genMs / 1000)
                 if mode == .off {
-                    if s.upscale && fg.hasPair { present(1); outCount += 1 } else if !s.upscale { setOverlay(false) }
+                    if s.upscale && fg.hasPair { present(1); meter.onOutput(repeated: false) } else if !s.upscale { setOverlay(false) }
                 }
             }
             if mode != .off && fg.hasPair && pacer.active {
                 let slot = pacer.next()
                 if now() >= slot.presentAt {
-                    present(pacer.t(for: slot.displayAt))
-                    outCount += 1
+                    let t = pacer.t(for: slot.displayAt)
+                    let repeated = pacer.repeats(t)
+                    if !repeated { present(t) }
+                    meter.onOutput(repeated: repeated)
                     pacer.advance(now())
                 } else {
                     Thread.sleep(forTimeInterval: max(0, min(slot.presentAt - now(), 0.001)))
@@ -300,14 +308,14 @@ final class Engine {
             }
 
             let t2 = now()
-            if (t2 - lastStats) * 1000 >= Double(s.statsMs) {
-                let dt = t2 - lastStats
-                let src = Double(srcCount) / dt, out = Double(outCount) / dt
-                Out.emit(["type": "stats", "srcFps": src, "outFps": out, "multiplier": src > 0 ? out / src : 0,
+            if meter.elapsed(t2) * 1000 >= Double(s.statsMs) {
+                let m = meter.take(t2)
+                Out.emit(["type": "stats", "srcFps": m.srcFps, "outFps": m.outFps, "multiplier": m.multiplier,
                           "mode": mode.rawValue, "refreshHz": refreshHz, "delayMs": pacer.delayMs,
                           "addedLatencyMs": pacer.addedLatencyMs, "genMs": fg.genMs, "analyzeMs": fg.analyzeMs,
-                          "transferMs": 0, "late": pacer.late, "skipped": pacer.skipped])
-                srcCount = 0; outCount = 0; lastStats = t2
+                          "transferMs": 0, "late": pacer.late, "skipped": pacer.skipped,
+                          "srcFrames": meter.totalSrc, "outFrames": meter.totalOut, "repeatFrames": meter.totalRepeat,
+                          "measuredSec": m.seconds, "intervalMs": pacer.interval * 1000])
             }
         }
         capture.stop()

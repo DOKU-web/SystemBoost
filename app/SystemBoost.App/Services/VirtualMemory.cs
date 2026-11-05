@@ -132,6 +132,7 @@ public static class VirtualMemory
     {
         var payload = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value)));
         var script =
+            "$ErrorActionPreference = 'Stop'; " +
             $"$v = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{payload}')) | ConvertFrom-Json; " +
             "$cs = Get-CimInstance Win32_ComputerSystem; " +
             $"Set-CimInstance -InputObject $cs -Property @{{AutomaticManagedPagefile = ${(automatic ? "true" : "false")}}}; " +
@@ -147,7 +148,8 @@ public static class VirtualMemory
             await p.WaitForExitAsync();
             return p.ExitCode == 0 ? null : $"저장하지 못했어요 (코드 {p.ExitCode})";
         }
-        catch (System.ComponentModel.Win32Exception) { return "취소했어요 (바뀐 것 없음)"; }   // UAC declined
+        catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223) { return "취소했어요 (바뀐 것 없음)"; }   // UAC declined
+        catch (System.ComponentModel.Win32Exception) { return "실행하지 못했어요 (바뀐 것 없음)"; }
     }
 
     public static void Restart()

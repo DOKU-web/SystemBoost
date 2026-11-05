@@ -72,7 +72,7 @@ static std::vector<Present> runPacer(const std::vector<double>& a, double hz, do
     size_t i = 0;
     double tA = 0, tB = 0, dsum = 0; long dn = 0;
     while (i < a.size()) {
-        bool srcFirst = !pc.active() || a[i] <= pc.next().presentAt;
+        bool srcFirst = (!pc.active() || a[i] <= pc.next().presentAt) && pc.wantsSource();
         if (srcFirst) {
             tA = tB; tB = a[i];
             pc.onSource(a[i], proc);

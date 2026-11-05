@@ -10,6 +10,7 @@
 #include "Capture.h"
 #include "Cursor.h"
 #include "FrameGenGpu.h"
+#include "FrameMeter.h"
 #include "Gpu.h"
 #include "Overlay.h"
 #include "Pacer.h"
@@ -229,7 +230,7 @@ int Run(const Settings& s) {
         dir = dir.substr(0, dir.find_last_of(L"\\/")) + L"\\shaders";
     }
     FrameGenGpu fg(genDev.Get(), genCtx.Get(), dir);
-    Overlay overlay(genDev.Get(), genCtx.Get());
+    Overlay overlay(genDev.Get(), genCtx.Get(), s.showInCapture);
     CursorManager cursor(genDev.Get());
     if (s.upscale) InstallCursorSafety();
 
@@ -263,9 +264,14 @@ int Run(const Settings& s) {
     HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     if (!timer) timer = CreateWaitableTimerW(nullptr, FALSE, nullptr);
 
-    double lastStats = QpcNow(), lastDisplayQuery = lastStats, lastLayout = lastStats;
-    uint64_t srcCount = 0, outCount = 0;
+    double lastDisplayQuery = QpcNow(), lastLayout = lastDisplayQuery;
+    FrameMeter meter;
+    meter.reset(lastDisplayQuery);
+    UINT lastShown = 0;
+    uint64_t totalShown = 0;
     bool wasActive = false;
+    CapturedFrame f;
+    bool holding = false;  // captured frame waiting for the output clock (Pacer::wantsSource)
 
     while (!g_cmd.quit) {
         MSG msg;
@@ -292,7 +298,8 @@ int Run(const Settings& s) {
 
         // active only while the game is in front and not minimized
         HWND fgw = GetForegroundWindow();
-        const bool active = g_cmd.enabled && !IsIconic(gameRoot) && (fgw == gameRoot || fgw == overlay.Hwnd());
+        const bool active = g_cmd.enabled && !IsIconic(gameRoot) &&
+                            (s.alwaysActive || fgw == gameRoot || fgw == overlay.Hwnd());
         if (!active) {
             if (wasActive) {
                 overlay.Show(false);
@@ -300,8 +307,8 @@ int Run(const Settings& s) {
                 fg.SetCursor(nullptr, 0, 0, 0, 0);
                 wasActive = false;
             }
-            CapturedFrame f;
-            if (cap->TryGet(f)) cap->Release();  // keep the capture queue drained
+            if (holding || cap->TryGet(f)) cap->Release();  // keep the capture queue drained
+            holding = false;
             Sleep(20);
             continue;
         }
@@ -326,6 +333,7 @@ int Run(const Settings& s) {
             // after a pause the old pair is stale: start fresh
             pacer.reset();
             fg.ResetHistory();
+            meter.reset(now);
             if (s.upscale) cursor.Activate(s.clipCursor ? &layout.client : nullptr);
             wasActive = true;
         } else if (s.upscale && s.clipCursor) {
@@ -333,8 +341,9 @@ int Run(const Settings& s) {
         }
 
         // 1) new captured frame?
-        CapturedFrame f;
-        if (cap->TryGet(f)) {
+        if (!holding) holding = cap->TryGet(f);
+        if (holding && (mode == MulMode::Off || pacer.wantsSource())) {
+            holding = false;
             const UINT w = f.box.right - f.box.left, h = f.box.bottom - f.box.top;
             if (w == layout.capW && h == layout.capH) {
                 if (xcopy) {
@@ -344,7 +353,7 @@ int Run(const Settings& s) {
                 } else {
                     fg.PushFrame(f.texture, f.box);
                 }
-                ++srcCount;
+                meter.onSource();
                 const double ts = f.time > 0 ? f.time : now;
                 pacer.onSource(ts, (fg.GenMs() + (xcopy ? xcopy->LastMs() : 0)) / 1000.0);
             }
@@ -355,7 +364,7 @@ int Run(const Settings& s) {
                 ID3D11Texture2D* out = fg.Generate(1.f);
                 overlay.Show(true);
                 overlay.Present(out, layout.offX, layout.offY, s.upscale);
-                ++outCount;
+                meter.onOutput(false);
             }
         }
 
@@ -376,10 +385,13 @@ int Run(const Settings& s) {
             OutputSlot slot = pacer.next();
             if (QpcNow() >= slot.presentAt) {
                 const float t = pacer.tFor(slot.displayAt);
-                ID3D11Texture2D* out = fg.Generate(t);
-                overlay.Show(true);
-                overlay.Present(out, layout.offX, layout.offY, s.upscale);
-                ++outCount;
+                const bool repeat = pacer.repeats(t);
+                if (!repeat) {
+                    ID3D11Texture2D* out = fg.Generate(t);
+                    overlay.Show(true);
+                    overlay.Present(out, layout.offX, layout.offY, s.upscale);
+                }
+                meter.onOutput(repeat);
                 pacer.advance(QpcNow());
             } else {
                 // sleep until the next present or a short capture poll interval
@@ -391,21 +403,26 @@ int Run(const Settings& s) {
 
         // 4) stats
         const double t2 = QpcNow();
-        if ((t2 - lastStats) * 1000.0 >= s.statsMs) {
-            const double dt = t2 - lastStats;
-            char buf[768];
-            const double srcFps = srcCount / dt, outFps = outCount / dt;
+        if (meter.elapsed(t2) * 1000.0 >= s.statsMs) {
+            const FrameMeter::Sample m = meter.take(t2);
+            UINT shown = 0;
+            if (overlay.ShownCount(shown)) { totalShown += shown - lastShown; lastShown = shown; }
+            char buf[900];
             std::snprintf(buf, sizeof buf,
                           "{\"type\":\"stats\",\"srcFps\":%.1f,\"outFps\":%.1f,\"multiplier\":%.2f,"
                           "\"mode\":%d,\"refreshHz\":%.2f,\"delayMs\":%.1f,\"addedLatencyMs\":%.1f,"
-                          "\"genMs\":%.2f,\"analyzeMs\":%.2f,\"transferMs\":%.2f,\"late\":%llu,\"skipped\":%llu}",
-                          srcFps, outFps, srcFps > 0 ? outFps / srcFps : 0.0, int(mode), disp.hz,
+                          "\"genMs\":%.2f,\"analyzeMs\":%.2f,\"transferMs\":%.2f,\"late\":%llu,\"skipped\":%llu,"
+                          "\"srcFrames\":%llu,\"outFrames\":%llu,\"repeatFrames\":%llu,\"shownFrames\":%llu,"
+                          "\"clockSec\":%.4f,\"measuredSec\":%.3f,\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f}",
+                          m.srcFps(), m.outFps(), m.multiplier(), int(mode), disp.hz,
                           pacer.delayMs(), pacer.addedLatencyMs(), fg.GenMs(), fg.AnalyzeMs(),
                           xcopy ? xcopy->LastMs() : 0.0, (unsigned long long)pacer.stats.late,
-                          (unsigned long long)pacer.stats.skipped);
+                          (unsigned long long)pacer.stats.skipped, (unsigned long long)meter.totalSrc(),
+                          (unsigned long long)meter.totalOut(), (unsigned long long)meter.totalRepeat(),
+                          (unsigned long long)totalShown, t2, m.seconds, pacer.interval() * 1000.0,
+                          pacer.percentile(0.1) * 1000.0, pacer.percentile(0.5) * 1000.0,
+                          pacer.percentile(0.9) * 1000.0);
             Emit(buf);
-            srcCount = outCount = 0;
-            lastStats = t2;
         }
     }
     cursor.Restore();

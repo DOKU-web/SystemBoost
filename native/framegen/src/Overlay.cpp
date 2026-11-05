@@ -16,7 +16,7 @@ static LRESULT CALLBACK OverlayProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
 }
 
-Overlay::Overlay(ID3D11Device* dev, ID3D11DeviceContext* ctx) : dev_(dev), ctx_(ctx) {
+Overlay::Overlay(ID3D11Device* dev, ID3D11DeviceContext* ctx, bool showInCapture) : dev_(dev), ctx_(ctx) {
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof wc;
     wc.lpfnWndProc = OverlayProc;
@@ -32,7 +32,7 @@ Overlay::Overlay(ID3D11Device* dev, ID3D11DeviceContext* ctx) : dev_(dev), ctx_(
     SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
     // keep our own output out of every capture (no feedback loop with DXGI capture,
     // and recording software sees the game, not the generated frames)
-    SetWindowDisplayAffinity(hwnd_, WDA_EXCLUDEFROMCAPTURE);
+    if (!showInCapture) SetWindowDisplayAffinity(hwnd_, WDA_EXCLUDEFROMCAPTURE);
 
     ComPtr<IDXGIDevice> dxgi;
     Check(dev_->QueryInterface(IID_PPV_ARGS(&dxgi)), "IDXGIDevice");
@@ -111,6 +111,13 @@ void Overlay::Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear) {
         Show(false);
         throw HrError{hr, "GPU device removed/reset"};
     }
+}
+
+bool Overlay::ShownCount(UINT& count) {
+    DXGI_FRAME_STATISTICS st{};
+    if (!swap_ || FAILED(swap_->GetFrameStatistics(&st))) return false;
+    count = st.PresentCount;
+    return true;
 }
 
 void Overlay::Show(bool on) {

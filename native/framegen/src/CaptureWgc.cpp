@@ -40,6 +40,10 @@ public:
             try { session_.IsBorderRequired(false); }  // Windows 11: no yellow border
             catch (const winrt::hresult_error&) {}       // not allowed -> keep the border
         }
+        // Windows 11 24H2 limits updates to about 60 per second by default, and on a
+        // 144 Hz display that lands on every third vblank: at most 48 fps, 20.8 ms apart.
+        if (ApiInformation::IsPropertyPresent(L"Windows.Graphics.Capture.GraphicsCaptureSession", L"MinUpdateInterval"))
+            session_.MinUpdateInterval(std::chrono::milliseconds(1));
         session_.StartCapture();
     }
 

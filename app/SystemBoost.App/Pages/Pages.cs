@@ -35,7 +35,7 @@ public sealed class DashboardPage : UserControl
         {
             grid.Children.Add(Tile("게임 부스트", backend.Connected
                 ? "선택한 프로필의 최적화를 한 번에 적용하고, 게임이 끝나면 되돌려요."
-                : "v0.5 부스트 기능 연결 전이에요. 연결되면 여기서 바로 적용할 수 있어요.", "열기", "boost", 2));
+                : "준비 중이에요. 열리면 여기서 바로 적용할 수 있어요.", "열기", "boost", 2));
             grid.Children.Add(Tile("벤치마크", "적용 전/후를 같은 장면에서 측정해서 효과가 있는 것만 남기세요.", "기록 보기", "bench", 4));
         }
         else
@@ -63,8 +63,10 @@ public sealed class BoostPage : UserControl
     public BoostPage(BoostCategory category, string title, IBoostBackend backend, BoostCategory? extra = null)
     {
         var root = new StackPanel();
-        root.Children.Add(Ui.Header(title, "모든 변경은 적용 전에 자동으로 백업되고, '백업 · 되돌리기'에서 한 번에 원래대로 돌릴 수 있어요."));
-        var status = Ui.Text(backend.Connected ? "" : "v0.5 부스트 기능을 아직 연결하지 않아서, 지금은 켜도 시스템이 바뀌지 않아요.", "muted", wrap: true);
+        root.Children.Add(Ui.Header(title, backend.Connected
+            ? "모든 변경은 적용 전에 자동으로 백업되고, '백업 · 되돌리기'에서 한 번에 원래대로 돌릴 수 있어요."
+            : "'준비 중' 항목은 아직 켤 수 없고, 시스템을 바꾸지 않아요."));
+        var status = Ui.Text("", "muted", wrap: true);
         status.Margin = new Thickness(0, 0, 0, 12);
         root.Children.Add(status);
 
@@ -90,7 +92,7 @@ public sealed class BoostPage : UserControl
             var desc = f.Description;
             if (f.RequiresAdmin) desc = (desc.Length > 0 ? desc + " · " : "") + "관리자 권한 필요";
             if (f.NeedsReboot) desc += " · 재부팅 후 적용";
-            var row = Ui.Row(f.Title, desc, sw, first);
+            var row = Ui.Row(f.Title, desc, backend.Connected ? sw : Ui.Pending(), first);
             if (f.Premium && row.Child is Grid g && g.Children[0] is StackPanel sp && sp.Children[0] is TextBlock tb)
             {
                 sp.Children.RemoveAt(0);
@@ -99,9 +101,10 @@ public sealed class BoostPage : UserControl
                 line.Children.Add(Ui.Badge("프리미엄"));
                 sp.Children.Insert(0, line);
             }
+            if (!backend.Connected && row.Child is Grid pending) pending.Children[0].Opacity = 0.55;
             list.Children.Add(row);
             first = false;
-            _ = Init(sw, backend, f.Id);
+            if (backend.Connected) _ = Init(sw, backend, f.Id);
         }
         if (Platform.IsMac && category == BoostCategory.GameBoost)
         {
@@ -153,9 +156,12 @@ public sealed class BackupPage : UserControl
         var root = new StackPanel();
         root.Children.Add(Ui.Header("백업 · 되돌리기", Platform.IsMac
             ? "SystemBoost가 바꾼 설정(저전력 모드, Time Machine, Spotlight)을 한 번에 원래대로 돌려요."
-            : "SystemBoost가 바꾼 설정(레지스트리, 전원 계획, 드라이버 프로필, 오버클럭)을 한 번에 원래대로 돌려요."));
+            : backend.Connected
+                ? "SystemBoost가 바꾼 설정(레지스트리, 전원 계획, 드라이버 프로필, 오버클럭)을 한 번에 원래대로 돌려요."
+                : "부스트 항목이 준비 중이라 아직 되돌릴 설정이 없어요. 가상 메모리는 'RAM 확보' 화면의 '원래대로'로 되돌려요."));
         var result = Ui.Text("", "muted", wrap: true);
-        var btn = Ui.Button("전체 되돌리기", "primary");
+        var btn = Ui.Button(backend.Connected ? "전체 되돌리기" : "준비 중", "primary");
+        btn.IsEnabled = backend.Connected;
         btn.HorizontalAlignment = HorizontalAlignment.Left;
         btn.Click += async (_, _) => result.Text = await backend.RevertAllAsync();
         var p = new StackPanel { Spacing = 12 };
@@ -178,7 +184,7 @@ public sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("운영체제", "", Ui.Text(Platform.Name, "label")));
         list.Children.Add(Ui.Row("프레임 생성 엔진", Platform.EnginePath, Ui.Text(Platform.EngineAvailable ? "설치됨" : "없음", "label")));
         if (Platform.IsWindows)
-            list.Children.Add(Ui.Row("부스트 기능 (v0.5)", "RAM·GPU·CPU·시스템 최적화", Ui.Text(backend.Connected ? "연결됨" : "연결 전", "label")));
+            list.Children.Add(Ui.Row("부스트 기능", "RAM·GPU·CPU·시스템 최적화", Ui.Text(backend.Connected ? "연결됨" : "준비 중", "label")));
         bool portable = Platform.Portable;
         list.Children.Add(Ui.Row("설치 형태", portable ? "설정과 기록을 이 폴더에 저장해요" : "설정과 기록을 사용자 폴더에 저장해요",
                                  Ui.Text(portable ? "포터블" : "설치판", "label")));
@@ -204,7 +210,7 @@ public sealed class SettingsPage : UserControl
         var notes = Ui.Text("", "muted", wrap: true);
         var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 10 };
         var check = Ui.Button("지금 확인", "ghost");
-        check.Click += async (_, _) => await Updater.CheckAndDownloadAsync();
+        check.Click += async (_, _) => await Updater.CheckAndDownloadAsync(userAsked: true);
         var restart = Ui.Button("다시 시작해서 업데이트", "primary");
         restart.Click += (_, _) =>
         {

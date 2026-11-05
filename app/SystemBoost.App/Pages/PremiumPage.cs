@@ -44,15 +44,21 @@ public sealed class PremiumPage : UserControl
         ("품질 모드", "성능 · 균형", "성능 · 균형 · 품질"),
         ("업스케일링 + 선명화", "●", "●"),
         ("듀얼 GPU (내장 그래픽에 생성 맡기기)", "—", "●"),
-        ("게임 부스트 · 모니터링 · 벤치마크", "●", "●"),
+        ("게임 부스트", "●", "●"),
+        ("모니터링 · 벤치마크", "●", "●"),
         ("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●"),
         ("자원 분배 · CPU 최대 사용량 제한", "—", "●"),
         ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "●"),
         ("GPU 오버클럭 / 언더볼트 (Windows)", "—", "●"),
     };
+    // rows that need the boost backend: shown as "준비 중" until it is connected
+    private static readonly string[] BoostRows =
+        { "게임 부스트", "게임별 자동 최적화 (측정해서 효과 있는 것만)", "GPU 오버클럭 / 언더볼트 (Windows)" };
+    private readonly bool _boostReady;
 
-    public PremiumPage()
+    public PremiumPage(bool boostReady)
     {
+        _boostReady = boostReady;
         var root = new StackPanel();
         root.Children.Add(Ui.Header("프리미엄", "무료로도 기본 기능은 계속 쓸 수 있어요. 프리미엄은 고급 기능을 열어 줘요. 효과는 게임과 PC마다 달라서, 벤치마크로 직접 확인하고 결정하세요."));
 
@@ -67,7 +73,7 @@ public sealed class PremiumPage : UserControl
         {
             var t = Ui.Text(text, head ? "h2" : "label");
             if (accent) t.Foreground = new SolidColorBrush(Color.Parse("#FF7A1A"));
-            if (text == "—") t.Foreground = new SolidColorBrush(Color.Parse("#5D5C60"));
+            if (text is "—" or "준비 중") t.Foreground = new SolidColorBrush(Color.Parse("#5D5C60"));
             var b = new Border { Child = t, Padding = new Thickness(0, 10), BorderBrush = new SolidColorBrush(Color.Parse("#232327")),
                                  BorderThickness = new Thickness(0, row == 0 ? 0 : 1, 0, 0) };
             if (col > 0) t.HorizontalAlignment = HorizontalAlignment.Center;
@@ -78,9 +84,10 @@ public sealed class PremiumPage : UserControl
         Cell("기능", 0, 0, true); Cell("무료", 0, 1, true); Cell("프리미엄", 0, 2, true, true);
         for (int i = 0; i < Rows.Length; i++)
         {
+            bool pending = !_boostReady && BoostRows.Contains(Rows[i].feature);
             Cell(Rows[i].feature, i + 1, 0);
-            Cell(Rows[i].free, i + 1, 1);
-            Cell(Rows[i].premium, i + 1, 2, accent: Rows[i].premium != "—");
+            Cell(pending ? "준비 중" : Rows[i].free, i + 1, 1);
+            Cell(pending ? "준비 중" : Rows[i].premium, i + 1, 2, accent: !pending && Rows[i].premium != "—");
         }
         root.Children.Add(Ui.Card(table));
 
@@ -289,7 +296,8 @@ public sealed class PremiumPage : UserControl
         else
         {
             _state.Text = "무료 플랜";
-            _stateSub.Text = "프레임 생성 2배, 업스케일, 게임 부스트, 모니터링을 쓸 수 있어요.";
+            _stateSub.Text = _boostReady ? "프레임 생성 2배, 업스케일, 게임 부스트, 모니터링을 쓸 수 있어요."
+                                         : "프레임 생성 2배, 업스케일, 모니터링을 쓸 수 있어요.";
         }
         if (License.Notice != null) _msg.Text = License.Notice;
         ShowPending();

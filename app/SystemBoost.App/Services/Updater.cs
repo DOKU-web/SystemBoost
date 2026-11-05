@@ -4,10 +4,13 @@
 //  - Checks 15 s after start and then every 6 hours (can be turned off in Settings).
 //  - Downloads in the background (only the changed parts when a delta exists).
 //  - Never interrupts: shows a bar; the user picks "restart now", or it is applied when the app closes.
+//  - A background check that fails stays silent; errors show only after the user presses "check now".
 //  - Steam builds and dev builds are not Velopack installs (IsInstalled = false): this does nothing there.
 //  - Settings, license key and records are outside the app folder, so updates keep them.
 using System;
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -62,6 +65,7 @@ public static class Updater
     private static UpdateInfo? _info;
     private static readonly SemaphoreSlim Busy = new(1, 1);
     private static Timer? _timer;
+    private static bool _userAsked;
 
     // ------------------------------------------------------------ settings
     private sealed record Prefs(bool Auto = true);
@@ -85,10 +89,12 @@ public static class Updater
     }
 
     /// Checks GitHub Releases; if a newer version exists, downloads it in the background.
-    public static async Task CheckAndDownloadAsync()
+    /// userAsked: the user pressed "check now", so a failure is shown instead of ignored.
+    public static async Task CheckAndDownloadAsync(bool userAsked = false)
     {
         if (!Supported) { Set(UpdateState.Unsupported); return; }
         if (State is UpdateState.Ready) return;                       // already downloaded, waiting for restart
+        if (userAsked) _userAsked = true;                             // also covers a check already running
         if (!await Busy.WaitAsync(0)) return;
         try
         {
@@ -104,12 +110,18 @@ public static class Updater
             await Mgr.DownloadUpdatesAsync(_info, p => { Progress = p; Set(UpdateState.Downloading); });
             Set(UpdateState.Ready);
         }
+        catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)
+        {
+            LastCheck = DateTime.Now;                                 // no releases published: nothing newer exists
+            Set(UpdateState.UpToDate);
+        }
         catch (Exception e)
         {
-            Error = e is System.Net.Http.HttpRequestException ? "업데이트 서버에 연결하지 못했어요" : "업데이트를 확인하지 못했어요";
+            if (!_userAsked) { Set(UpdateState.Idle); return; }
+            Error = e is HttpRequestException ? "업데이트 서버에 연결하지 못했어요" : "업데이트를 확인하지 못했어요";
             Set(UpdateState.Failed);
         }
-        finally { Busy.Release(); }
+        finally { _userAsked = false; Busy.Release(); }
     }
 
     /// Restarts into the new version now. Call the app's own shutdown first (frame generation, resource limits).

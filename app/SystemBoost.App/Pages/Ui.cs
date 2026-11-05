@@ -65,4 +65,15 @@ internal static class Ui
             Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeight.Bold, Foreground = Brushes.Black },
         };
     }
+
+    /// Gray tag shown instead of a control while a feature is not available yet.
+    public static Border Pending()
+    {
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.Parse("#232327")), CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 4), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = "준비 중", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#8B8A88")) },
+        };
+    }
 }

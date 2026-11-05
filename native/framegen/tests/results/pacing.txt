@@ -1,13 +1,13 @@
 case             sched  judder_ms  repeat%  drop%  lat_ms  outFPS notes
-48fps,  x3       burst       5.81     45.0   43.4    16.2    79.3 
-48fps,  x3       fixed       4.96      9.6    5.8    21.0   130.1 
-48fps,  x3       v0.6        3.23      1.3    0.9    27.3   142.2 late=167 skipped=0 switches=0
-48fps,  auto     burst       5.88     44.7   43.6    16.3    79.7 N switches=83
-48fps,  auto     fixed       5.23      9.4    5.7    21.1   130.4 N switches=83
-48fps,  auto     v0.6        2.58      0.0    0.0    24.3   144.0 late=170 skipped=0 switches=0
-40-70fps, auto   burst       6.59     41.3   39.3    15.0    84.6 N switches=299
-40-70fps, auto   fixed       7.04     12.8    7.3    19.0   125.6 N switches=299
-40-70fps, auto   v0.6        4.70      0.0    0.0    22.2   144.0 late=221 skipped=0 switches=0
-30fps,  x4       burst       7.90     57.5   48.0    23.5    61.2 
-30fps,  x4       fixed       4.83     19.7    1.0    32.6   115.6 
-30fps,  x4       v0.6        3.02     16.9    0.0    40.3   119.6 late=89 skipped=0 switches=0
+48fps,  x3       burst       5.73     44.5   42.7    16.2    80.0 
+48fps,  x3       fixed       4.90      9.6    5.7    21.0   130.2 
+48fps,  x3       v0.6        3.04      3.5    0.0    28.6   139.0 late=96 skipped=0 switches=0
+48fps,  auto     burst       5.79     44.0   42.8    16.3    80.7 N switches=82
+48fps,  auto     fixed       5.18      9.4    5.7    21.1   130.5 N switches=82
+48fps,  auto     v0.6        2.34      0.0    0.0    25.6   144.0 late=111 skipped=0 switches=0
+40-70fps, auto   burst       6.52     41.1   39.2    15.0    84.9 N switches=292
+40-70fps, auto   fixed       7.03     12.8    7.4    19.0   125.6 N switches=292
+40-70fps, auto   v0.6        4.54      0.0    0.0    23.5   144.0 late=145 skipped=0 switches=0
+30fps,  x4       burst       7.85     57.4   47.8    23.4    61.3 
+30fps,  x4       fixed       4.77     19.9    1.3    32.6   115.3 
+30fps,  x4       v0.6        3.02     18.3    0.0    41.8   117.6 late=54 skipped=0 switches=0

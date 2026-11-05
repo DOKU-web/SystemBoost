@@ -129,7 +129,13 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             Status = $"실행 중 · 캡처 {cap} · 생성 GPU {gpu} · {hz:0}Hz";
         };
         _engine.Message += (type, msg) => Status = (type == "error" ? "오류: " : "알림: ") + msg;
-        _engine.Exited += () => { EndSession(); Running = false; if (!Status.StartsWith("오류")) Status = "중지됨"; };
+        _engine.Exited += () =>
+        {
+            EndSession();
+            Running = false;
+            ResourceManagers.GameProcess = null;
+            if (!Status.StartsWith("오류")) Status = "중지됨";
+        };
     }
 
     public async Task RefreshAsync()
@@ -158,6 +164,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         try
         {
             _engine.Start(SelectedWindow.Id, o);
+            ResourceManagers.GameProcess = ResourceManagers.ProcessOfWindow(SelectedWindow);
             Running = true;
             Status = "시작하는 중…";
             GameInfo = SelectedWindow.ToString();
