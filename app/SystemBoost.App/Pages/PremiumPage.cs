@@ -37,6 +37,8 @@ public sealed class PremiumPage : UserControl
     private readonly StackPanel _orderPanel = new() { Spacing = 8, IsVisible = false };
     private readonly TextBlock _orderCode = Ui.Text("", "big");
     private readonly TextBlock _orderSub = Ui.Text("", "muted", wrap: true);
+    private readonly TextBlock _keyNote = Ui.Text("", "muted", wrap: true);
+    private readonly Border _buyCard;   // shown only while something is on sale
 
     private static readonly (string feature, string free, string premium)[] Rows =
     {
@@ -177,11 +179,14 @@ public sealed class PremiumPage : UserControl
         _paidPanel.Children.Add(paidRow);
         _orderPanel.Children.Add(_paidPanel);
         buy.Children.Add(_orderPanel);
-        root.Children.Add(Ui.Card(buy));
+        _buyCard = Ui.Card(buy);
+        _buyCard.IsVisible = false;
+        root.Children.Add(_buyCard);
 
         // key
         var keyP = new StackPanel { Spacing = 10 };
         keyP.Children.Add(Ui.Text("라이선스 키", "h2"));
+        keyP.Children.Add(_keyNote);
         var keyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         keyRow.Children.Add(_key);
         var act = Ui.Button("등록", "primary");
@@ -211,11 +216,12 @@ public sealed class PremiumPage : UserControl
         var (reachable, methods) = await License.GetShopStatusAsync();
         _methods = methods;
         UpdateBuy();
-        if (methods["card"].Count == 0 && methods["manual"].Count == 0)
-            _buyMsg.Text = reachable || !License.ServerConfigured
-                ? "결제는 아직 준비 중이에요. 열리면 이 화면에서 바로 결제할 수 있어요. 키를 받았다면 아래에 등록하세요."
-                : "결제 서버에 연결하지 못했어요. 인터넷 연결을 확인하세요.";
-        else if (_buyMsg.Text?.StartsWith("결제는 아직") == true || _buyMsg.Text?.StartsWith("결제 서버") == true) _buyMsg.Text = "";
+        bool closed = methods["card"].Count == 0 && methods["manual"].Count == 0;
+        _buyCard.IsVisible = !closed || License.Pending != null;   // an open order stays reachable
+        _keyNote.IsVisible = closed;
+        _keyNote.Text = reachable || !License.ServerConfigured
+            ? "지금은 구매할 수 없어요. 키를 받았다면 여기에 등록하세요."
+            : "서버에 연결하지 못했어요. 키를 받았다면 여기에 등록하세요.";
     }
 
     private void UpdateBuy()
