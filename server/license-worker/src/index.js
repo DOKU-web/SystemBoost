@@ -309,7 +309,7 @@ async function admin(req, url, env) {
   if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 6) return json({ error: "not found" }, 404);   // off unless configured
   if (url.pathname === "/admin" && req.method === "GET")
     return new Response(ADMIN_HTML.replace("/*SB_SERVED*/false", "true"), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
-      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; frame-ancestors 'none'",
       "x-frame-options": "DENY", "referrer-policy": "no-referrer" } });
   // Wrong-password lockout: 5 misses per IP per 15 min, 20 misses in total per hour.
   // A short PIN is only safe because of this (20 guesses an hour vs 1,000,000 six-digit PINs).

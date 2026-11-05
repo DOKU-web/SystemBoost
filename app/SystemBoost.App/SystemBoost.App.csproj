@@ -9,6 +9,7 @@
     <RootNamespace>SystemBoost.App</RootNamespace>
     <Version>0.6.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\brand\SystemBoost.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <InvariantGlobalization>false</InvariantGlobalization>
@@ -23,5 +24,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets/wine-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <AvaloniaResource Include="Assets\SystemBoost.ico" />
+    <AvaloniaResource Include="Assets\icon_128.png" />
   </ItemGroup>
 </Project>

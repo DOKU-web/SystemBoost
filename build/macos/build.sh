@@ -24,6 +24,7 @@ for ARCH in arm64 x64; do
     --self-contained true -p:Version="$VERSION" -p:UseAppHost=true -o "$APP/Contents/MacOS"
   cp "$ENGINE" "$APP/Contents/MacOS/sb-framegen-mac"
   sed "s/__VERSION__/$VERSION/g" "$ROOT/build/macos/Info.plist" > "$APP/Contents/Info.plist"
+  cp "$ROOT/assets/brand/SystemBoost.icns" "$APP/Contents/Resources/SystemBoost.icns"
   chmod +x "$APP/Contents/MacOS/SystemBoost" "$APP/Contents/MacOS/sb-framegen-mac"
 
   # 3) Velopack: .pkg installer, portable zip and update packages for this architecture.
@@ -31,7 +32,7 @@ for ARCH in arm64 x64; do
   CH="osx-$ARCH"
   REL="$OUT/Releases-$LABEL"; mkdir -p "$REL"
   if [ -n "${VPK_REPO_URL:-}" ]; then vpk download github --repoUrl "$VPK_REPO_URL" --token "${VPK_TOKEN:-}" -o "$REL" --channel "$CH" || echo "no previous release: full package only"; fi
-  ARGS=(pack -u SystemBoost -v "$VERSION" -p "$APP" --mainExe SystemBoost --packTitle SystemBoost --channel "$CH" -o "$REL")
+  ARGS=(pack -u SystemBoost -v "$VERSION" -p "$APP" --mainExe SystemBoost --packTitle SystemBoost --icon "$ROOT/assets/brand/SystemBoost.icns" --channel "$CH" -o "$REL")
   [ -f "$ROOT/RELEASE_NOTES.md" ] && ARGS+=(--releaseNotes "$ROOT/RELEASE_NOTES.md")
   if [ -n "${SIGN_IDENTITY:-}" ]; then
     ARGS+=(--signAppIdentity "$SIGN_IDENTITY" --signEntitlements "$ROOT/build/macos/entitlements.plist")

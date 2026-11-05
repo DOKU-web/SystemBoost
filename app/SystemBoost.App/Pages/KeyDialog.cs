@@ -1,8 +1,10 @@
 // Popup shown when a purchase completes: the license key (already registered) + copy.
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform;
 
 namespace SystemBoost.App.Pages;
 
@@ -11,6 +13,7 @@ public sealed class KeyDialog : Window
     public KeyDialog(string key, string? note)
     {
         Title = "SystemBoost 프리미엄";
+        Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://SystemBoost/Assets/SystemBoost.ico")));
         Width = 520; SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

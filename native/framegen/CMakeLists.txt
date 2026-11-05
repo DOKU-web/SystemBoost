@@ -23,6 +23,7 @@ if(MSVC)
     target_compile_options(sb_framegen PRIVATE /W4 /permissive- /EHsc /utf-8)
     set_property(TARGET sb_framegen PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     target_link_options(sb_framegen PRIVATE /SUBSYSTEM:CONSOLE)
+    target_sources(sb_framegen PRIVATE sb_framegen.rc)
 endif()
 
 # Precompile shaders (cs_5_0) with fxc from the Windows SDK. At runtime the exe

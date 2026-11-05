@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="SystemBoost.App.MainWindow"
         Title="SystemBoost"
+        Icon="/Assets/SystemBoost.ico"
         Width="1600" Height="1000" MinWidth="1280" MinHeight="800"
         WindowStartupLocation="CenterScreen">
   <Grid ColumnDefinitions="236,*">
@@ -9,9 +10,7 @@
     <Border Grid.Column="0" Background="{StaticResource SbSide}" BorderBrush="{StaticResource SbLine}" BorderThickness="0,0,1,0" Padding="18,26">
       <DockPanel LastChildFill="False">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="6,0,0,26">
-          <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource SbOrange}">
-            <TextBlock Text="⚡" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#111111" FontSize="16" />
-          </Border>
+          <Image Source="/Assets/icon_128.png" Width="30" Height="30" RenderOptions.BitmapInterpolationMode="HighQuality" />
           <TextBlock VerticalAlignment="Center" FontSize="20" FontWeight="Bold">
             <Run Text="System" /><Run Text="Boost" Foreground="{StaticResource SbOrange}" />
           </TextBlock>

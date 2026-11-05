@@ -33,7 +33,7 @@ New-Item -ItemType Directory -Force $rel | Out-Null
 if ($env:VPK_REPO_URL) { vpk download github --repoUrl $env:VPK_REPO_URL --token $env:VPK_TOKEN -o $rel --channel win }
 $notes = "$root\RELEASE_NOTES.md"
 $vpkArgs = @("pack", "-u", "SystemBoost", "-v", $Version, "-p", $pub, "--mainExe", "SystemBoost.exe",
-             "--packTitle", "SystemBoost", "--channel", "win", "-o", $rel)
+             "--packTitle", "SystemBoost", "--icon", "$root\assets\brand\SystemBoost.ico", "--channel", "win", "-o", $rel)
 if (Test-Path $notes) { $vpkArgs += @("--releaseNotes", $notes) }
 if ($env:SIGN_CERT_THUMBPRINT) { $vpkArgs += @("--signParams", "/sha1 $env:SIGN_CERT_THUMBPRINT /fd sha256 /tr http://timestamp.digicert.com /td sha256") }
 vpk @vpkArgs
