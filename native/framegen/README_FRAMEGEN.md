@@ -55,7 +55,7 @@ cmake --build build --config Release
 ```
 sb_framegen.exe --hwnd 0x1234AB [옵션]
   --mode auto|x2|x3|x4|off   기본 auto. off = 프레임 생성 없이 업스케일만
-  --max-mul 2..4             auto 모드 최대 배수 (기본 4)
+  --max-mul 2..4             auto 모드 최대 배수 (기본 4). 경계에서는 25%까지 넘을 수 있음
   --quality performance|balanced|quality
                              분석 해상도 1/4, 1/2, 1/2 + 정밀 탐색 2회
   --upscale                  게임 창을 그 모니터 크기로 확대 (비율 유지)

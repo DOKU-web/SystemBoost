@@ -31,7 +31,7 @@ enum class MulMode : int { Off = 1, X2 = 2, X3 = 3, X4 = 4, Auto = 0 };
 struct PacerConfig {
     MulMode mode = MulMode::Auto;
     double refreshHz = 60.0;     // display refresh (DwmGetCompositionTimingInfo)
-    int maxMul = 4;              // Auto: output fps <= source fps * maxMul
+    int maxMul = 4;              // Auto: output fps <= source fps * maxMul (see kDividerSlack)
     double vblankPhase = 0.0;    // time of any known vblank (seconds)
     double switchHoldSec = 1.0;  // Auto: hysteresis for divider changes
     double marginSec = 0.0005;   // extra safety added to D
@@ -164,6 +164,9 @@ public:
 private:
     static constexpr int kHist = 30;
     static constexpr double kHitchFactor = 4.0;
+    // A slower divider cuts the output rate in half, so a game hovering at the limit would
+    // flip between 120 and 60 fps. It stays until the source is clearly below the limit.
+    static constexpr double kDividerSlack = 1.25;
 
     double outputStep() const {
         switch (cfg_.mode) {
@@ -195,6 +198,7 @@ private:
         if (cfg_.mode != MulMode::Auto) return;
         const double maxOut = sourceFps() * std::max(1, cfg_.maxMul);
         int want = std::max(1, int(std::ceil(cfg_.refreshHz / maxOut - 0.05)));
+        if (want > divider_ && cfg_.refreshHz / divider_ <= maxOut * kDividerSlack) want = divider_;
         if (want == divider_) { candidate_ = 0; return; }
         // hysteresis: only switch if the new divider is needed for a while
         if (candidate_ != want) { candidate_ = want; candidateSince_ = now; return; }

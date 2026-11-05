@@ -78,6 +78,50 @@ void StdinThread() {
     g_cmd.quit = true;  // stdin closed (parent exited) -> stop
 }
 
+// DWM only reports the primary monitor: next to a 144 Hz primary, the vblank of a 120 Hz
+// monitor came out 7 to 8 ms off, different on each read. Each output is asked for its own.
+std::atomic<HMONITOR> g_vblankMonitor{nullptr};
+std::atomic<double> g_vblankTime{0};
+constexpr DWORD kVBlankSampleMs = 500;
+
+ComPtr<IDXGIOutput> OutputOf(HMONITOR mon) {
+    ComPtr<IDXGIFactory1> f;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&f)))) return nullptr;
+    ComPtr<IDXGIAdapter1> a;
+    for (UINT i = 0; f->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i, a.Reset()) {
+        ComPtr<IDXGIOutput> o;
+        for (UINT j = 0; a->EnumOutputs(j, &o) != DXGI_ERROR_NOT_FOUND; ++j, o.Reset()) {
+            DXGI_OUTPUT_DESC d{};
+            if (SUCCEEDED(o->GetDesc(&d)) && d.Monitor == mon) return o;
+        }
+    }
+    return nullptr;
+}
+
+// Detached: WaitForVBlank can block while a monitor is off, and must not hold up exit.
+void WatchVBlank() {
+    HMONITOR cur = nullptr;
+    ComPtr<IDXGIOutput> out;
+    for (;;) {
+        const HMONITOR want = g_vblankMonitor.load();
+        if (want != cur) {
+            cur = want;
+            g_vblankTime = 0;
+            out = want ? OutputOf(want) : nullptr;
+        }
+        if (out) {
+            if (SUCCEEDED(out->WaitForVBlank())) {
+                g_vblankTime = QpcNow();
+            } else {    // the display changed: find the output again
+                cur = nullptr;
+                out.Reset();
+                g_vblankTime = 0;
+            }
+        }
+        Sleep(kVBlankSampleMs);
+    }
+}
+
 struct DisplayTiming { double hz = 60; double phase = 0; };
 DisplayTiming QueryDisplay(HWND game) {
     DisplayTiming d;
@@ -89,9 +133,13 @@ DisplayTiming QueryDisplay(HWND game) {
     }
     // DWM reports the composition rate; if the game's monitor runs at another
     // rate (multi-monitor), use that monitor's mode instead.
+    const HMONITOR mon = MonitorFromWindow(game, MONITOR_DEFAULTTONEAREST);
     MONITORINFOEXW mi{};
     mi.cbSize = sizeof mi;
-    if (GetMonitorInfoW(MonitorFromWindow(game, MONITOR_DEFAULTTONEAREST), &mi)) {
+    if (GetMonitorInfoW(mon, &mi)) {
+        const bool primary = mi.dwFlags & MONITORINFOF_PRIMARY;
+        g_vblankMonitor = primary ? nullptr : mon;    // DWM is exact there, a wake-up is not
+        if (const double vblank = g_vblankTime; !primary && vblank > 0) d.phase = vblank;
         DEVMODEW dm{};
         dm.dmSize = sizeof dm;
         if (EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm) && dm.dmDisplayFrequency > 1 &&
@@ -234,6 +282,7 @@ int Run(const Settings& s) {
     CursorManager cursor(genDev.Get());
     if (s.upscale) InstallCursorSafety();
 
+    std::thread(WatchVBlank).detach();
     DisplayTiming disp = QueryDisplay(game);
     PacerConfig pc;
     pc.mode = s.mode;
