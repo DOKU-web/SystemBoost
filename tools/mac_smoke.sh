@@ -107,13 +107,16 @@ else:
     print(f"{len(rows)} stats")
 EOF
 if [ -n "$ID" ]; then
-  for MODE in off x2 auto; do
+  for RUN in off x2 auto x2-low; do
+    MODE=${RUN%-low}
+    QUALITY=balanced
+    if [ "$RUN" = x2-low ]; then QUALITY=low; fi
     osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 1
-    (sleep 15) | limit 30 "$BIN/sb-framegen-mac" --hwnd "$ID" --mode "$MODE" --quality balanced > "$OUT/engine-$MODE.txt" 2>&1 &
+    (sleep 15) | limit 30 "$BIN/sb-framegen-mac" --hwnd "$ID" --mode "$MODE" --quality "$QUALITY" > "$OUT/engine-$RUN.txt" 2>&1 &
     sleep 9
-    screencapture -x "$OUT/screen-engine-$MODE.png" 2>> "$OUT/screen-error.txt"
+    screencapture -x "$OUT/screen-engine-$RUN.png" 2>> "$OUT/screen-error.txt"
     wait $!; CODE=$?
-    say "engine $MODE: exit $CODE $(python3 "$OUT/stats.py" "$OUT/engine-$MODE.txt")"
+    say "engine $RUN: exit $CODE $(python3 "$OUT/stats.py" "$OUT/engine-$RUN.txt"), fit lines $(grep -c '"type":"fit"' "$OUT/engine-$RUN.txt")"
   done
 else
   say "engine run: skipped, no window id"

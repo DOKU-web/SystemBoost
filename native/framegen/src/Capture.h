@@ -10,12 +10,14 @@ struct CapturedFrame {
     ID3D11Texture2D* texture = nullptr;  // valid until Release()
     D3D11_BOX box{};                     // game client area inside texture
     double time = 0;                     // QPC seconds when the game presented it
+    int frames = 1;                      // the game's frames since the last one returned, with this one
 };
 
 class ICapture {
 public:
     virtual ~ICapture() = default;
-    // Non-blocking. Returns true and fills `f` if a new frame is available.
+    // Non-blocking. Returns true and fills `f` if a new frame is available. Safe while a frame
+    // is held: it is replaced by the new one, or stays, or if it cannot stay f.texture is cleared.
     virtual bool TryGet(CapturedFrame& f) = 0;
     // Release the frame returned by TryGet (after copying it).
     virtual void Release() = 0;

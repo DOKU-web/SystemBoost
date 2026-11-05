@@ -20,6 +20,8 @@ done
 echo "== 2. frame pacing simulation"
 g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/pacer_sim.cpp" -o "$WORK/pacer_sim"
 "$WORK/pacer_sim" | tee "$OUT/pacing.txt"
+g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/fit_test.cpp" -o "$WORK/fit_test"
+"$WORK/fit_test"
 
 echo "== 2b. frame meter"
 g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/meter_test.cpp" -o "$WORK/meter_test"

@@ -31,7 +31,7 @@ public:
               "CreateForWindow");
         size_ = item_.Size();
         pool_ = wgc::Direct3D11CaptureFramePool::CreateFreeThreaded(
-            device_, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size_);
+            device_, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, kBuffers, size_);
         session_ = pool_.CreateCaptureSession(item_);
         using winrt::Windows::Foundation::Metadata::ApiInformation;
         if (ApiInformation::IsPropertyPresent(L"Windows.Graphics.Capture.GraphicsCaptureSession", L"IsCursorCaptureEnabled"))
@@ -55,22 +55,27 @@ public:
 
     bool TryGet(CapturedFrame& f) override {
         try { return TryGetImpl(f); }
-        catch (const winrt::hresult_error&) { Release(); return false; }  // window closing, device lost
+        catch (const winrt::hresult_error&) {  // window closing, device lost
+            Release();
+            f.texture = nullptr;
+            return false;
+        }
     }
 
     bool TryGetImpl(CapturedFrame& f) {
         // drain to the newest frame (older ones would only add latency)
         wgc::Direct3D11CaptureFrame newest{nullptr};
-        while (auto fr = pool_.TryGetNextFrame()) newest = fr;
+        int frames = 0;
+        while (auto fr = pool_.TryGetNextFrame()) { newest = fr; ++frames; }
         if (!newest) return false;
+        Release();
         frame_ = newest;
         auto cs = frame_.ContentSize();
         if (cs.Width != size_.Width || cs.Height != size_.Height) {  // window resized
             size_ = cs;
-            pool_.Recreate(device_, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size_);
+            pool_.Recreate(device_, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, kBuffers, size_);
         }
         auto access = frame_.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
-        tex_.Reset();
         Check(access->GetInterface(IID_PPV_ARGS(&tex_)), "GetInterface(tex)");
 
         // client area inside the captured window image (which starts at the
@@ -83,11 +88,12 @@ public:
         LONG l = std::max<LONG>(0, c.left - frameR.left), t = std::max<LONG>(0, c.top - frameR.top);
         LONG r = std::min<LONG>(LONG(std::min<UINT>(d.Width, UINT(cs.Width))), c.right - frameR.left);
         LONG b = std::min<LONG>(LONG(std::min<UINT>(d.Height, UINT(cs.Height))), c.bottom - frameR.top);
-        if (r <= l || b <= t) { Release(); return false; }
+        if (r <= l || b <= t) { Release(); f.texture = nullptr; return false; }
         f.texture = tex_.Get();
         f.box = {UINT(l), UINT(t), 0, UINT(r), UINT(b), 1};
         // SystemRelativeTime = QPC converted to 100 ns ticks (same clock as QpcNow)
         f.time = double(frame_.SystemRelativeTime().count()) * 1e-7;
+        f.frames = frames;
         return true;
     }
 
@@ -98,6 +104,9 @@ public:
     const char* Name() const override { return "wgc"; }
 
 private:
+    // the frame in use, the next one, and one more while the engine waits on the GPU
+    static constexpr int kBuffers = 3;
+
     HWND hwnd_;
     wd3d::IDirect3DDevice device_{nullptr};
     wgc::GraphicsCaptureItem item_{nullptr};

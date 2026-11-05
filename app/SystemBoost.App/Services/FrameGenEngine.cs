@@ -149,6 +149,7 @@ public sealed class FrameGenEngine : IDisposable
                 {
                     case "stats": Stats?.Invoke(ParseStats(r)); break;
                     case "ready": Ready?.Invoke(r); break;
+                    case "fit": Message?.Invoke("warning", FitText(r)); break;
                     case "warning":
                     case "error": Message?.Invoke(type!, r.TryGetProperty("msg", out var m) ? m.GetString() ?? "" : ""); break;
                 }
@@ -156,6 +157,15 @@ public sealed class FrameGenEngine : IDisposable
         }
         catch (JsonException) { }
         catch (KeyNotFoundException) { }
+    }
+
+    private static string FitText(JsonElement r)
+    {
+        if (r.TryGetProperty("stopped", out _)) return "GPU가 따라오지 못해 프레임 생성을 멈췄어요. 게임 화면을 그대로 보여 줘요.";
+        if (r.TryGetProperty("maxOut", out _)) return "출력이 계속 밀려서 출력 프레임 수를 낮췄어요.";
+        var quality = r.TryGetProperty("quality", out var q) ? q.GetString() : null;
+        var name = quality switch { "low" => "저사양", "performance" => "성능", _ => "균형" };
+        return $"출력이 계속 밀려서 품질을 '{name}' 단계로 낮췄어요. 다음에 시작할 때는 원래 설정으로 돌아가요.";
     }
 
     private static double D(JsonElement r, string k) => r.TryGetProperty(k, out var v) ? v.GetDouble() : 0;

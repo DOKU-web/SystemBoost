@@ -56,8 +56,8 @@ cmake --build build --config Release
 sb_framegen.exe --hwnd 0x1234AB [옵션]
   --mode auto|x2|x3|x4|off   기본 auto. off = 프레임 생성 없이 업스케일만
   --max-mul 2..4             auto 모드 최대 배수 (기본 4). 경계에서는 25%까지 넘을 수 있음
-  --quality performance|balanced|quality
-                             분석 해상도 1/4, 1/2, 1/2 + 정밀 탐색 2회
+  --quality low|performance|balanced|quality
+                             분석 해상도 1/8, 1/4, 1/2, 1/2 + 정밀 탐색 2회
   --upscale                  게임 창을 그 모니터 크기로 확대 (비율 유지)
   --sharpness 0..1           업스케일 선명화 (기본 0.5)
   --gen-gpu same|igpu|<번호>  프레임 생성 GPU (번호는 --list-gpus 결과)
@@ -74,9 +74,12 @@ stdout:
 {"type":"ready","capture":"wgc","genGpu":"...","displayGpu":"...","refreshHz":143.99,...}
 {"type":"stats","srcFps":47.9,"outFps":143.8,"multiplier":3.00,"refreshHz":143.99,
  "delayMs":23.9,"addedLatencyMs":21.4,"genMs":0.81,"analyzeMs":1.42,"transferMs":0,"late":3,"skipped":0}
+{"type":"fit","quality":"performance"}
 {"type":"warning"|"error","msg":"..."}
 {"type":"exit"}
 ```
+`fit`: 출력 시점을 3초 동안 계속 놓쳐서 엔진이 스스로 낮췄다는 뜻입니다. 품질을 한 단계씩 내리고(`quality`), 저사양에서도 밀리면 출력을 약 4분의 1 줄이고(`maxOut`), 출력이 원본의 1.25배 이하가 되면 프레임 생성을 멈춥니다(`stopped`). 다음 시작 때는 원래 설정으로 돌아갑니다.
+
 stdin: `mode x3`, `sharp 0.4`, `enable`, `disable`, `quit`. stdin이 닫히면(앱 종료) 스스로 종료합니다.
 
 화면에 보여 줄 값:

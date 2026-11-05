@@ -12,6 +12,7 @@
 #include "FrameGenGpu.h"
 #include "FrameMeter.h"
 #include "Gpu.h"
+#include "GpuFit.h"
 #include "Overlay.h"
 #include "Pacer.h"
 #include "Settings.h"
@@ -238,7 +239,7 @@ int Run(const Settings& s) {
 
     ComPtr<ID3D11Device> genDev, dispDev;
     ComPtr<ID3D11DeviceContext> genCtx, dispCtx;
-    CreateDevice(AdapterByIndex(genIdx).Get(), genDev, genCtx);
+    CreateDevice((s.genGpu == GenGpu::Warp ? WarpAdapter() : AdapterByIndex(genIdx)).Get(), genDev, genCtx);
 
     CaptureApi api = s.capture;
 #ifndef SBFG_WITH_WGC
@@ -292,6 +293,12 @@ int Run(const Settings& s) {
     Pacer pacer(pc);
     MulMode mode = s.mode;
     Settings cur = s;
+    auto setMode = [&](MulMode m) {
+        mode = pc.mode = m;
+        pc.refreshHz = disp.hz;
+        pc.vblankPhase = disp.phase;
+        pacer.setConfig(pc);
+    };
 
     Layout layout = ComputeLayout(game, s.upscale);
     fg.Resize(layout.capW, layout.capH, layout.outW, layout.outH, s);
@@ -316,6 +323,7 @@ int Run(const Settings& s) {
     double lastDisplayQuery = QpcNow(), lastLayout = lastDisplayQuery;
     FrameMeter meter;
     meter.reset(lastDisplayQuery);
+    GpuFit fit;
     UINT lastShown = 0;
     uint64_t totalShown = 0;
     bool wasActive = false;
@@ -332,11 +340,7 @@ int Run(const Settings& s) {
             std::lock_guard<std::mutex> l(g_cmd.m);
             if (g_cmd.hasMode) {
                 g_cmd.hasMode = false;
-                mode = g_cmd.mode;
-                pc.mode = mode;
-                pc.refreshHz = disp.hz;
-                pc.vblankPhase = disp.phase;
-                pacer.setConfig(pc);
+                setMode(g_cmd.mode);
             }
             if (g_cmd.hasSharp) {
                 g_cmd.hasSharp = false;
@@ -390,8 +394,14 @@ int Run(const Settings& s) {
             cursor.UpdateClip(layout.client);
         }
 
-        // 1) new captured frame?
-        if (!holding) holding = cap->TryGet(f);
+        // 1) new captured frame? Looked for while one waits too: capture buffers left full
+        // lose the game's next frames, and it reads as a slower game than it is.
+        if (cap->TryGet(f)) {
+            holding = true;
+            meter.onSource(f.frames);
+            pacer.onArrival(f.time > 0 ? f.time : now, f.frames);
+        }
+        holding = holding && f.texture;
         if (holding && (mode == MulMode::Off || pacer.wantsSource())) {
             holding = false;
             const UINT w = f.box.right - f.box.left, h = f.box.bottom - f.box.top;
@@ -403,9 +413,7 @@ int Run(const Settings& s) {
                 } else {
                     fg.PushFrame(f.texture, f.box);
                 }
-                meter.onSource();
-                const double ts = f.time > 0 ? f.time : now;
-                pacer.onSource(ts, (fg.GenMs() + (xcopy ? xcopy->LastMs() : 0)) / 1000.0);
+                pacer.onSource(f.time > 0 ? f.time : now, (fg.GenMs() + (xcopy ? xcopy->LastMs() : 0)) / 1000.0);
             }
             cap->Release();
             if (mode == MulMode::Off && !s.upscale) {
@@ -475,6 +483,22 @@ int Run(const Settings& s) {
                           pacer.percentile(0.1) * 1000.0, pacer.percentile(0.5) * 1000.0,
                           pacer.percentile(0.9) * 1000.0);
             Emit(buf);
+
+            if (mode != MulMode::Off && fit.update(t2, pacer.stats.skipped)) {
+                if (cur.quality != Quality::Low) {
+                    cur.quality = Quality(int(cur.quality) - 1);
+                    fg.Resize(layout.capW, layout.capH, layout.outW, layout.outH, cur);
+                    pacer.reset();
+                    static const char* const names[] = {"low", "performance", "balanced"};
+                    Emit(std::string("{\"type\":\"fit\",\"quality\":\"") + names[int(cur.quality)] + "\"}");
+                } else if (pacer.slowDown()) {
+                    std::snprintf(buf, sizeof buf, "{\"type\":\"fit\",\"maxOut\":%.0f}", pacer.outputCap());
+                    Emit(buf);
+                } else {    // the game alone is the better picture now
+                    setMode(MulMode::Off);
+                    Emit("{\"type\":\"fit\",\"stopped\":true}");
+                }
+            }
         }
     }
     cursor.Restore();

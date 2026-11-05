@@ -35,7 +35,7 @@ final class FrameMeter {
         start = now
     }
 
-    func onSource() { cur.src += 1; totalSrc += 1 }
+    func onSource(_ frames: Int = 1) { cur.src += UInt64(frames); totalSrc += UInt64(frames) }
 
     func onOutput(repeated: Bool) {
         if repeated { cur.repeated += 1; totalRepeat += 1 } else { cur.out += 1; totalOut += 1 }

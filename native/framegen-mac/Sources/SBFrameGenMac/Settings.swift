@@ -1,6 +1,6 @@
 import Foundation
 
-enum Quality { case performance, balanced, quality }
+enum Quality: Int { case low, performance, balanced, quality }    // lowest first: steps down by one
 
 struct Settings {
     var windowID: UInt32 = 0          // CGWindowID (the app passes it as --hwnd too)
@@ -16,7 +16,7 @@ struct Settings {
     var listGpus = false
     var listWindows = false
 
-    var procFactor: Int { quality == .performance ? 4 : 2 }
+    var procFactor: Int { quality == .low ? 8 : quality == .performance ? 4 : 2 }
     var refineIters: Int { quality == .quality ? 2 : 1 }
     var coarseRadius: Int { quality == .performance ? 4 : 6 }
 
@@ -58,6 +58,7 @@ struct Settings {
                 s.maxMul = n
             case "--quality":
                 switch value() {
+                case "low": s.quality = .low
                 case "performance": s.quality = .performance
                 case "balanced": s.quality = .balanced
                 case "quality": s.quality = .quality

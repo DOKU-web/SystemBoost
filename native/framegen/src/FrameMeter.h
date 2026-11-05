@@ -36,7 +36,7 @@ public:
         activeSec_ += now - start_;
         start_ = now;
     }
-    void onSource() { ++cur_.src; ++totalSrc_; }
+    void onSource(int frames = 1) { cur_.src += frames; totalSrc_ += frames; }
     void onOutput(bool repeat) {
         if (repeat) { ++cur_.repeat; ++totalRepeat_; }
         else { ++cur_.out; ++totalOut_; }

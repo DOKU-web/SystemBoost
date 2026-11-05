@@ -43,7 +43,7 @@ public sealed class PremiumPage : UserControl
     private static readonly (string feature, string free, string premium)[] CommonRows =
     {
         ("프레임 생성 배수", "2배", "자동 · 2 · 3 · 4배"),
-        ("품질 모드", "성능 · 균형", "성능 · 균형 · 품질"),
+        ("품질 모드", "저사양 · 성능 · 균형", "저사양 · 성능 · 균형 · 품질"),
         ("업스케일링 + 선명화", "●", "●"),
         ("듀얼 GPU (내장 그래픽에 생성 맡기기)", "—", "●"),
         ("게임 부스트", "●", "●"),
@@ -74,7 +74,7 @@ public sealed class PremiumPage : UserControl
         root.Children.Add(Ui.Card(status));
 
         // comparison
-        var table = new Grid { ColumnDefinitions = new ColumnDefinitions("*,160,200") };
+        var table = new Grid { ColumnDefinitions = new ColumnDefinitions("*,170,220") };
         void Cell(string text, int row, int col, bool head = false, bool accent = false)
         {
             var t = Ui.Text(text, head ? "h2" : "label");

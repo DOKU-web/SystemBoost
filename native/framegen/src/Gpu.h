@@ -26,6 +26,7 @@ int AdapterForWindow(HWND hwnd, const std::vector<GpuInfo>& gpus);
 int PickGenGpu(const Settings& s, HWND game, const std::vector<GpuInfo>& gpus, std::string& why);
 
 ComPtr<IDXGIAdapter1> AdapterByIndex(int index);
+ComPtr<IDXGIAdapter1> WarpAdapter();
 void CreateDevice(IDXGIAdapter1* adapter, ComPtr<ID3D11Device>& dev, ComPtr<ID3D11DeviceContext>& ctx);
 
 }  // namespace sbfg

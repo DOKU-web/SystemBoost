@@ -8,8 +8,8 @@
 
 namespace sbfg {
 
-enum class Quality { Performance, Balanced, Quality };
-enum class GenGpu { SameAsGame, Integrated, Index };
+enum class Quality { Low, Performance, Balanced, Quality };    // lowest first: steps down by one
+enum class GenGpu { SameAsGame, Integrated, Index, Warp };
 enum class CaptureApi { Wgc, Dxgi };
 
 struct Settings {
@@ -32,7 +32,7 @@ struct Settings {
     std::string shaderDir;             // default: <exe dir>\shaders
 
     // Pipeline parameters derived from quality (mirror ref PARAMS)
-    int procFactor() const { return quality == Quality::Performance ? 4 : 2; }
+    int procFactor() const { return quality == Quality::Low ? 8 : quality == Quality::Performance ? 4 : 2; }
     int refineIters() const { return quality == Quality::Quality ? 2 : 1; }
     int coarseRadius() const { return quality == Quality::Performance ? 4 : 6; }
 };
@@ -64,7 +64,8 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
             s.maxMul = std::atoi(v->c_str());
             if (s.maxMul < 2 || s.maxMul > 4) return "--max-mul must be 2..4";
         } else if (k == "--quality") {
-            if (*v == "performance") s.quality = Quality::Performance;
+            if (*v == "low") s.quality = Quality::Low;
+            else if (*v == "performance") s.quality = Quality::Performance;
             else if (*v == "balanced") s.quality = Quality::Balanced;
             else if (*v == "quality") s.quality = Quality::Quality;
             else return "bad --quality " + *v;
@@ -74,6 +75,7 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
         } else if (k == "--gen-gpu") {
             if (*v == "same") s.genGpu = GenGpu::SameAsGame;
             else if (*v == "igpu") s.genGpu = GenGpu::Integrated;
+            else if (*v == "warp") s.genGpu = GenGpu::Warp;    // tests only: stands in for a slow GPU
             else { s.genGpu = GenGpu::Index; s.genGpuIndex = std::atoi(v->c_str()); }
         } else if (k == "--capture") {
             if (*v == "wgc") s.capture = CaptureApi::Wgc;

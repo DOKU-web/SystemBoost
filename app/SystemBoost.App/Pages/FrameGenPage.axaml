@@ -114,9 +114,10 @@
             <Border Classes="row">
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Spacing="2"><TextBlock Classes="label" Text="품질" />
-                  <TextBlock Classes="muted" Text="품질이 높을수록 GPU를 더 써요" /></StackPanel>
+                  <TextBlock Classes="muted" Text="높을수록 GPU를 더 써요. 밀리면 자동으로 낮춰요" /></StackPanel>
                 <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="QualitySeg" Orientation="Horizontal">
-                  <ToggleButton Classes="seg" Content="성능" Tag="performance" /><ToggleButton Classes="seg" Content="균형" Tag="balanced" />
+                  <ToggleButton Classes="seg" Content="저사양" Tag="low" /><ToggleButton Classes="seg" Content="성능" Tag="performance" />
+                  <ToggleButton Classes="seg" Content="균형" Tag="balanced" />
                   <ToggleButton Classes="seg" Content="품질" Tag="quality" /></StackPanel></Border>
               </Grid>
             </Border>

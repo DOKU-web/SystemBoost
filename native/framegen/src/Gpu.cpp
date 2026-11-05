@@ -93,6 +93,14 @@ ComPtr<IDXGIAdapter1> AdapterByIndex(int index) {
     return a;
 }
 
+ComPtr<IDXGIAdapter1> WarpAdapter() {
+    ComPtr<IDXGIFactory4> f;
+    Check(Factory().As(&f), "IDXGIFactory4");
+    ComPtr<IDXGIAdapter1> a;
+    Check(f->EnumWarpAdapter(IID_PPV_ARGS(&a)), "EnumWarpAdapter");
+    return a;
+}
+
 void CreateDevice(IDXGIAdapter1* adapter, ComPtr<ID3D11Device>& dev, ComPtr<ID3D11DeviceContext>& ctx) {
     const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
     UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;

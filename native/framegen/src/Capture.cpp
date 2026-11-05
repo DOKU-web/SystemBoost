@@ -18,6 +18,7 @@ public:
     DxgiCapture(ID3D11Device* dev, HWND hwnd) : dev_(dev), hwnd_(hwnd) { Open(); }
 
     bool TryGet(CapturedFrame& f) override {
+        if (held_) return false;  // one frame at a time, and nothing tells how many went by
         // game moved to another monitor -> duplicate that output instead
         if (MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST) != mon_) dup_.Reset();
         if (!dup_) {

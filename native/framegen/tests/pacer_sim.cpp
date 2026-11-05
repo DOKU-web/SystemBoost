@@ -75,6 +75,7 @@ static std::vector<Present> runPacer(const std::vector<double>& a, double hz, do
         bool srcFirst = (!pc.active() || a[i] <= pc.next().presentAt) && pc.wantsSource();
         if (srcFirst) {
             tA = tB; tB = a[i];
+            pc.onArrival(a[i]);
             pc.onSource(a[i], proc);
             ++i;
             continue;

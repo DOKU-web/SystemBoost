@@ -148,6 +148,7 @@ func computeLayout(_ id: CGWindowID, upscale: Bool) -> Layout? {
 
 final class Engine {
     let s: Settings
+    var cur: Settings  // s, with the quality steps taken since the start
     let fg: FrameGenMetal
     let overlay: Overlay
     let capture: WindowCapture
@@ -161,6 +162,7 @@ final class Engine {
 
     init(settings: Settings, device: MTLDevice, window: SCWindow, layout: Layout, overlay: Overlay) throws {
         s = settings
+        cur = settings
         self.layout = layout
         self.overlay = overlay
         mode = settings.mode
@@ -234,10 +236,25 @@ final class Engine {
         }
     }
 
+    func setMode(_ m: MulMode) {
+        mode = m
+        var pc = pacer.cfg; pc.mode = m; pc.refreshHz = refreshHz; pc.vblankPhase = vblank?.phase ?? 0
+        pacer.setConfig(pc)
+    }
+
+    func resizeEngine(_ l: Layout) {
+        // capture keeps its configured size; frames are copied up to the new size
+        let sharp = fg.sharpness
+        fg.resize(capW: l.capW, capH: l.capH, outW: l.outW, outH: l.outH, settings: cur)
+        fg.sharpness = sharp
+        pacer.reset()
+    }
+
     func run() {
         var lastLayout = now(), lastDisplay = now()
         let meter = FrameMeter()
         meter.reset(now())
+        let fit = GpuFit()
         var wasActive = false
         var held: WindowCapture.Frame?  // waits for the output clock (Pacer.wantsSource)
         Out.emit(["type": "ready", "capture": "screencapturekit", "genGpu": fg.device.name,
@@ -246,11 +263,7 @@ final class Engine {
         while !commands.quit {
             let t0 = now()
             guard windowBounds(capture.window.windowID) != nil, !capture.stopped else { break }
-            if let m = commands.takeMode() {
-                mode = m
-                var pc = pacer.cfg; pc.mode = m; pc.refreshHz = refreshHz; pc.vblankPhase = vblank?.phase ?? 0
-                pacer.setConfig(pc)
-            }
+            if let m = commands.takeMode() { setMode(m) }
             if let sh = commands.takeSharp() { fg.sharpness = sh }
 
             let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -267,13 +280,7 @@ final class Engine {
                 if let nl = computeLayout(capture.window.windowID, upscale: s.upscale), nl != layout {
                     let resized = nl.capW != layout.capW || nl.capH != layout.capH || nl.outW != layout.outW || nl.outH != layout.outH
                     layout = nl
-                    if resized {
-                        // capture keeps its configured size; frames are copied up to the new size
-                        let sharp = fg.sharpness
-                        fg.resize(capW: nl.capW, capH: nl.capH, outW: nl.outW, outH: nl.outH, settings: s)
-                        fg.sharpness = sharp
-                        pacer.reset()
-                    }
+                    if resized { resizeEngine(nl) }
                     setOverlay(true)
                 }
             }
@@ -286,11 +293,15 @@ final class Engine {
             }
             confineCursor()
 
-            if held == nil { held = capture.take() }
+            // looked for while one waits too, so that every frame of the game counts
+            if let f = capture.take() {
+                held = f
+                meter.onSource(f.frames)
+                pacer.onArrival(f.time > 0 ? f.time : t0, frames: f.frames)
+            }
             if let f = held, mode == .off || pacer.wantsSource {
                 held = nil
                 fg.pushFrame(f.texture)
-                meter.onSource()
                 pacer.onSource(f.time > 0 ? f.time : t0, procSec: fg.genMs / 1000)
                 if mode == .off {
                     if s.upscale && fg.hasPair { present(1); meter.onOutput(repeated: false) } else if !s.upscale { setOverlay(false) }
@@ -320,6 +331,19 @@ final class Engine {
                           "srcFrames": meter.totalSrc, "outFrames": meter.totalOut, "repeatFrames": meter.totalRepeat,
                           "measuredSec": m.seconds, "activeSec": meter.activeSec,
                           "divider": mode == .auto ? pacer.divider : 1, "intervalMs": pacer.interval * 1000])
+
+                if mode != .off && fit.update(t2, skipped: pacer.skipped) {
+                    if let lower = Quality(rawValue: cur.quality.rawValue - 1) {
+                        cur.quality = lower
+                        resizeEngine(layout)
+                        Out.emit(["type": "fit", "quality": "\(lower)"])
+                    } else if pacer.slowDown() {
+                        Out.emit(["type": "fit", "maxOut": pacer.outputCap.rounded()])
+                    } else {  // the game alone is the better picture now
+                        setMode(.off)
+                        Out.emit(["type": "fit", "stopped": true])
+                    }
+                }
             }
         }
         capture.stop()

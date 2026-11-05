@@ -7,7 +7,10 @@ import CoreVideo
 import Metal
 
 final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
-    struct Frame { let texture: MTLTexture; let time: Double; let keep: CVMetalTexture }
+    struct Frame {
+        let texture: MTLTexture; let time: Double; let keep: CVMetalTexture
+        var frames = 1  // the game's frames since the last take(), with this one
+    }
 
     private let device: MTLDevice
     private var cache: CVMetalTextureCache?
@@ -15,6 +18,7 @@ final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     private let queue = DispatchQueue(label: "sbfg.capture", qos: .userInteractive)
     private let lock = NSLock()
     private var latest: Frame?
+    private var arrived = 0
     private(set) var stopped = false
     let window: SCWindow
 
@@ -52,8 +56,10 @@ final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Newest frame since the last call (older frames are dropped: they only add latency).
     func take() -> Frame? {
         lock.lock(); defer { lock.unlock() }
-        let f = latest
+        guard var f = latest else { return nil }
+        f.frames = arrived
         latest = nil
+        arrived = 0
         return f
     }
 
@@ -71,6 +77,7 @@ final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         let t = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sb))
         lock.lock()
         latest = Frame(texture: tex, time: t, keep: ct)
+        arrived += 1
         lock.unlock()
     }
 

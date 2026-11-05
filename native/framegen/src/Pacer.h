@@ -46,7 +46,7 @@ class Pacer {
 public:
     explicit Pacer(const PacerConfig& c = {}) : cfg_(c) { reset(); }
 
-    void setConfig(const PacerConfig& c) { cfg_ = c; reset(); }
+    void setConfig(const PacerConfig& c) { cfg_ = c; outputCap_ = 0; reset(); }
     // Refresh rate / vblank phase updates (no reset; called periodically).
     void setDisplay(double refreshHz, double vblankPhase) {
         cfg_.refreshHz = refreshHz;
@@ -56,6 +56,7 @@ public:
 
     void reset() {
         count_ = pos_ = 0;
+        lastArrival_ = -1;
         tA_ = tB_ = -1;
         nextDisplay_ = -1;
         divider_ = 1;
@@ -65,9 +66,16 @@ public:
         lastPos_ = -1;
     }
 
-    // New captured frame at time `now`; procSec = GPU time per generated frame.
+    // A frame reached the capture, used or not; `frames` = the game's frames it stands for.
+    // The rate comes from here: counting only the frames that get used would read a GPU
+    // that cannot keep up as a slow game, and the output would slow down to match it.
+    void onArrival(double time, int frames = 1) {
+        if (lastArrival_ > 0) pushInterval((time - lastArrival_) / frames);
+        lastArrival_ = time;
+    }
+
+    // New source frame in use at time `now`; procSec = GPU time per generated frame.
     void onSource(double now, double procSec) {
-        if (tB_ > 0) pushInterval(now - tB_);
         tA_ = tB_;
         tB_ = now;
         ++serial_;
@@ -115,6 +123,16 @@ public:
         lastPos_ = pos;
         return same;
     }
+
+    // The GPU cannot hold this output rate: lower it by about a quarter. Auto lands on the next
+    // vblank divider. False when the output is already close to the source rate.
+    bool slowDown() {
+        const double out = outputFps();
+        if (out <= sourceFps() * kMinGain) return false;
+        outputCap_ = out * 0.75;
+        return true;
+    }
+    double outputCap() const { return outputCap_; }
 
     // Move the output clock to the next slot.
     void advance(double now) {
@@ -167,13 +185,14 @@ private:
     // A slower divider cuts the output rate in half, so a game hovering at the limit would
     // flip between 120 and 60 fps. It stays until the source is clearly below the limit.
     static constexpr double kDividerSlack = 1.25;
+    static constexpr double kMinGain = 1.25;    // less output over the source than this adds little
 
     double outputStep() const {
         switch (cfg_.mode) {
         case MulMode::Auto: return divider_ * vsync();
         case MulMode::Off: return interval();
         // the display cannot show more than one image per vblank
-        default: return std::max(interval() / double(int(cfg_.mode)), vsync());
+        default: return std::max({interval() / double(int(cfg_.mode)), vsync(), outputCap_ > 0 ? 1.0 / outputCap_ : 0.0});
         }
     }
 
@@ -199,6 +218,7 @@ private:
         const double maxOut = sourceFps() * std::max(1, cfg_.maxMul);
         int want = std::max(1, int(std::ceil(cfg_.refreshHz / maxOut - 0.05)));
         if (want > divider_ && cfg_.refreshHz / divider_ <= maxOut * kDividerSlack) want = divider_;
+        if (outputCap_ > 0) want = std::max(want, int(std::ceil(cfg_.refreshHz / outputCap_ - 0.05)));
         if (want == divider_) { candidate_ = 0; return; }
         // hysteresis: only switch if the new divider is needed for a while
         if (candidate_ != want) { candidate_ = want; candidateSince_ = now; return; }
@@ -212,10 +232,12 @@ private:
     PacerConfig cfg_;
     std::array<double, kHist> hist_{};
     int pos_ = 0, count_ = 0;
+    double lastArrival_ = -1;
     double tA_ = -1, tB_ = -1;
     double proc_ = 0.002;
     double D_ = -1;
     double nextDisplay_ = -1;
+    double outputCap_ = 0;   // fps, 0 = none (slowDown)
     int divider_ = 1;
     int candidate_ = 0;
     double candidateSince_ = 0;
