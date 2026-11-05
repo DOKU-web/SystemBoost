@@ -129,7 +129,9 @@
             </Border>
             <Border Classes="row" IsVisible="{Binding ShowCaptureOption}">
               <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="label" Text="캡처 방식" VerticalAlignment="Center" />
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="캡처 방식" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="WGC = 게임 창만 캡처해요 (기본, 듀얼 GPU에 권장)" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="DXGI = 모니터 화면을 캡처해요. 게임 위에 뜬 창도 함께 잡혀요" /></StackPanel>
                 <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="CaptureSeg" Orientation="Horizontal">
                   <ToggleButton Classes="seg" Content="WGC" Tag="wgc" /><ToggleButton Classes="seg" Content="DXGI" Tag="dxgi" /></StackPanel></Border>
               </Grid>
