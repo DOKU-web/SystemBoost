@@ -1,0 +1,13 @@
+{
+  "generated": "2026-11-05 (manual seed - CI regenerates with tools/update_wine_manifest.sh)",
+  "wine": {
+    "repo": "Gcenx/macOS_Wine_builds",
+    "tag": "11.16",
+    "name": "wine-devel-11.16-osx64.tar.xz",
+    "url": "https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.16/wine-devel-11.16-osx64.tar.xz",
+    "size": 0,
+    "sha256": "6f9af818b7af6001aeed7818cb32bf0155598c5ea4e3b33380a03cf814e033cd"
+  },
+  "dxvk": null,
+  "notice": "Wine (LGPL-2.1) and DXVK (zlib) are downloaded unmodified from their GitHub releases; source is available there."
+}

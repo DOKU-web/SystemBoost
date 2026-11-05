@@ -1,0 +1,11 @@
+# never commit license signing keys
+*.pem
+keys/
+# build output
+dist/
+native/framegen/build/
+native/framegen-mac/.build/
+app/**/bin/
+app/**/obj/
+node_modules/
+__pycache__/

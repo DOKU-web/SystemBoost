@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SystemBoost 다운로드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0b0c;--card:#141416;--inner:#101012;--line:#232327;--text:#e8e6e3;--mut:#8b8a88;--or:#ff7a1a;--or2:#ff9a4d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:"Noto Sans KR",system-ui,sans-serif;line-height:1.55;min-height:100vh}
+a{color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:48px 24px 64px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px}
+.logo i{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--or),#ff4d00);display:grid;place-items:center;font-style:normal;color:#111}
+.logo span{color:var(--or)}
+h1{font-size:clamp(30px,5vw,44px);font-weight:800;letter-spacing:-.5px;margin:40px 0 10px}
+.lead{color:var(--mut);font-size:16px;max-width:640px}
+.detected{margin-top:28px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+.detected small{color:var(--mut);display:block;font-size:13px}
+.detected b{font-size:19px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;border:1px solid var(--line);color:var(--text);background:transparent;cursor:pointer;font-family:inherit}
+.btn.p{background:var(--or);color:#111;border-color:var(--or)}
+.btn.p:hover{background:var(--or2)}
+.btn:hover{border-color:#3a3a40}
+.tabs{display:flex;gap:6px;margin:40px 0 16px;background:#0e0e10;border:1px solid var(--line);border-radius:12px;padding:4px;width:max-content}
+.tabs button{background:none;border:0;color:#b9b7b3;font:inherit;font-size:14px;padding:8px 18px;border-radius:9px;cursor:pointer}
+.tabs button.on{background:var(--or);color:#111;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.card h3{font-size:18px;display:flex;align-items:center;gap:8px}
+.tag{font-size:11px;font-weight:700;color:#111;background:#ffd2b0;border-radius:6px;padding:2px 7px}
+.card p{color:var(--mut);font-size:14px}
+.card ul{list-style:none;font-size:13.5px;color:#cfcdc9;display:grid;gap:4px}
+.card ul li:before{content:"·";color:var(--or);margin-right:8px;font-weight:800}
+.card .btn{margin-top:auto;justify-content:center}
+.file{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;word-break:break-all}
+.panel{display:none}.panel.on{display:block}
+.req{margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.req .card{gap:8px}
+.req h4{font-size:15px}
+.note{margin-top:16px;color:var(--mut);font-size:13px}
+.compare{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+.compare th,.compare td{padding:10px 12px;border-top:1px solid var(--line);text-align:left}
+.compare th{color:var(--mut);font-weight:500}
+.yes{color:var(--or);font-weight:700}.no{color:#5d5c60}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo"><i>⚡</i>System<span>Boost</span></div>
+  <h1>SystemBoost 다운로드</h1>
+  <p class="lead">게임 최적화와 화면 캡처 방식 프레임 생성·업스케일 프로그램이에요. 게임에 주입하지 않아요. 운영체제와 설치 방식을 골라서 받으세요.</p>
+
+  <div class="detected" id="detected">
+    <div><small>이 기기에 맞는 버전</small><b id="detName">확인 중…</b></div>
+    <a class="btn p" id="detBtn" href="#">다운로드</a>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="on" data-tab="win" role="tab">Windows</button>
+    <button data-tab="mac" role="tab">macOS</button>
+  </div>
+
+  <section class="panel on" id="panel-win">
+    <div class="grid">
+      <div class="card">
+        <h3>설치판 <span class="tag">추천</span></h3>
+        <p>설치가 끝나면 바로 실행돼요. 시작 메뉴·바탕화면 바로가기와 제거 기능이 함께 들어가요.</p>
+        <ul><li>.NET 등 별도 설치 필요 없음</li><li>새 버전은 앱이 알아서 받아 두고, 끌 때 자동 적용</li><li>설정·기록은 사용자 폴더에 저장</li><li>관리자 권한이 필요한 최적화 포함</li></ul>
+        <div class="file" data-file="win-setup"></div>
+        <a class="btn p" data-link="win-setup" href="#">Windows 설치판 받기</a>
+      </div>
+      <div class="card">
+        <h3>포터블</h3>
+        <p>설치 없이 압축을 풀고 <b>SystemBoost.exe</b>를 실행하면 바로 켜져요. USB에 넣고 다닐 수 있어요.</p>
+        <ul><li>.NET 등 별도 설치 필요 없음</li><li>자동 업데이트 지원</li><li>설정·기록은 압축 푼 폴더에 저장</li><li>지울 때는 폴더만 지우면 끝</li></ul>
+        <div class="file" data-file="win-portable"></div>
+        <a class="btn" data-link="win-portable" href="#">Windows 포터블 받기</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-mac">
+    <div class="grid">
+      <div class="card">
+        <h3>Apple Silicon <span class="tag">M1 이후</span></h3>
+        <p>M1·M2·M3·M4 칩 Mac용이에요. 받은 설치 파일(.pkg)을 열고 안내대로 설치하면 바로 실행돼요.</p>
+        <ul><li>.NET 등 별도 설치 필요 없음</li><li>자동 업데이트 지원</li><li>처음 실행 시 '화면 기록' 권한 허용 필요</li></ul>
+        <div class="file" data-file="mac-arm"></div>
+        <a class="btn p" data-link="mac-arm" href="#">macOS (Apple Silicon) 받기</a>
+      </div>
+      <div class="card">
+        <h3>Intel</h3>
+        <p>Intel 칩 Mac용이에요. 내장 + 외장 그래픽이 있는 Mac은 듀얼 GPU 옵션을 쓸 수 있어요.</p>
+        <ul><li>.NET 등 별도 설치 필요 없음</li><li>자동 업데이트 지원</li><li>처음 실행 시 '화면 기록' 권한 허용 필요</li></ul>
+        <div class="file" data-file="mac-intel"></div>
+        <a class="btn" data-link="mac-intel" href="#">macOS (Intel) 받기</a>
+      </div>
+    </div>
+    <p class="note">어떤 칩인지 모르면: 화면 왼쪽 위 Apple 메뉴 → 이 Mac에 관하여 → '칩' 항목이 Apple M…이면 Apple Silicon, '프로세서'에 Intel이 보이면 Intel이에요.</p>
+  </section>
+
+  <div class="req">
+    <div class="card">
+      <h4>운영체제별 기능</h4>
+      <table class="compare">
+        <tr><th></th><th>Windows</th><th>macOS</th></tr>
+        <tr><td>프레임 생성 (자동·2~4배)</td><td class="yes">●</td><td class="yes">●</td></tr>
+        <tr><td>업스케일링 + 선명화</td><td class="yes">●</td><td class="yes">●</td></tr>
+        <tr><td>듀얼 GPU</td><td class="yes">●</td><td class="yes">Intel Mac</td></tr>
+        <tr><td>벤치마크·기록</td><td class="yes">●</td><td class="yes">●</td></tr>
+        <tr><td>RAM·GPU·CPU 부스트, 오버클럭</td><td class="yes">●</td><td class="no">—</td></tr>
+        <tr><td>백업·원클릭 되돌리기</td><td class="yes">●</td><td class="no">—</td></tr>
+      </table>
+      <p class="note">macOS에는 RAM·GPU·CPU 부스트에 해당하는 시스템 설정이 없어서 프레임 생성·업스케일만 제공해요.</p>
+    </div>
+    <div class="card">
+      <h4>필요 사양</h4>
+      <ul>
+        <li>Windows 10 2004 이상 / Windows 11, 64비트</li>
+        <li>DirectX 11 지원 그래픽카드</li>
+        <li>macOS 13 Ventura 이상</li>
+        <li>게임은 테두리 없는 창 또는 창 모드</li>
+      </ul>
+      <p class="note">프레임 생성은 다음 프레임을 기다려야 해서 입력 지연이 늘어나요. 경쟁 게임에는 권장하지 않아요. 추가 지연은 프로그램 화면에 측정값으로 표시돼요.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// Release files. Built by .github/workflows/build.yml and attached to GitHub Releases under fixed
+// names, so "latest/download" always points at the newest release and this page never needs editing.
+const REPO = "DOKU-web/SystemBoost";   // change to the real repository (same as Updater.RepoUrl)
+const FILES = {
+  "win-setup":    "SystemBoost-Windows-Setup.exe",
+  "win-portable": "SystemBoost-Windows-Portable.zip",
+  "mac-arm":      "SystemBoost-macOS-AppleSilicon.pkg",
+  "mac-intel":    "SystemBoost-macOS-Intel.pkg",
+};
+const url = k => `https://github.com/${REPO}/releases/latest/download/${FILES[k]}`;
+const LABEL = {"win-setup":"Windows 설치판","win-portable":"Windows 포터블","mac-arm":"macOS · Apple Silicon","mac-intel":"macOS · Intel"};
+
+document.querySelectorAll("[data-link]").forEach(a => a.href = url(a.dataset.link));
+document.querySelectorAll("[data-file]").forEach(d => d.textContent = FILES[d.dataset.file]);
+
+function showTab(t){
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("on", p.id === "panel-" + t));
+}
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+function appleSilicon(){
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    const ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+    const r = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "";
+    if (/Apple M|Apple GPU/i.test(r)) return true;
+    if (/Intel|AMD|Radeon/i.test(r)) return false;
+  } catch (e) {}
+  return null;  // unknown
+}
+(function detect(){
+  const ua = navigator.userAgent, plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+  let key = null, name = "";
+  if (/Win/i.test(plat) || /Windows/i.test(ua)) { key = "win-setup"; name = "Windows · 설치판"; showTab("win"); }
+  else if (/Mac/i.test(plat) || /Mac OS X/i.test(ua)) {
+    if (/iPhone|iPad/i.test(ua) || (navigator.maxTouchPoints > 1 && /Mac/i.test(plat))) { key = null; }
+    else {
+      const as = appleSilicon();
+      key = as === false ? "mac-intel" : "mac-arm";
+      name = as === null ? "macOS · Apple Silicon (칩이 다르면 아래에서 Intel을 고르세요)" : LABEL[key];
+      showTab("mac");
+    }
+  }
+  const btn = document.getElementById("detBtn");
+  if (key) { document.getElementById("detName").textContent = name; btn.href = url(key); btn.textContent = LABEL[key] + " 받기"; }
+  else { document.getElementById("detName").textContent = "PC나 Mac에서 열면 맞는 버전을 바로 골라 드려요"; btn.style.display = "none"; }
+})();
+</script>
+</body>
+</html>

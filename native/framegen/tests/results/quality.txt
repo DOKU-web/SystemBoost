@@ -1,0 +1,16 @@
+scene        method  PSNR  HUD   OCC  cut
+pan_small    blend   31.9  99.0   nan 
+pan_small    simple  35.5  28.5   nan 
+pan_small    v0.6    41.4  99.0   nan False
+pan_large    blend   16.2  99.0   nan 
+pan_large    simple  16.1  16.0   nan 
+pan_large    v0.6    25.8  99.0   nan False
+zoom         blend   24.9  99.0   nan 
+zoom         simple  27.3  20.6   nan 
+zoom         v0.6    31.8  99.0   nan False
+occlusion    blend   24.9  99.0  18.2 
+occlusion    simple  26.4  19.9  18.3 
+occlusion    v0.6    29.8  99.0  19.8 False
+scene_cut    blend   21.5  99.0   nan 
+scene_cut    simple  18.7  17.4   nan 
+scene_cut    v0.6    99.0  99.0   nan True

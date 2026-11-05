@@ -1,0 +1,20 @@
+name = "systemboost-license"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+# wrangler kv namespace create LICENSES   -> paste the id below
+[[kv_namespaces]]
+binding = "LICENSES"
+id = "REPLACE_WITH_KV_ID"
+
+[vars]
+# Lemon Squeezy auto-payments only (manual payment links do not use this):
+# off  = closed: no checkout, no keys (default)
+# test = only Lemon Squeezy test-mode orders get keys, valid 24 h
+# live = only real orders get keys
+SALES_MODE = "off"
+PUBLIC_URL = "https://systemboost-license.YOUR-SUBDOMAIN.workers.dev"
+LS_STORE_ID = "REPLACE"
+LS_VARIANT_MONTHLY = "REPLACE"
+LS_VARIANT_YEARLY = "REPLACE"
+LS_VARIANT_LIFETIME = "REPLACE"

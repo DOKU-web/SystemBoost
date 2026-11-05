@@ -1,0 +1,137 @@
+# SystemBoost 0.6 (Windows + macOS)
+
+게임 최적화 + 화면 캡처 방식 프레임 생성·업스케일 프로그램. 게임에 주입하지 않습니다.
+
+## 구성
+
+```
+app/SystemBoost.App/        공통 화면 (Avalonia, .NET 8) - Windows·macOS 같은 코드
+  Pages/                    프레임 생성(동작), 대시보드, 부스트, 벤치마크, 백업, 설정
+  Services/FrameGenEngine   OS에 맞는 엔진 실행 + JSON 통신
+  Services/BoostCatalog     부스트 기능 목록 + IBoostBackend (v0.5 로직 연결 지점)
+native/framegen/            Windows 엔진 (C++ / D3D11)  - README_FRAMEGEN.md 참고
+native/framegen-mac/        macOS 엔진 (Swift / Metal / ScreenCaptureKit)
+tools/gen_metal.sh          HLSL -> Metal 셰이더 생성 (두 OS가 같은 알고리즘 사용)
+build/windows/              build.ps1 (Velopack 설치판 + 포터블 + 업데이트 패키지)
+build/macos/                build.sh, Info.plist, entitlements (Velopack .pkg + 업데이트 패키지)
+.github/workflows/build.yml 테스트 + Windows·macOS 빌드 + 태그 시 릴리스·업데이트 배포
+RELEASE_NOTES.md            다음 버전의 바뀐 점 (앱 업데이트 화면과 릴리스에 그대로 표시)
+site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 선택)
+```
+
+## 배포 파일 (다운로드할 때 선택)
+
+| 파일 | 설명 |
+|---|---|
+| `SystemBoost-Windows-Setup.exe` | 설치판. 관리자 권한 없이 설치되고 바로 실행, 바로가기·제거 포함 |
+| `SystemBoost-Windows-Portable.zip` | 포터블. 압축 풀고 `SystemBoost.exe` 실행. 설정·기록은 그 폴더(`data\`)에 저장 |
+| `SystemBoost-macOS-AppleSilicon.pkg` | M1 이후 Mac 설치 파일 |
+| `SystemBoost-macOS-Intel.pkg` | Intel Mac 설치 파일 |
+
+파일 이름에 버전이 없어서 다운로드 페이지는 항상 최신 릴리스를 가리킵니다(`releases/latest/download/...`).
+네 가지 모두 **자동 업데이트**됩니다(아래).
+
+모두 .NET 런타임이 포함된 자체 실행형이라 따로 설치할 것이 없습니다.
+스팀에 올릴 때는 Windows 깊이(depot)에 설치판 대신 `dist\windows\SystemBoost` 폴더를, macOS 깊이에 `SystemBoost.app`을 올리면 스팀이 OS에 맞는 것을 자동으로 내려줍니다.
+
+## 업데이트 내보내기 (자동 업데이트)
+
+1. `app/SystemBoost.App/SystemBoost.App.csproj`의 `<Version>`을 올리고 `RELEASE_NOTES.md`에 바뀐 점을 적습니다.
+2. 커밋하고 태그를 올립니다: `git tag v0.7.0 && git push origin main v0.7.0`
+3. 끝. GitHub Actions가 빌드 → Velopack으로 포장(이전 버전과 바뀐 부분만 담은 델타 포함) → 릴리스 게시까지 합니다.
+
+사용자 쪽에서는 (`Services/Updater.cs`)
+- 앱이 켜지고 15초 뒤, 그다음 6시간마다 새 버전을 확인하고 백그라운드에서 받아 둡니다.
+- 받아지면 화면 위에 '새 버전 준비됨' 줄이 뜨고, **지금 다시 시작** 또는 **끌 때 적용**을 고릅니다.
+  아무것도 안 해도 앱을 끌 때 조용히 적용돼요. 게임 중에 창을 띄우거나 강제로 재시작하지 않습니다.
+- 설정 → 업데이트: 현재 버전, 지금 확인, 바뀐 점, 자동 확인 끄기.
+- 설정·라이선스 키·기록은 앱 폴더 밖(포터블은 `data\`)에 있어서 업데이트해도 그대로입니다.
+- 스팀판은 스팀이 업데이트하므로 이 기능이 꺼져 있습니다(Velopack 설치본이 아니면 아무것도 안 함).
+
+확인 필요: Velopack은 첫 CI 빌드에서 처음 돌아갑니다. `vpk` 결과 파일 이름(`*-Setup.exe`, `*-Portable.zip`, `*-Setup.pkg`)과
+업로드 결과를 첫 태그 릴리스에서 확인하세요. 저장소가 비공개면 업데이트 확인에 토큰이 필요하니 공개 저장소(또는 공개 릴리스 전용 저장소)를 쓰세요.
+
+## 빌드
+
+- **자동 (권장)**: GitHub에 올리면 `.github/workflows/build.yml`이 테스트 → Windows 빌드 → macOS 빌드를 돌리고 결과 파일을 Actions 아티팩트로 남깁니다. `v0.6.0` 태그를 붙이면 릴리스와 자동 업데이트까지 배포됩니다(위).
+- **Windows 수동**: `dotnet tool install -g vpk --version 0.0.1298` 후 `powershell -ExecutionPolicy Bypass -File build\windows\build.ps1`
+- **macOS 수동**: `build/macos/build.sh`
+
+서명: Windows는 `SIGN_CERT_THUMBPRINT`, macOS는 `SIGN_IDENTITY` + `INSTALL_IDENTITY` + `NOTARY_PROFILE` 환경 변수(CI에서는 저장소 Secrets `MAC_SIGN_IDENTITY` 등)를 넣으면 서명·공증까지 합니다. 서명하지 않으면 Windows SmartScreen, macOS Gatekeeper 경고가 뜹니다.
+
+## 지금 상태 (솔직하게)
+
+| 부분 | 상태 |
+|---|---|
+| 프레임 생성 알고리즘 + 셰이더 | 참조 구현으로 측정, 실제 셰이더 실행 결과와 일치 확인 |
+| Windows 엔진 (C++) | mingw로 경고 없이 빌드됨. MSVC·실제 PC 실행은 아직 |
+| macOS 엔진 (Swift) | 작성만 함. **처음 컴파일은 CI의 macOS 빌드** |
+| 공통 화면 (Avalonia) | C# 문법 검사만 통과. **처음 빌드는 CI** (이 작업 환경은 NuGet이 막혀 있었음) |
+| 부스트 기능 (RAM·GPU·CPU 등) | 화면과 목록만 있음. **v0.5 로직을 `IBoostBackend`에 연결해야 동작** (연결 전에는 시스템을 바꾸지 않음) |
+| 관리자 헬퍼 | v0.5 것을 그대로 사용. `build.ps1`의 TODO 위치에 복사 추가 |
+| 단축키 | 아직 없음 (전역 단축키는 OS별 구현 필요) |
+| macOS 윈도우 게임 실행 | 작성만 함. Mac에서 설치·실행 확인 필요 |
+| macOS 게임 부스트 | 작성만 함. Mac에서 관리자 창·되돌리기 확인 필요 |
+
+### v0.5 로직 연결 순서
+1. v0.5 WPF 프로젝트의 최적화 서비스(RAM, GPU, CPU, 시스템, 백업)를 `app/` 아래 별도 클래스 라이브러리로 옮깁니다. WPF 의존성(Window, Dispatcher 등)만 빼면 대부분 그대로 쓸 수 있습니다.
+2. `V05Backend`를 실제 구현으로 바꿉니다. `featureId`는 `BoostCatalog.cs`의 id(`ram.standby` 등)입니다.
+3. v0.5 화면에만 있던 항목은 `BoostCatalog`에 추가하면 해당 페이지에 자동으로 나타납니다.
+
+## macOS: 윈도우 게임 실행 (Wine)
+- 메뉴 "🍷 윈도우 게임"에서 실행 환경을 설치합니다. Wine·DXVK는 처음 쓸 때 GitHub 릴리스에서 내려받고, `Assets/wine-manifest.json`의 SHA-256과 다르면 설치하지 않습니다. CI(macOS 빌드)가 `tools/update_wine_manifest.sh`로 매니페스트를 최신 릴리스 기준으로 갱신합니다.
+- 그래픽 방식: DXVK(DirectX 10·11, 기본) / WineD3D(DirectX 9 이하) / D3DMetal(DirectX 11·12 — 사용자가 Apple Game Porting Toolkit을 직접 받아 폴더를 지정. SystemBoost는 배포하지 않음).
+- Apple Silicon은 Rosetta 2가 필요하고, 앱에서 Apple 설치 명령을 열어 줍니다.
+- 설치 프로그램(.exe)이나 Windows용 Steam을 보틀 안에 설치하고, "설치된 게임 찾기"로 목록에 추가합니다. "실행 + 프레임 생성"으로 게임을 켠 뒤 그 창에 프레임 생성을 겁니다.
+- **안 되는 것**: 커널 안티치트(EasyAntiCheat, BattlEye, Vanguard 등) 게임은 대부분 실행되지 않습니다. 스타시티즌도 EAC를 써서 실행되지 않을 가능성이 높습니다. 게임마다 호환성이 다르고 윈도우 PC보다 느릴 수 있습니다.
+- 확인 필요: Wine 빌드에 MoltenVK가 들어 있는지(없으면 DXVK가 동작하지 않고 WineD3D로 실행), 컷신 재생용 GStreamer 필요 여부. 실제 Mac에서 확인해야 합니다.
+- 서드파티 라이선스: `THIRD_PARTY_NOTICES.md`
+
+## 가상 메모리 (Windows, RAM 확보 메뉴)
+`Services/VirtualMemory.cs`, `Pages/VirtualMemoryCard.cs`. 설치된 RAM·지금 설정·드라이브 남은 공간을 보여 주고, 자동(Windows) / 권장(게임용: RAM만큼 시작, 최대 2배, 드라이브에 15GB 또는 10%는 남김) / 직접 입력 중 하나를 골라 관리자 확인 한 번으로 저장합니다. 처음 설정을 백업해 두고 '원래대로'로 되돌립니다. 다시 시작해야 적용되고, '지금 다시 시작'은 두 번 눌러야 실행됩니다.
+- 효과: 메모리 부족으로 게임이 튕기는 것을 막음. RAM이 늘거나 FPS가 오르지는 않음(앱 문구에도 그렇게 적음).
+- macOS는 스왑을 OS가 관리하고 앱이 바꿀 수 없어서 없음.
+- 확인 필요: 실제 PC에서 저장 후 재부팅 시 적용되는지(레지스트리 PagingFiles + AutomaticManagedPagefile).
+
+## 프리미엄
+가격: 월간 ₩2,900 · 연간 ₩19,900 · 평생 ₩29,900 · 스팀 DLC ₩14,000 (PremiumPage.cs 상수, 결제 페이지 가격과 맞출 것).
+결제·키 발급·관리자 대시보드: `server/license-worker/README.md`.
+- **결제 준비 전에는 키가 나가지 않음**: 앱의 '결제하기'는 대시보드에 결제 링크가 있는 플랜만 켜지고(없으면 '결제 준비 중'),
+  키는 판매자가 대시보드에서 결제를 확인하고 발급할 때만 나옴. 자동 결제(Lemon Squeezy) 판매 모드 기본값도 '꺼짐'.
+`Services/License.cs`, `Pages/PremiumPage.cs`. 무료: 프레임 생성 2배, 업스케일, 게임 부스트·모니터링·벤치마크, 자원 분배(그래프·우선/낮춤). 프리미엄: 자동·3·4배, 품질 모드, 듀얼 GPU, CPU 최대 사용량 제한, 게임별 자동 최적화, 오버클럭. 잠긴 기능을 누르면 안내가 뜨고 선택이 되돌아갑니다.
+- 스팀판: 'SystemBoost Premium' DLC → `License.Steam`(ISteamOwnership)에 Steamworks.NET 연결
+- 직접 배포판: 웹 결제 후 라이선스 키(ECDSA P-256 서명) 입력. 앱에는 공개키만 들어감
+- **출시 전에 채울 것**: `License.cs`의 `ServerUrl`(라이선스 서버 배포 주소), `PremiumPage.cs`의 가격 문구, 대시보드의 결제 링크
+- 서명 키: `tools/license_tool.py`로 만든 공개 키가 `License.cs`에 들어 있습니다. 짝이 되는 **비밀 키(systemboost-license-private.pem)는 저장소에 없고** 개발자가 따로 보관합니다(.gitignore로 막음).
+- 키 발급: `python3 tools/license_tool.py sign <private.pem> <이메일> [--days 30]` (기간 없으면 평생). 결제 서버도 같은 방식으로 서명하면 됩니다.
+
+## 자원 분배 (CPU·GPU·메모리)
+`Services/ResourceManager.cs`, `Pages/ResourcePage.cs` — 앱별 사용량을 쌓인 그래프로 보여 주고, 앱마다 우선/보통/낮춤/제한을 고릅니다. 게임 프로세스는 열지도 바꾸지도 않습니다(안티치트 안전). 다른 앱을 낮춰서 게임 몫을 늘립니다. 앱을 끄면 모두 원래대로 돌아갑니다.
+
+| | Windows | macOS |
+|---|---|---|
+| 사용량 그래프 | CPU·GPU(작업 관리자와 같은 성능 카운터)·메모리 | CPU·메모리 (앱별 GPU는 macOS가 공개하지 않음) |
+| 우선 | 우선순위를 보통보다 한 단계 위로(AboveNormal, '높음'은 쓰지 않음) | 불가 (macOS가 허용 안 함) |
+| 낮춤 | 우선순위 낮춤 + 효율 모드 + 메모리 우선순위 낮춤 + 다음 실행부터 내장 GPU | 백그라운드 모드 (`taskpolicy`) |
+| 제한 | Job Object로 CPU 최대 %를 강제 (5~90%) | 불가 |
+
+- GPU를 앱별로 몇 %씩 나눠 주는 기능은 Windows에도 없습니다. '낮춤'은 그 앱을 다음 실행부터 내장 GPU로 보내 외장 GPU를 비웁니다.
+- 메모리를 강제로 막는 제한은 앱이 튕길 수 있어 넣지 않았습니다.
+- 확인 필요: macOS `taskpolicy -b/-B -p` 동작(OS 버전별), Windows에서 관리자 권한으로 실행된 앱은 권한 부족으로 바꾸지 못함(메시지 표시).
+
+## macOS: 게임 부스트
+`Services/MacBoostBackend.cs` — macOS가 허용하고 효과가 있는 것만 넣었습니다. 바꾸기 전 상태를 `mac-backup.json`에 저장하고, 항목별 또는 "백업 · 되돌리기"에서 한 번에 되돌립니다(관리자 암호는 macOS 표준 창으로 받음).
+- 저전력 모드 끄기 (`pmset`)
+- Time Machine 자동 백업 멈추기 (`tmutil disable` / `enable`)
+- Spotlight 색인 멈추기 (`mdutil -a -i off` / `on`)
+- 무거운 앱 정리: CPU·메모리 상위 앱 목록, 고른 앱만 정상 종료 요청
+- 상태: 발열(CPU 속도 제한), 메모리 여유, 저전력 모드
+- 넣지 않은 것(macOS가 막아 둠): RAM 정리, GPU 클럭, 프로세스 우선순위 올리기, 코어 배치
+
+## macOS에서 다른 점
+- 처음 실행할 때 **화면 기록 권한**이 필요합니다 (시스템 설정 → 개인정보 보호 및 보안 → 화면 기록).
+- 게임 창 위의 출력 창은 다른 캡처·녹화에 잡히지 않습니다(sharingType = none).
+- RAM 정리·GPU 오버클럭·CPU 우선순위는 macOS가 앱에 열어 두지 않아 넣지 않았습니다(위 "게임 부스트" 참고).
+- 업스케일 중에는 실제 커서를 게임 창 안에 가두지만, 커서를 확대 위치에 다시 그리지는 못합니다. 마우스 커서를 쓰는 게임에서는 커서 위치가 화면과 어긋나 보일 수 있습니다.
+- 듀얼 GPU는 내장 + 외장 그래픽이 있는 Intel Mac에서만 의미가 있습니다. Apple Silicon은 GPU가 하나입니다.
+- 창 모드 게임은 제목 표시줄까지 캡처됩니다. 전체 화면(별도 Space) 또는 테두리 없는 창 모드를 권장합니다.

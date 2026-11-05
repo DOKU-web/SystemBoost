@@ -1,0 +1,99 @@
+# Builds every platform on each push and pull request.
+# Releasing: write RELEASE_NOTES.md, then push a tag (git tag v0.7.0 && git push origin v0.7.0).
+# The tag build packs with Velopack (installer, portable, update packages + deltas) and publishes a
+# GitHub Release; installed and portable apps pick it up by themselves (Services/Updater.cs), and the
+# download page always points at the newest release (releases/latest/download/...).
+name: build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y glslang-tools spirv-cross mesa-vulkan-drivers libvulkan-dev g++-mingw-w64-x86-64-posix python3-numpy python3-scipy python3-pil
+      - run: native/framegen/tests/run_all.sh
+      - name: Metal shaders are up to date with the HLSL
+        run: tools/gen_metal.sh && git diff --exit-code native/framegen-mac/Sources/SBFrameGenMac/GeneratedShaders.swift
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - run: dotnet tool install -g vpk --version 0.0.1298
+      - name: Build
+        shell: pwsh
+        env:
+          # tag builds fetch the previous release so only the changed parts are packed (deltas)
+          VPK_REPO_URL: ${{ startsWith(github.ref, 'refs/tags/v') && format('https://github.com/{0}', github.repository) || '' }}
+          VPK_TOKEN: ${{ github.token }}
+        run: |
+          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.6.0' }
+          build\windows\build.ps1 -Version $v
+      - uses: actions/upload-artifact@v4
+        with: { name: SystemBoost-Windows, path: 'dist/windows/Releases/**' }
+      - uses: actions/upload-artifact@v4
+        with: { name: download-Windows, path: 'dist/windows/download/*' }
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: Refresh Wine runtime manifest (URLs + SHA-256 from the GitHub API)
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: tools/update_wine_manifest.sh
+      - run: dotnet tool install -g vpk --version 0.0.1298
+      - name: Build
+        env:
+          VPK_REPO_URL: ${{ startsWith(github.ref, 'refs/tags/v') && format('https://github.com/{0}', github.repository) || '' }}
+          VPK_TOKEN: ${{ github.token }}
+          # optional Apple signing (repository secrets); unsigned builds still work but Gatekeeper warns
+          SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          INSTALL_IDENTITY: ${{ secrets.MAC_INSTALL_IDENTITY }}
+          NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
+        run: |
+          v=0.6.0; [[ "$GITHUB_REF" == refs/tags/v* ]] && v="${GITHUB_REF_NAME#v}"
+          build/macos/build.sh "$v"
+      - uses: actions/upload-artifact@v4
+        with: { name: SystemBoost-macOS-AppleSilicon, path: 'dist/macos/Releases-AppleSilicon/**' }
+      - uses: actions/upload-artifact@v4
+        with: { name: SystemBoost-macOS-Intel, path: 'dist/macos/Releases-Intel/**' }
+      - uses: actions/upload-artifact@v4
+        with: { name: download-macOS, path: 'dist/macos/download/*' }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [tests, windows, macos]
+    runs-on: ubuntu-24.04
+    permissions: { contents: write }
+    env:
+      REPO_URL: https://github.com/${{ github.repository }}
+      TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - run: dotnet tool install -g vpk --version 0.0.1298
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+      - name: Upload update packages (one release, three channels)
+        run: |
+          NAME="SystemBoost ${TAG#v}"
+          vpk upload github --repoUrl "$REPO_URL" --token "$TOKEN" --tag "$TAG" --releaseName "$NAME" -o dist/SystemBoost-Windows --channel win --publish
+          vpk upload github --repoUrl "$REPO_URL" --token "$TOKEN" --tag "$TAG" --releaseName "$NAME" -o dist/SystemBoost-macOS-AppleSilicon --channel osx-arm64 --merge --publish
+          vpk upload github --repoUrl "$REPO_URL" --token "$TOKEN" --tag "$TAG" --releaseName "$NAME" -o dist/SystemBoost-macOS-Intel --channel osx-x64 --merge --publish
+      - name: Add the fixed-name downloads for the download page
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release upload "$TAG" dist/download-Windows/* dist/download-macOS/* --clobber --repo "${{ github.repository }}"
+          [ -f RELEASE_NOTES.md ] && gh release edit "$TAG" --notes-file RELEASE_NOTES.md --repo "${{ github.repository }}" || true

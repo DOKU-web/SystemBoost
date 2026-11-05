@@ -1,0 +1,141 @@
+<!-- SystemBoost theme: black background + orange accent -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <SolidColorBrush x:Key="SbBg" Color="#0B0B0C" />
+    <SolidColorBrush x:Key="SbSide" Color="#0F0F11" />
+    <SolidColorBrush x:Key="SbCard" Color="#141416" />
+    <SolidColorBrush x:Key="SbInner" Color="#101012" />
+    <SolidColorBrush x:Key="SbLine" Color="#232327" />
+    <SolidColorBrush x:Key="SbText" Color="#E8E6E3" />
+    <SolidColorBrush x:Key="SbMuted" Color="#8B8A88" />
+    <SolidColorBrush x:Key="SbOrange" Color="#FF7A1A" />
+    <SolidColorBrush x:Key="SbOrangeSoft" Color="#1FFF7A1A" />
+    <FontFamily x:Key="SbFont">Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif</FontFamily>
+    <!-- Fluent accent -> orange (toggles, sliders, focus) -->
+    <Color x:Key="SystemAccentColor">#FF7A1A</Color>
+    <Color x:Key="SystemAccentColorLight1">#FF9A4D</Color>
+    <Color x:Key="SystemAccentColorLight2">#FFB27A</Color>
+    <Color x:Key="SystemAccentColorDark1">#E5620A</Color>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource SbBg}" />
+    <Setter Property="FontFamily" Value="{StaticResource SbFont}" />
+    <Setter Property="Foreground" Value="{StaticResource SbText}" />
+  </Style>
+
+  <!-- cards -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{StaticResource SbCard}" />
+    <Setter Property="BorderBrush" Value="{StaticResource SbLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="Border.tile">
+    <Setter Property="Background" Value="{StaticResource SbInner}" />
+    <Setter Property="BorderBrush" Value="{StaticResource SbLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14" />
+  </Style>
+  <Style Selector="Border.row">
+    <Setter Property="BorderBrush" Value="{StaticResource SbLine}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="0,12" />
+  </Style>
+  <Style Selector="Border.note">
+    <Setter Property="Background" Value="{StaticResource SbInner}" />
+    <Setter Property="BorderBrush" Value="{StaticResource SbLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="12,10" />
+  </Style>
+
+  <!-- text -->
+  <Style Selector="TextBlock.h1"><Setter Property="FontSize" Value="26" /><Setter Property="FontWeight" Value="Bold" /></Style>
+  <Style Selector="TextBlock.h2"><Setter Property="FontSize" Value="16" /><Setter Property="FontWeight" Value="Bold" /></Style>
+  <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{StaticResource SbMuted}" /><Setter Property="FontSize" Value="12" /></Style>
+  <Style Selector="TextBlock.sub"><Setter Property="Foreground" Value="{StaticResource SbMuted}" /><Setter Property="FontSize" Value="14" /></Style>
+  <Style Selector="TextBlock.big"><Setter Property="FontSize" Value="26" /><Setter Property="FontWeight" Value="Bold" /></Style>
+  <Style Selector="TextBlock.accent"><Setter Property="Foreground" Value="{StaticResource SbOrange}" /></Style>
+  <Style Selector="TextBlock.label"><Setter Property="FontSize" Value="14" /></Style>
+
+  <!-- sidebar navigation -->
+  <Style Selector="Button.nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#B9B7B3" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="14,11" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="FontSize" Value="15" />
+  </Style>
+  <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#1A1A1D" />
+  </Style>
+  <Style Selector="Button.nav.on">
+    <Setter Property="Foreground" Value="{StaticResource SbOrange}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.nav.on /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SbOrangeSoft}" />
+  </Style>
+  <Style Selector="Button.nav.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SbOrangeSoft}" />
+  </Style>
+
+  <!-- segmented buttons (ToggleButton.seg inside Border.segbox) -->
+  <Style Selector="Border.segbox">
+    <Setter Property="Background" Value="#0E0E10" />
+    <Setter Property="BorderBrush" Value="{StaticResource SbLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+  <Style Selector="ToggleButton.seg">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#B9B7B3" />
+    <Setter Property="Padding" Value="13,6" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ToggleButton.seg:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SbOrange}" />
+  </Style>
+  <Style Selector="ToggleButton.seg:checked">
+    <Setter Property="Foreground" Value="#111111" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="ToggleButton.seg:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#FF9A4D" />
+  </Style>
+
+  <!-- buttons -->
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{StaticResource SbOrange}" />
+    <Setter Property="Foreground" Value="#111111" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Padding" Value="16,10" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#FF9A4D" />
+    <Setter Property="Foreground" Value="#111111" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource SbLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="16,10" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="MinWidth" Value="230" />
+  </Style>
+</Styles>

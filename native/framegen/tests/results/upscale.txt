@@ -1,0 +1,11 @@
+scale  method                   PSNR  sharp overshoot
+1.5    bilinear                39.16   0.96     0.000
+1.5    bicubic (no clamp)      40.26   0.99     0.071
+1.5    v0.6 sharp=0            40.27   0.99     0.047
+1.5    v0.6 sharp=0.5          40.46   1.01     0.078
+1.5    v0.6 sharp=1.0          40.34   1.02     0.106
+2.0    bilinear                32.69   0.92     0.000
+2.0    bicubic (no clamp)      32.94   0.97     0.161
+2.0    v0.6 sharp=0            32.94   0.96     0.113
+2.0    v0.6 sharp=0.5          32.95   0.98     0.174
+2.0    v0.6 sharp=1.0          32.91   1.00     0.228

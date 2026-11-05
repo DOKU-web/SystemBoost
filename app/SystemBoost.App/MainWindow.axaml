@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SystemBoost.App.MainWindow"
+        Title="SystemBoost"
+        Width="1600" Height="1000" MinWidth="1280" MinHeight="800"
+        WindowStartupLocation="CenterScreen">
+  <Grid ColumnDefinitions="236,*">
+    <!-- sidebar -->
+    <Border Grid.Column="0" Background="{StaticResource SbSide}" BorderBrush="{StaticResource SbLine}" BorderThickness="0,0,1,0" Padding="18,26">
+      <DockPanel LastChildFill="False">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="6,0,0,26">
+          <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource SbOrange}">
+            <TextBlock Text="⚡" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#111111" FontSize="16" />
+          </Border>
+          <TextBlock VerticalAlignment="Center" FontSize="20" FontWeight="Bold">
+            <Run Text="System" /><Run Text="Boost" Foreground="{StaticResource SbOrange}" />
+          </TextBlock>
+        </StackPanel>
+        <StackPanel x:Name="NavPanel" DockPanel.Dock="Top" Spacing="4" />
+        <StackPanel DockPanel.Dock="Bottom" Spacing="10">
+          <Button x:Name="NavSettings" Classes="nav" Content="⚙   설정" />
+          <Border x:Name="PlanCard" BorderBrush="{StaticResource SbLine}" BorderThickness="1" CornerRadius="12" Padding="14" Cursor="Hand">
+            <StackPanel Spacing="4">
+              <TextBlock x:Name="PlanTitle" Text="무료" FontWeight="Bold" FontSize="14" />
+              <TextBlock x:Name="PlanText" Classes="muted" Text="" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <!-- page host + update bar (shown only when a downloaded update is ready) -->
+    <DockPanel Grid.Column="1">
+      <Border x:Name="UpdateBarBox" DockPanel.Dock="Top" IsVisible="False" Background="#2A1A0A" BorderBrush="#5A3A14" BorderThickness="0,0,0,1" Padding="20,10">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+            <Button x:Name="UpdateNotes" Classes="ghost" Content="바뀐 점" />
+            <Button x:Name="UpdateLater" Classes="ghost" Content="끌 때 적용" />
+            <Button x:Name="UpdateRestart" Classes="primary" Content="지금 다시 시작" />
+          </StackPanel>
+          <TextBlock x:Name="UpdateBarText" VerticalAlignment="Center" Foreground="#FFC58A" TextWrapping="Wrap" />
+        </DockPanel>
+      </Border>
+      <ContentControl x:Name="PageHost" Margin="34,28" />
+    </DockPanel>
+  </Grid>
+</Window>

@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:p="clr-namespace:SystemBoost.App.Pages"
+             x:Class="SystemBoost.App.Pages.FrameGenPage">
+  <DockPanel>
+    <!-- header -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,20">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="h1" Text="프레임 생성 · 업스케일" />
+        <TextBlock Classes="sub" Text="게임 화면을 캡처해서 중간 프레임을 만들어요. 게임에 주입하지 않아요." />
+      </StackPanel>
+      <Border Grid.Column="1" Classes="card" Padding="12,10" CornerRadius="12">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <ComboBox x:Name="WindowBox" ItemsSource="{Binding Windows}" SelectedItem="{Binding SelectedWindow}"
+                    PlaceholderText="게임 창 선택" MinWidth="320" MaxWidth="420" VerticalAlignment="Center" />
+          <Button x:Name="RefreshButton" Classes="ghost" Content="↻" Padding="12,8" VerticalAlignment="Center" />
+          <Button x:Name="StartButton" Classes="primary" Content="{Binding StartText}" MinWidth="72" VerticalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Grid>
+    <TextBlock DockPanel.Dock="Bottom" Classes="muted" Text="{Binding Status}" Margin="2,12,0,0" />
+
+    <Grid ColumnDefinitions="1.25*,20,*">
+      <!-- left column -->
+      <StackPanel Grid.Column="0" Spacing="20">
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Classes="h2" Text="실시간 측정" />
+              <Border BorderBrush="{StaticResource SbOrange}" BorderThickness="1" CornerRadius="6" Padding="6,1">
+                <TextBlock Text="LIVE" FontSize="11" Foreground="{StaticResource SbOrange}" FontWeight="SemiBold" />
+              </Border>
+            </StackPanel>
+            <Grid ColumnDefinitions="*,12,*,12,*,12,*" RowDefinitions="Auto,12,Auto">
+              <Border Grid.ColumnSpan="3" Classes="tile">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="muted" Text="원본 FPS → 출력 FPS" />
+                  <TextBlock Classes="big accent">
+                    <Run Text="{Binding SrcFps}" /><Run Text=" → " Foreground="{StaticResource SbMuted}" /><Run Text="{Binding OutFps}" /><Run Text=" fps" FontSize="13" Foreground="{StaticResource SbMuted}" />
+                  </TextBlock>
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="4" Classes="tile"><StackPanel Spacing="6"><TextBlock Classes="muted" Text="현재 배수" />
+                <TextBlock Classes="big"><Run Text="{Binding Multiplier}" /><Run Text=" 배" FontSize="13" Foreground="{StaticResource SbMuted}" /></TextBlock></StackPanel></Border>
+              <Border Grid.Column="6" Classes="tile"><StackPanel Spacing="6"><TextBlock Classes="muted" Text="추가 지연 (추정)" />
+                <TextBlock Classes="big"><Run Text="{Binding Latency}" /><Run Text=" ms" FontSize="13" Foreground="{StaticResource SbMuted}" /></TextBlock></StackPanel></Border>
+              <Border Grid.Row="2" Classes="tile"><StackPanel Spacing="6"><TextBlock Classes="muted" Text="생성 GPU 시간" />
+                <TextBlock Classes="big"><Run Text="{Binding GenMs}" /><Run Text=" ms/장" FontSize="13" Foreground="{StaticResource SbMuted}" /></TextBlock></StackPanel></Border>
+              <Border Grid.Row="2" Grid.Column="2" Classes="tile"><StackPanel Spacing="6"><TextBlock Classes="muted" Text="분석 GPU 시간" />
+                <TextBlock Classes="big"><Run Text="{Binding AnalyzeMs}" /><Run Text=" ms/장" FontSize="13" Foreground="{StaticResource SbMuted}" /></TextBlock></StackPanel></Border>
+              <Border Grid.Row="2" Grid.Column="4" Classes="tile"><StackPanel Spacing="6"><TextBlock Classes="muted" Text="늦은 프레임" />
+                <TextBlock Classes="big"><Run Text="{Binding Late}" /><Run Text=" 회" FontSize="13" Foreground="{StaticResource SbMuted}" /></TextBlock></StackPanel></Border>
+              <Border Grid.Row="2" Grid.Column="6" Classes="tile"><StackPanel Spacing="6"><TextBlock Classes="muted" Text="GPU 간 전송" />
+                <TextBlock Classes="big"><Run Text="{Binding Transfer}" /><Run Text=" ms" FontSize="13" Foreground="{StaticResource SbMuted}" /></TextBlock></StackPanel></Border>
+            </Grid>
+            <Border Classes="tile" Padding="0" Height="150" ClipToBounds="True">
+              <p:FpsChart x:Name="Chart" />
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel>
+            <TextBlock Classes="h2" Text="업스케일링" Margin="0,0,0,6" />
+            <Border Classes="row" BorderThickness="0">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="낮은 해상도 창을 화면 크기로 확대" />
+                  <TextBlock Classes="muted" x:Name="UpscaleHint" Text="화면 비율 유지 · 커서는 확대된 위치에 다시 그려요" /></StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding Upscale}" OnContent="" OffContent="" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="선명도" />
+                  <TextBlock Classes="muted" Text="높을수록 또렷하지만 노이즈도 강조돼요" /></StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                  <Slider Width="230" Minimum="0" Maximum="1" Value="{Binding Sharpness}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding SharpnessText}" Foreground="{StaticResource SbOrange}" FontWeight="Bold" VerticalAlignment="Center" Width="36" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- right column: settings -->
+      <Border Grid.Column="2" Classes="card">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="h2" Text="프레임 생성 설정" Margin="0,0,0,6" />
+          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
+            <Button x:Name="ApplyButton" Classes="primary" Content="적용 (다시 시작)" />
+            <Button x:Name="DefaultsButton" Classes="ghost" Content="기본값" />
+          </StackPanel>
+          <StackPanel>
+            <Border Classes="row" BorderThickness="0">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="배수" />
+                  <TextBlock Classes="muted" Text="자동 = 모니터 주사율에 맞춰 채움" /></StackPanel>
+                <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="ModeSeg" Orientation="Horizontal">
+                  <ToggleButton Classes="seg" Content="자동" Tag="auto" /><ToggleButton Classes="seg" Content="2배" Tag="x2" />
+                  <ToggleButton Classes="seg" Content="3배" Tag="x3" /><ToggleButton Classes="seg" Content="4배" Tag="x4" />
+                  <ToggleButton Classes="seg" Content="끄기" Tag="off" /></StackPanel></Border>
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Text="자동 최대 배수" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="MaxSeg" Orientation="Horizontal">
+                  <ToggleButton Classes="seg" Content="2" Tag="2" /><ToggleButton Classes="seg" Content="3" Tag="3" />
+                  <ToggleButton Classes="seg" Content="4" Tag="4" /></StackPanel></Border>
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="품질" />
+                  <TextBlock Classes="muted" Text="품질이 높을수록 GPU를 더 써요" /></StackPanel>
+                <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="QualitySeg" Orientation="Horizontal">
+                  <ToggleButton Classes="seg" Content="성능" Tag="performance" /><ToggleButton Classes="seg" Content="균형" Tag="balanced" />
+                  <ToggleButton Classes="seg" Content="품질" Tag="quality" /></StackPanel></Border>
+              </Grid>
+            </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="프레임 생성 GPU (듀얼 GPU)" />
+                  <TextBlock Classes="muted" Text="내장 그래픽에 맡기면 외장 GPU는 게임만 처리" /></StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Gpus}" SelectedItem="{Binding SelectedGpu}" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <Border Classes="row" IsVisible="{Binding ShowCaptureOption}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Text="캡처 방식" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="CaptureSeg" Orientation="Horizontal">
+                  <ToggleButton Classes="seg" Content="WGC" Tag="wgc" /><ToggleButton Classes="seg" Content="DXGI" Tag="dxgi" /></StackPanel></Border>
+              </Grid>
+            </Border>
+            <Border Classes="note" Margin="0,14,0,0">
+              <TextBlock x:Name="NoteText" Classes="muted" FontSize="12.5" TextWrapping="Wrap" LineHeight="20" />
+            </Border>
+          </StackPanel>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>
