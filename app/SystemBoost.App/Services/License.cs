@@ -34,7 +34,7 @@ public static class License
     public const string ServerUrl = "https://systemboost-license.euning97.workers.dev";
     private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     // SubjectPublicKeyInfo (DER, base64) of the shop's signing key. TODO: replace.
-    private const string PublicKeyB64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxZ49ijlJxLkWb9WskgHPgdKbz+p92SGubgYtOf6cX4QW/HMtJLQ1Rz0Cd2fzmwCTktgyYPLRGBwl9+PPKDc7g==";
+    private const string PublicKeyB64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY8H/jVOrF8oTVDz8WRucglw4zrjLpBkic0VMbIs3gIFypN5xTnt8EPDf5h1hKFVz6z7Jp+O/E87cxU4CADvO2Q==";
 
     public static ISteamOwnership? Steam { get; set; }
     public static event Action? Changed;
