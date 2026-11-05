@@ -5,8 +5,8 @@ keys/
 dist/
 native/framegen/build/
 native/framegen-mac/.build/
-app/**/bin/
-app/**/obj/
+bin/
+obj/
 node_modules/
 .wrangler/
 __pycache__/
