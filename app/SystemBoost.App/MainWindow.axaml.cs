@@ -43,7 +43,7 @@ public partial class MainWindow : Window
         Updater.Changed += UpdateBar;
         UpdateNotes.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
         UpdateLater.Click += (_, _) => { _updateDismissed = true; UpdateBar(); };
-        UpdateRestart.Click += (_, _) => { Shutdown(); Updater.ApplyAndRestart(); };
+        UpdateRestart.Click += (_, _) => { Shutdown(applyUpdateOnExit: false); Updater.ApplyAndRestart(); };
         UpdateBar();
         License.KeyArrived += async (key, err) =>   // seller confirmed a payment -> key popup
         {
@@ -85,13 +85,13 @@ public partial class MainWindow : Window
         PlanText.Text = License.IsPremium ? "모든 기능 사용 중" : "누르면 프리미엄 안내";
     }
 
-    public void Shutdown()
+    public void Shutdown(bool applyUpdateOnExit = true)
     {
         if (_shutDown) return;
         _shutDown = true;
         _frameGen.Dispose();
         _resources.Dispose();   // puts every app's priority / limits back
-        Updater.ApplyOnExit();  // a downloaded update is installed after the app closes
+        if (applyUpdateOnExit) Updater.ApplyOnExit();  // a downloaded update is installed after the app closes
     }
     private bool _shutDown;
 

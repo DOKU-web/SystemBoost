@@ -215,7 +215,7 @@ public sealed class SettingsPage : UserControl
         restart.Click += (_, _) =>
         {
             if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
-                && d.MainWindow is MainWindow w) w.Shutdown();
+                && d.MainWindow is MainWindow w) w.Shutdown(applyUpdateOnExit: false);
             Updater.ApplyAndRestart();
         };
         row.Children.Add(check);
