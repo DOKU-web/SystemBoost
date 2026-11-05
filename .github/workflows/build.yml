@@ -38,7 +38,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y glslang-tools spirv-cross mesa-vulkan-drivers libvulkan-dev g++-mingw-w64-x86-64-posix python3-numpy python3-scipy python3-pil
+      # A stalled mirror held this step for over 30 minutes and a release waits on it, so give up on a connection quickly.
+      - run: |
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          sudo apt-get $APT update
+          sudo apt-get $APT install -y glslang-tools spirv-cross mesa-vulkan-drivers libvulkan-dev g++-mingw-w64-x86-64-posix python3-numpy python3-scipy python3-pil
       - run: native/framegen/tests/run_all.sh
       # The generated text differs between tool versions, so this uses the Vulkan SDK that
       # made the committed file. Update the version here when regenerating with a newer one.
