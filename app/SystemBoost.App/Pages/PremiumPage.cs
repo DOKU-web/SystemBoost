@@ -40,7 +40,7 @@ public sealed class PremiumPage : UserControl
     private readonly TextBlock _keyNote = Ui.Text("", "muted", wrap: true);
     private readonly Border _buyCard;   // shown only while something is on sale
 
-    private static readonly (string feature, string free, string premium)[] Rows =
+    private static readonly (string feature, string free, string premium)[] CommonRows =
     {
         ("프레임 생성 배수", "2배", "자동 · 2 · 3 · 4배"),
         ("품질 모드", "성능 · 균형", "성능 · 균형 · 품질"),
@@ -49,10 +49,16 @@ public sealed class PremiumPage : UserControl
         ("게임 부스트", "●", "●"),
         ("모니터링 · 벤치마크", "●", "●"),
         ("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●"),
+    };
+    // macOS does not allow these, see MacBoostBackend
+    private static readonly (string feature, string free, string premium)[] WindowsRows =
+    {
         ("자원 분배 · CPU 최대 사용량 제한", "—", "●"),
         ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "●"),
         ("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "●"),
     };
+    private static readonly (string feature, string free, string premium)[] Rows =
+        Platform.IsWindows ? CommonRows.Concat(WindowsRows).ToArray() : CommonRows;
     private const string BoostRow = "게임 부스트";
     private readonly bool _boostReady;
 

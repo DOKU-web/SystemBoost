@@ -219,7 +219,7 @@ public sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("운영체제", "", Ui.Text(Platform.Name, "label")));
         list.Children.Add(Ui.Row("프레임 생성 엔진", Platform.EnginePath, Ui.Text(Platform.EngineAvailable ? "설치됨" : "없음", "label")));
         if (Platform.IsWindows)
-            list.Children.Add(Ui.Row("부스트 기능", "RAM·GPU·CPU·시스템 최적화 (오버클럭과 게임별 자동 최적화는 준비 중)", Ui.Text(backend.Connected ? "연결됨" : "준비 중", "label")));
+            list.Children.Add(Ui.Row("부스트 기능", "RAM·GPU·CPU·시스템 최적화", Ui.Text(backend.Connected ? "연결됨" : "준비 중", "label")));
         bool portable = Platform.Portable;
         list.Children.Add(Ui.Row("설치 형태", portable ? "설정과 기록을 이 폴더에 저장해요" : "설정과 기록을 사용자 폴더에 저장해요",
                                  Ui.Text(portable ? "포터블" : "설치판", "label")));

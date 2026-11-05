@@ -155,6 +155,7 @@ final class Engine {
     let gamePid: pid_t
     var layout: Layout
     var vblank: VBlank?
+    var vblankDisplay: CGDirectDisplayID = 0
     var refreshHz = 60.0
     var mode: MulMode
 
@@ -177,8 +178,11 @@ final class Engine {
     func updateDisplay() {
         guard let screen = screenFor(layout.game)?.0 else { return }
         refreshHz = Double(max(30, screen.maximumFramesPerSecond))
-        if vblank == nil, let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
-            vblank = VBlank(displayID: CGDirectDisplayID(num.uint32Value))
+        // the window can move to another monitor, whose vblanks are its own
+        if let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+           num.uint32Value != vblankDisplay {
+            vblankDisplay = num.uint32Value
+            vblank = VBlank(displayID: vblankDisplay)
         }
         pacer.setDisplay(hz: refreshHz, phase: vblank?.phase ?? 0)
     }

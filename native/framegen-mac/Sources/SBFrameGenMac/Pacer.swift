@@ -30,6 +30,9 @@ final class Pacer {
     private var lastPos = -1.0
     private(set) var late: UInt64 = 0
     private(set) var skipped: UInt64 = 0
+    // A slower divider cuts the output rate in half, so a game hovering at the limit would
+    // flip between 120 and 60 fps. It stays until the source is clearly below the limit.
+    private static let dividerSlack = 1.25
 
     init(_ c: PacerConfig) { cfg = c }
 
@@ -125,7 +128,8 @@ final class Pacer {
     private func updateDivider(_ now: Double) {
         guard cfg.mode == .auto else { return }
         let maxOut = sourceFps * Double(max(1, cfg.maxMul))
-        let want = max(1, Int((cfg.refreshHz / maxOut - 0.05).rounded(.up)))
+        var want = max(1, Int((cfg.refreshHz / maxOut - 0.05).rounded(.up)))
+        if want > divider && cfg.refreshHz / Double(divider) <= maxOut * Pacer.dividerSlack { want = divider }
         if want == divider { candidate = 0; return }
         if candidate != want { candidate = want; candidateSince = now; return }
         if now - candidateSince >= cfg.switchHoldSec { divider = want; candidate = 0 }
