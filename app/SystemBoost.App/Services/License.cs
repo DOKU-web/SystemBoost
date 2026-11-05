@@ -30,8 +30,8 @@ public interface ISteamOwnership { bool OwnsPremiumDlc(); }
 
 public static class License
 {
-    // License server (server/license-worker). TODO: set after `wrangler deploy`.
-    public const string ServerUrl = "https://systemboost-license.YOUR-SUBDOMAIN.workers.dev";
+    // License server (server/license-worker).
+    public const string ServerUrl = "https://systemboost-license.euning97.workers.dev";
     private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     // SubjectPublicKeyInfo (DER, base64) of the shop's signing key. TODO: replace.
     private const string PublicKeyB64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxZ49ijlJxLkWb9WskgHPgdKbz+p92SGubgYtOf6cX4QW/HMtJLQ1Rz0Cd2fzmwCTktgyYPLRGBwl9+PPKDc7g==";
