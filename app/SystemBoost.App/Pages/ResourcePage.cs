@@ -92,7 +92,7 @@ public sealed class ResourcePage : UserControl
         _rm = rm;
         var root = new StackPanel();
         root.Children.Add(Ui.Header("자원 분배", "앱마다 CPU·GPU·메모리를 얼마나 쓰는지 보고, 어떤 앱에 더 줄지 정해요. " +
-            "게임 자체는 건드리지 않고(안티치트 안전), 다른 앱을 낮춰서 게임 몫을 늘려요."));
+            "게임 자체는 건드리지 않고, 다른 앱을 낮춰서 게임 몫을 늘려요."));
 
         // metric tabs
         var tabs = new StackPanel { Orientation = Orientation.Horizontal };

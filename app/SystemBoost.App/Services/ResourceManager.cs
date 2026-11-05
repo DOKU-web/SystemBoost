@@ -54,8 +54,11 @@ public static class ResourceManagers
     /// Process of the window frame generation is attached to, while it runs.
     public static string? GameProcess { get; set; }
 
+    /// Process names of the games on the boost page.
+    public static HashSet<string> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public static bool IsProtected(string name) =>
-        Protected.Contains(name) || string.Equals(name, GameProcess, StringComparison.OrdinalIgnoreCase);
+        Protected.Contains(name) || Games.Contains(name) || string.Equals(name, GameProcess, StringComparison.OrdinalIgnoreCase);
 
     public static string? ProcessOfWindow(GameWindow w)
     {
@@ -77,7 +80,8 @@ public static class ResourceManagers
         "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "dwm",
         "explorer", "audiodg", "fontdrvhost", "SystemBoost", "sb_framegen", "sb-framegen-mac",
         "kernel_task", "launchd", "WindowServer", "loginwindow", "Dock", "Finder",
-        "EasyAntiCheat", "EasyAntiCheat_EOS", "BEService", "vgc", "StarCitizen", "RSI Launcher",
+        "EasyAntiCheat", "EasyAntiCheat_EOS", "BEService", "vgc", "vgtray", "FACEITClient", "faceit", "StarCitizen", "RSI Launcher",
+        "sb_helper",
     };
 }
 

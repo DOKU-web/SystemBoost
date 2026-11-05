@@ -4,6 +4,7 @@ keys/
 # build output
 dist/
 native/framegen/build/
+native/helper/build/
 native/framegen-mac/.build/
 bin/
 obj/

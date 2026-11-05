@@ -10,9 +10,17 @@ namespace SystemBoost.App;
 public partial class MainWindow : Window
 {
     private readonly FrameGenViewModel _frameGen = new();
-    private readonly IBoostBackend _backend = Platform.IsMac ? new MacBoostBackend() : new V05Backend();
+    private readonly IBoostBackend _backend = Platform.IsMac ? new MacBoostBackend() : CreateWindowsBackend();
     private readonly IResourceManager _resources = ResourceManagers.Create();
     private readonly Dictionary<Button, Func<Control>> _pages = new();
+
+    private static IBoostBackend CreateWindowsBackend()
+    {
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+        var b = new WindowsBoostBackend();
+        b.Notice += text => Avalonia.Threading.Dispatcher.UIThread.Post(() => new NoticeWindow(text).Show());
+        return b;
+    }
     private readonly Dictionary<string, Control> _cache = new();
 
     public MainWindow()
@@ -51,6 +59,7 @@ public partial class MainWindow : Window
             await new KeyDialog(key, err).ShowDialog(this);
         };
         Go("fg");
+        if (OperatingSystem.IsWindows() && _backend is WindowsBoostBackend win) _ = win.StartAsync();
     }
 
     private readonly Dictionary<string, Button> _navByKey = new();
@@ -91,6 +100,7 @@ public partial class MainWindow : Window
         _shutDown = true;
         _frameGen.Dispose();
         _resources.Dispose();   // puts every app's priority / limits back
+        (_backend as IDisposable)?.Dispose();   // what was only for the running game goes back
         if (applyUpdateOnExit) Updater.ApplyOnExit();  // a downloaded update is installed after the app closes
     }
     private bool _shutDown;

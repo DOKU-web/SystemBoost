@@ -12,6 +12,7 @@ bundled in the installer.
 | Apple Game Porting Toolkit / D3DMetal | Apple license | https://developer.apple.com/games/ | **Not distributed.** The user downloads it from Apple, accepts Apple's license, and selects its folder |
 | Avalonia | MIT | https://github.com/AvaloniaUI/Avalonia | UI framework |
 | .NET runtime | MIT | https://github.com/dotnet/runtime | Bundled (self-contained) |
+| NVAPI | MIT | https://github.com/NVIDIA/nvapi | Linked into the Windows admin helper (per-game driver setting) |
 
 LGPL note: because Wine is downloaded as-is from its public release and run as
 a separate program, users can replace it with any other Wine build in

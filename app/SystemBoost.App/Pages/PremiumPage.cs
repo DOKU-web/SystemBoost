@@ -53,9 +53,10 @@ public sealed class PremiumPage : UserControl
         ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "●"),
         ("GPU 오버클럭 / 언더볼트 (Windows)", "—", "●"),
     };
-    // rows that need the boost backend: shown as "준비 중" until it is connected
-    private static readonly string[] BoostRows =
-        { "게임 부스트", "게임별 자동 최적화 (측정해서 효과 있는 것만)", "GPU 오버클럭 / 언더볼트 (Windows)" };
+    // rows behind a feature that is not connected yet: shown as "준비 중"
+    private static readonly string[] NotReadyRows =
+        { "게임별 자동 최적화 (측정해서 효과 있는 것만)", "GPU 오버클럭 / 언더볼트 (Windows)" };
+    private const string BoostRow = "게임 부스트";
     private readonly bool _boostReady;
 
     public PremiumPage(bool boostReady)
@@ -86,7 +87,7 @@ public sealed class PremiumPage : UserControl
         Cell("기능", 0, 0, true); Cell("무료", 0, 1, true); Cell("프리미엄", 0, 2, true, true);
         for (int i = 0; i < Rows.Length; i++)
         {
-            bool pending = !_boostReady && BoostRows.Contains(Rows[i].feature);
+            bool pending = NotReadyRows.Contains(Rows[i].feature) || (!_boostReady && Rows[i].feature == BoostRow);
             Cell(Rows[i].feature, i + 1, 0);
             Cell(pending ? "준비 중" : Rows[i].free, i + 1, 1);
             Cell(pending ? "준비 중" : Rows[i].premium, i + 1, 2, accent: !pending && Rows[i].premium != "—");

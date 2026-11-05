@@ -8,7 +8,7 @@ $out = "$root\dist\windows"
 Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $out | Out-Null
 
-# 1) native frame generation engine (D3D11)
+# 1) native frame generation engine (D3D11); the admin helper is built with step 2
 cmake -S "$root\native\framegen" -B "$root\native\framegen\build" -A x64
 cmake --build "$root\native\framegen\build" --config Release
 
@@ -19,7 +19,9 @@ dotnet publish "$root\app\SystemBoost.App\SystemBoost.App.csproj" -c Release -r 
 New-Item -ItemType Directory -Force "$pub\native\framegen\shaders" | Out-Null
 Copy-Item "$root\native\framegen\build\Release\sb_framegen.exe" "$pub\native\framegen\"
 Copy-Item "$root\native\framegen\build\Release\shaders\*" "$pub\native\framegen\shaders\"
-# TODO(v0.5): copy the admin helper here, e.g. Copy-Item ...\SystemBoost.Helper.exe $pub
+cmake -S "$root\native\helper" -B "$root\native\helper\build" -A x64
+cmake --build "$root\native\helper\build" --config Release
+Copy-Item "$root\native\helper\build\Release\sb_helper.exe" $pub
 
 # 3) code signing (optional: set SIGN_CERT_THUMBPRINT) is done by vpk pack below (--signParams),
 #    which signs the app files, the installer and the updater.

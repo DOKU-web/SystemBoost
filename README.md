@@ -1,4 +1,4 @@
-# SystemBoost 0.6 (Windows + macOS)
+# SystemBoost 0.7 (Windows + macOS)
 
 게임 최적화 + 화면 캡처 방식 프레임 생성·업스케일 프로그램. 게임에 주입하지 않습니다.
 
@@ -8,9 +8,12 @@
 app/SystemBoost.App/        공통 화면 (Avalonia, .NET 8) - Windows·macOS 같은 코드
   Pages/                    프레임 생성(동작), 대시보드, 부스트, 벤치마크, 백업, 설정
   Services/FrameGenEngine   OS에 맞는 엔진 실행 + JSON 통신
-  Services/BoostCatalog     부스트 기능 목록 + IBoostBackend (v0.5 로직 연결 지점)
+  Services/BoostCatalog     부스트 기능 목록 + IBoostBackend
+  Services/WindowsBoostBackend  Windows 부스트 구현 (백업·적용·되돌리기·게임 감시)
+  Services/BoostHelper      관리자 도우미 실행 + 파이프 통신
 native/framegen/            Windows 엔진 (C++ / D3D11)  - README_FRAMEGEN.md 참고
 native/framegen-mac/        macOS 엔진 (Swift / Metal / ScreenCaptureKit)
+native/helper/              관리자 도우미 sb_helper.exe (C++, 명령 허용 목록)
 tools/gen_metal.sh          HLSL -> Metal 셰이더 생성 (두 OS가 같은 알고리즘 사용)
 build/windows/              build.ps1 (Velopack 설치판 + 포터블 + 업데이트 패키지)
 build/macos/                build.sh, Info.plist, entitlements (Velopack .pkg + 업데이트 패키지)
@@ -67,16 +70,35 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
 | Windows 엔진 (C++) | mingw로 경고 없이 빌드됨. MSVC·실제 PC 실행은 아직 |
 | macOS 엔진 (Swift) | 작성만 함. **처음 컴파일은 CI의 macOS 빌드** |
 | 공통 화면 (Avalonia) | C# 문법 검사만 통과. **처음 빌드는 CI** (이 작업 환경은 NuGet이 막혀 있었음) |
-| 부스트 기능 (RAM·GPU·CPU 등) | 화면과 목록만 있음. **v0.5 로직을 `IBoostBackend`에 연결해야 동작** (연결 전에는 시스템을 바꾸지 않음) |
-| 관리자 헬퍼 | v0.5 것을 그대로 사용. `build.ps1`의 TODO 위치에 복사 추가 |
+| Windows 게임 부스트 | 동작. 값이 바뀌고 되돌아가는 것은 재서 확인. **게임 FPS 효과는 아직 재지 않음**, 실제 게임·안티치트와 함께 쓴 시험도 없음 |
+| 관리자 도우미 | 새로 작성 (`native/helper`). `build.ps1`이 빌드해 앱 폴더에 넣음 |
+| GPU 오버클럭, 게임별 자동 최적화 | 준비 중. 각각 안전장치와 게임별 측정 방법을 검증하지 못함 |
 | 단축키 | 아직 없음 (전역 단축키는 OS별 구현 필요) |
 | macOS 윈도우 게임 실행 | 작성만 함. Mac에서 설치·실행 확인 필요 |
 | macOS 게임 부스트 | 작성만 함. Mac에서 관리자 창·되돌리기 확인 필요 |
 
-### v0.5 로직 연결 순서
-1. v0.5 WPF 프로젝트의 최적화 서비스(RAM, GPU, CPU, 시스템, 백업)를 `app/` 아래 별도 클래스 라이브러리로 옮깁니다. WPF 의존성(Window, Dispatcher 등)만 빼면 대부분 그대로 쓸 수 있습니다.
-2. `V05Backend`를 실제 구현으로 바꿉니다. `featureId`는 `BoostCatalog.cs`의 id(`ram.standby` 등)입니다.
-3. v0.5 화면에만 있던 항목은 `BoostCatalog`에 추가하면 해당 페이지에 자동으로 나타납니다.
+## Windows: 게임 부스트
+`Services/WindowsBoostBackend.cs`. v0.5 소스가 없어서 새로 작성했습니다. 게임에 주입하지 않고 게임 프로세스를 열지도 않습니다. 게임은 프로세스 이름으로만 알아봅니다('내 게임' 목록, 또는 프레임 생성 중인 게임).
+
+바꾸기 전 값을 `boost-state.json`에 먼저 저장합니다. 앱이 강제로 꺼져도 다음 실행 때 게임 시간 항목을 되돌립니다.
+
+| 종류 | 항목 | 되돌리는 때 |
+|---|---|---|
+| 끌 때까지 유지 | `gpu.highperf` `gpu.hags` `gpu.driver` `cpu.priority` `net.adapterpower` `sys.gamemode` `sys.dvr` | 스위치, 전체 되돌리기 |
+| 게임 중에만 | `ram.standby` `ram.workingset` `cpu.ecores` `cpu.power` `net.monitor` `sys.focus` | 게임 종료, 앱 종료, 다음 실행 |
+
+- `cpu.ecores`: 게임 중 다른 프로그램의 코어 마스크를 E코어로 제한. 앞에 있는 창, 방송·음성·런처, 시스템 프로그램은 옮기지 않음.
+- `cpu.priority`: `Image File Execution Options\...\PerfOptions\CpuPriorityClass`. 다음 실행부터 Windows가 적용.
+- `gpu.driver`: NVAPI 드라이버 프로필. AMD·Intel은 미지원.
+- `sys.focus`: 알림 끄기 + Windows 업데이트 일시정지(최대 1일).
+- `net.monitor`: 큰 전송 알림. 프로그램 이름은 관리자 도우미가 있을 때 TCP 연결에서만 찾음(QUIC·UDP는 이름 없음).
+
+### 관리자 도우미 (`native/helper`)
+앱은 일반 권한으로 돌고, 관리자 작업이 필요할 때만 UAC로 `sb_helper.exe`를 띄웁니다. 앱이 꺼지면 도우미도 꺼집니다.
+- 임의 레지스트리 쓰기나 명령 실행은 없고, `commands.cpp`의 허용 목록만 처리합니다(`validate.h`가 값 형식을 검사).
+- 무작위 이름 파이프, 원격 클라이언트 거부, 앱 사용자만 접근 가능, 호출자 PID와 실행 파일(`SystemBoost.exe`, 도우미와 같은 폴더) 확인.
+- 설치 폴더가 사용자 쓰기 가능하고 서명 전이라, 같은 사용자 권한의 악성 프로그램이 UAC 전에 파일을 바꿀 수는 있습니다. 코드 서명을 하면 UAC에 발행자가 보입니다.
+- NVAPI는 CMake가 고정된 커밋과 SHA-256으로 내려받습니다.
 
 ## macOS: 윈도우 게임 실행 (Wine)
 - 메뉴 "🍷 윈도우 게임"에서 실행 환경을 설치합니다. Wine·DXVK는 처음 쓸 때 GitHub 릴리스에서 내려받고, `Assets/wine-manifest.json`의 SHA-256과 다르면 설치하지 않습니다. CI(macOS 빌드)가 `tools/update_wine_manifest.sh`로 매니페스트를 최신 릴리스 기준으로 갱신합니다.
@@ -106,7 +128,7 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
 - 키 발급: `python3 tools/license_tool.py sign <private.pem> <이메일> [--days 30]` (기간 없으면 평생). 결제 서버도 같은 방식으로 서명하면 됩니다.
 
 ## 자원 분배 (CPU·GPU·메모리)
-`Services/ResourceManager.cs`, `Pages/ResourcePage.cs` — 앱별 사용량을 쌓인 그래프로 보여 주고, 앱마다 우선/보통/낮춤/제한을 고릅니다. 게임 프로세스는 열지도 바꾸지도 않습니다(안티치트 안전). 다른 앱을 낮춰서 게임 몫을 늘립니다. 앱을 끄면 모두 원래대로 돌아갑니다.
+`Services/ResourceManager.cs`, `Pages/ResourcePage.cs` — 앱별 사용량을 쌓인 그래프로 보여 주고, 앱마다 우선/보통/낮춤/제한을 고릅니다. 게임 프로세스는 열지도 바꾸지도 않습니다. 다른 앱을 낮춰서 게임 몫을 늘립니다. 앱을 끄면 모두 원래대로 돌아갑니다.
 
 | | Windows | macOS |
 |---|---|---|

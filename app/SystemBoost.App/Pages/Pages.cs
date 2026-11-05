@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using SystemBoost.App.Services;
 using SystemBoost.App.ViewModels;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace SystemBoost.App.Pages;
@@ -14,7 +16,7 @@ public sealed class DashboardPage : UserControl
     public DashboardPage(FrameGenViewModel fg, IBoostBackend backend, Action<string> go)
     {
         var root = new StackPanel();
-        root.Children.Add(Ui.Header("대시보드", $"{Platform.Name} · SystemBoost 0.6"));
+        root.Children.Add(Ui.Header("대시보드", $"{Platform.Name} · SystemBoost {Updater.CurrentVersion.Split('+')[0]}"));
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,20,*,20,*") };
 
         Border Tile(string title, string body, string button, string target, int col)
@@ -72,11 +74,13 @@ public sealed class BoostPage : UserControl
 
         var list = new StackPanel();
         bool first = true;
+        var toggles = new List<(ToggleSwitch sw, string id)>();
         var features = BoostCatalog.For(category).ToList();
         if (extra is BoostCategory e) features.AddRange(BoostCatalog.For(e));
         foreach (var f in features)
         {
             var sw = new ToggleSwitch { OnContent = "", OffContent = "", Tag = "loading" };
+            Avalonia.Automation.AutomationProperties.SetName(sw, f.Title);
             sw.IsCheckedChanged += async (_, _) =>
             {
                 if (sw.Tag is "loading") return;  // initial state from the backend, not a user change
@@ -86,13 +90,18 @@ public sealed class BoostPage : UserControl
                     status.Text = $"{f.Title}은(는) 프리미엄 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
                     return;
                 }
+                sw.IsEnabled = false;
+                status.Text = $"{f.Title}: 처리하는 중…";
                 string r = sw.IsChecked == true ? await backend.ApplyAsync(f.Id) : await backend.RevertAsync(f.Id);
                 status.Text = $"{f.Title}: {r}";
+                await Init(sw, backend, f.Id);   // a declined prompt or a failure leaves it off
+                sw.IsEnabled = true;
             };
             var desc = f.Description;
             if (f.RequiresAdmin) desc = (desc.Length > 0 ? desc + " · " : "") + "관리자 권한 필요";
             if (f.NeedsReboot) desc += " · 재부팅 후 적용";
-            var row = Ui.Row(f.Title, desc, backend.Connected ? sw : Ui.Pending(), first);
+            bool ready = backend.Connected && f.Ready;
+            var row = Ui.Row(f.Title, desc, ready ? sw : Ui.Pending(), first);
             if (f.Premium && row.Child is Grid g && g.Children[0] is StackPanel sp && sp.Children[0] is TextBlock tb)
             {
                 sp.Children.RemoveAt(0);
@@ -101,10 +110,14 @@ public sealed class BoostPage : UserControl
                 line.Children.Add(Ui.Badge("프리미엄"));
                 sp.Children.Insert(0, line);
             }
-            if (!backend.Connected && row.Child is Grid pending) pending.Children[0].Opacity = 0.55;
+            if (!ready && row.Child is Grid pending) pending.Children[0].Opacity = 0.55;
             list.Children.Add(row);
             first = false;
-            if (backend.Connected) _ = Init(sw, backend, f.Id);
+            if (ready)
+            {
+                _ = Init(sw, backend, f.Id);
+                toggles.Add((sw, f.Id));
+            }
         }
         if (Platform.IsMac && category == BoostCategory.GameBoost)
         {
@@ -116,13 +129,23 @@ public sealed class BoostPage : UserControl
             root.Children.Add(new MacSystemPanel { Margin = new Thickness(0, 20, 0, 0) });
         }
         else root.Children.Add(Ui.Card(list));
+        if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend win)
+        {
+            foreach (var c in BoostExtras.For(category, win, status)) root.Children.Add(c);
+            win.Changed += () => Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var (sw, id) in toggles) if (sw.IsEnabled) _ = Init(sw, backend, id);
+            });
+        }
         if (Platform.IsWindows && category == BoostCategory.Ram) root.Children.Add(new VirtualMemoryCard());
         Content = new ScrollViewer { Content = root };
     }
 
     private static async System.Threading.Tasks.Task Init(ToggleSwitch sw, IBoostBackend b, string id)
     {
-        sw.IsChecked = await b.IsAppliedAsync(id);
+        var applied = await b.IsAppliedAsync(id);
+        sw.Tag = "loading";
+        sw.IsChecked = applied;
         sw.Tag = null;
     }
 }
@@ -157,7 +180,7 @@ public sealed class BackupPage : UserControl
         root.Children.Add(Ui.Header("백업 · 되돌리기", Platform.IsMac
             ? "SystemBoost가 바꾼 설정(저전력 모드, Time Machine, Spotlight)을 한 번에 원래대로 돌려요."
             : backend.Connected
-                ? "SystemBoost가 바꾼 설정(레지스트리, 전원 계획, 드라이버 프로필, 오버클럭)을 한 번에 원래대로 돌려요."
+                ? "SystemBoost가 바꾼 설정(레지스트리, 전원 계획, 드라이버 프로필)을 한 번에 원래대로 돌려요. 앱을 지우기 전에도 눌러 주세요. 가상 메모리는 'RAM 확보' 화면의 '원래대로'로 되돌려요."
                 : "부스트 항목이 준비 중이라 아직 되돌릴 설정이 없어요. 가상 메모리는 'RAM 확보' 화면의 '원래대로'로 되돌려요."));
         var result = Ui.Text("", "muted", wrap: true);
         var btn = Ui.Button(backend.Connected ? "전체 되돌리기" : "준비 중", "primary");
@@ -165,6 +188,18 @@ public sealed class BackupPage : UserControl
         btn.HorizontalAlignment = HorizontalAlignment.Left;
         btn.Click += async (_, _) => result.Text = await backend.RevertAllAsync();
         var p = new StackPanel { Spacing = 12 };
+        if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend win)
+        {
+            var changed = Ui.Text("", "label", wrap: true);
+            void Refresh()
+            {
+                var items = win.ChangedItems();
+                changed.Text = items.Count == 0 ? "지금 바뀐 항목이 없어요." : "지금 바뀐 항목: " + string.Join(", ", items);
+            }
+            Refresh();
+            win.Changed += () => Dispatcher.UIThread.Post(Refresh);
+            p.Children.Add(changed);
+        }
         p.Children.Add(btn);
         p.Children.Add(result);
         root.Children.Add(Ui.Card(p));
@@ -184,7 +219,7 @@ public sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("운영체제", "", Ui.Text(Platform.Name, "label")));
         list.Children.Add(Ui.Row("프레임 생성 엔진", Platform.EnginePath, Ui.Text(Platform.EngineAvailable ? "설치됨" : "없음", "label")));
         if (Platform.IsWindows)
-            list.Children.Add(Ui.Row("부스트 기능", "RAM·GPU·CPU·시스템 최적화", Ui.Text(backend.Connected ? "연결됨" : "준비 중", "label")));
+            list.Children.Add(Ui.Row("부스트 기능", "RAM·GPU·CPU·시스템 최적화 (오버클럭과 게임별 자동 최적화는 준비 중)", Ui.Text(backend.Connected ? "연결됨" : "준비 중", "label")));
         bool portable = Platform.Portable;
         list.Children.Add(Ui.Row("설치 형태", portable ? "설정과 기록을 이 폴더에 저장해요" : "설정과 기록을 사용자 폴더에 저장해요",
                                  Ui.Text(portable ? "포터블" : "설치판", "label")));

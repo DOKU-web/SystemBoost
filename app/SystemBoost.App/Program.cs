@@ -10,7 +10,9 @@ internal static class Program
     {
         // Must run first: handles install / update / uninstall hooks of the Velopack installer and exits
         // early when it was started for one of them. Does nothing in Steam or dev builds.
-        Velopack.VelopackApp.Build().Run();
+        var velopack = Velopack.VelopackApp.Build();
+        if (OperatingSystem.IsWindows()) velopack.OnBeforeUninstallFastCallback(_ => Services.WindowsBoostBackend.RestoreUserSettings());
+        velopack.Run();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
