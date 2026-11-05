@@ -172,5 +172,20 @@ std::string dispatch(const std::vector<std::string>& f) {
     if (c == "nv.restore" && n == 4 && sb::isExeName(f[1]) && sb::isBit(f[2]) && sb::isOldValue(f[3]))
         return nvRestore(f[1], f[2] == "1", f[3]);
 
+    // GPU tuning: goes back by itself, see gpuoc.cpp
+    if (c == "oc.set" && n == 5 && sb::isPowerWatts(f[1]) && sb::isCoreOffset(f[2]) && sb::isMemOffset(f[3]) && sb::isTempLimit(f[4]))
+        return ocSet(std::stoi(f[1]), std::stoi(f[2]), std::stoi(f[3]), std::stoi(f[4]));
+    if (c == "oc.keep" && n == 1) return ocKeep();
+    if (c == "oc.status" && n == 1) return ocStatus();
+    // the value saved before tuning, which may be another tool's: only the driver's own limits apply
+    if (c == "oc.restore" && n == 4 && sb::isInt(f[1], 1000, 2000000) && sb::isInt(f[2], -5000, 8000) && sb::isInt(f[3], -5000, 8000))
+        return ocRestore((unsigned)std::stoul(f[1]), std::stoi(f[2]), std::stoi(f[3]));
+
+    // frame timing of a running game
+    if (c == "fps.start" && n == 1) return fpsStart();
+    if (c == "fps.mark" && n == 1) return fpsMark();
+    if (c == "fps.read" && n == 2 && sb::isInt(f[1], 1, 4294967295LL)) return fpsRead(std::stoul(f[1]));
+    if (c == "fps.stop" && n == 1) return fpsStop();
+
     return err("refused");
 }

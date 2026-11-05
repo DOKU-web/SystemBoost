@@ -1,5 +1,6 @@
 // Controls under the toggles of the Windows boost pages: the game list and the
-// one-click profile, the standby limit and trim targets, the CPU's core layout.
+// one-click profile, per-game measurement, the standby limit and trim targets,
+// GPU tuning values, the CPU's core layout.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -12,6 +13,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 
 namespace SystemBoost.App.Pages;
 
@@ -25,6 +27,9 @@ internal static class BoostExtras
         ("full", "전체: 대기 메모리 정리까지 (관리자 권한 필요)"),
     };
     private static readonly int[] Limits = { 512, 1024, 2048, 4096 };
+    private const int CoreOffsetMin = -200, CoreOffsetMax = 100, CoreOffsetStep = 15;
+    private const int MemOffsetMin = -500, MemOffsetMax = 300, MemOffsetStep = 50;
+    private const int PowerStep = 5;
 
     public static IEnumerable<Control> For(BoostCategory category, WindowsBoostBackend b, TextBlock status)
     {
@@ -32,11 +37,15 @@ internal static class BoostExtras
         {
             case BoostCategory.GameBoost:
                 yield return Ui.Card(Games(b, status));
+                yield return Ui.Card(GameMeasure(b, status));
                 yield return Ui.Card(Activity(b));
                 break;
             case BoostCategory.Ram:
                 yield return Ui.Card(Standby(b, status));
                 yield return Ui.Card(TrimTargets(b, status));
+                break;
+            case BoostCategory.Gpu:
+                yield return Ui.Card(GpuTuning(b, status));
                 break;
             case BoostCategory.Cpu:
                 var cores = WindowsBoostBackend.CoreCounts();
@@ -45,6 +54,130 @@ internal static class BoostExtras
                     : "이 CPU는 E코어가 없어서 'E코어로' 항목은 쓸 수 없어요", "muted", wrap: true));
                 break;
         }
+    }
+
+    private static Control GameMeasure(WindowsBoostBackend b, TextBlock status)
+    {
+        var p = new StackPanel { Spacing = 10 };
+        p.Children.Add(Ui.Text("게임별 측정", "h2"));
+        p.Children.Add(Ui.Text("게임을 실행하고 같은 장면에 가만히 둔 채 '측정'을 누르세요. 약 2분 30초 동안 항목을 껐다 켜며 FPS를 재요. "
+                               + "3% 이상 오르고 측정 오차보다 큰 항목만 그 게임에서 켜요.", "muted", wrap: true));
+        var results = new StackPanel { Spacing = 6 };
+        void Refresh()
+        {
+            results.Children.Clear();
+            if (b.GameProfiles.Count == 0) results.Children.Add(Ui.Text("아직 측정한 게임이 없어요.", "muted"));
+            foreach (var (game, profile) in b.GameProfiles)
+            {
+                results.Children.Add(Ui.Text($"{game} ({profile.MeasuredAt:MM-dd HH:mm})", "label"));
+                foreach (var r in profile.Results) results.Children.Add(Ui.Text(Describe(r), "muted", wrap: true));
+            }
+        }
+        p.Children.Add(results);
+        var progress = Ui.Text("", "muted", wrap: true);
+        var run = Ui.Button("측정", "primary");
+        run.HorizontalAlignment = HorizontalAlignment.Left;
+        run.Click += async (_, _) =>
+        {
+            if (!License.Allowed(PremiumFeature.PerGameProfiles))
+            {
+                status.Text = "게임별 자동 최적화는 프리미엄 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
+                return;
+            }
+            run.IsEnabled = false;
+            var line = await b.MeasureGameAsync(t => Dispatcher.UIThread.Post(() => progress.Text = t));
+            progress.Text = "";
+            status.Text = line;
+            run.IsEnabled = true;
+            Refresh();
+        };
+        p.Children.Add(run);
+        p.Children.Add(progress);
+        Refresh();
+        return p;
+    }
+
+    private static string Describe(ProfileResult r)
+    {
+        var title = BoostCatalog.All.First(f => f.Id == r.Feature).Title;
+        if (r.Note.Length > 0) return $"{title}: {r.Note}";
+        return $"{title}: 평균 {r.OffFps:0.0} → {r.OnFps:0.0} fps ({r.GainPercent:+0.0;-0.0}%, 오차 {r.NoisePercent:0.0}%), "
+             + $"1% 낮은 값 {r.OffLow:0.0} → {r.OnLow:0.0} · " + (r.Keep ? "켜요" : "효과가 확인되지 않아 켜지 않아요");
+    }
+
+    private static Control GpuTuning(WindowsBoostBackend b, TextBlock status)
+    {
+        var p = new StackPanel { Spacing = 10 };
+        p.Children.Add(Ui.Text("오버클럭 / 전력 제한 값", "h2"));
+        var gpu = WindowsBoostBackend.ReadGpu();
+        if (gpu == null)
+        {
+            p.Children.Add(Ui.Text("NVIDIA 그래픽카드와 최신 드라이버가 있어야 쓸 수 있어요.", "muted", wrap: true));
+            return p;
+        }
+        var now = Ui.Text("", "muted", wrap: true);
+        p.Children.Add(now);
+        var choice = b.GpuSettings;
+        var powers = Steps(gpu.PowerMinW, gpu.PowerMaxW, PowerStep, gpu.PowerDefaultW);
+        var power = Picker(powers, choice.PowerW > 0 ? choice.PowerW : gpu.PowerDefaultW, v => v == gpu.PowerDefaultW ? $"{v} W (기본)" : $"{v} W");
+        var cores = Steps(CoreOffsetMin, CoreOffsetMax, CoreOffsetStep, 0);
+        var core = Picker(cores, choice.CoreMHz, Offset);
+        var mems = Steps(MemOffsetMin, MemOffsetMax, MemOffsetStep, 0);
+        var mem = Picker(mems, choice.MemMHz, Offset);
+        var risk = new CheckBox { Content = "값을 높이면 게임이 멈추거나 화면이 꺼질 수 있다는 것을 이해했어요", IsChecked = choice.RiskAccepted };
+        p.Children.Add(Ui.Row("전력 제한", "낮추면 전력과 열이 줄고 성능도 줄 수 있어요", power, true));
+        p.Children.Add(Ui.Row("코어 클럭 오프셋", "기본 클럭에 더하거나 빼는 값이에요", core));
+        p.Children.Add(Ui.Row("메모리 클럭 오프셋", "기본 클럭에 더하거나 빼는 값이에요", mem));
+        p.Children.Add(risk);
+        p.Children.Add(Ui.Text($"위 스위치를 켜면 적용돼요. '유지'를 누르지 않거나, GPU가 {choice.TempLimitC} °C 이상이 되거나, 드라이버 오류가 나거나, "
+                               + "앱을 끄면 원래 값으로 돌아가요. 제조사 보증 조건은 직접 확인해 주세요.", "muted", wrap: true));
+        void Store() => b.SetGpuChoice(powers[power.SelectedIndex], cores[core.SelectedIndex], mems[mem.SelectedIndex], risk.IsChecked == true);
+        power.SelectionChanged += (_, _) => Store();
+        core.SelectionChanged += (_, _) => Store();
+        mem.SelectionChanged += (_, _) => Store();
+        risk.IsCheckedChanged += (_, _) => Store();
+
+        var keepText = Ui.Text("", "label", wrap: true);
+        var keep = Ui.Button("유지", "primary");
+        keep.Click += async (_, _) => status.Text = "오버클럭 / 전력 제한: " + await b.KeepGpuAsync();
+        var keepBox = new StackPanel { Spacing = 8, IsVisible = false };
+        keepBox.Children.Add(keepText);
+        keepBox.Children.Add(keep);
+        p.Children.Add(keepBox);
+
+        void Show(GpuReading? g)
+        {
+            if (g != null) now.Text = $"{g.Name} · 지금 전력 제한 {g.PowerNowW} W, 코어 {Offset(g.CoreMHz)}, 메모리 {Offset(g.MemMHz)}, {g.TempC} °C";
+            var left = b.GpuConfirmLeft;
+            keepBox.IsVisible = left != null;
+            keepText.Text = $"화면과 게임이 정상이면 {left}초 안에 '유지'를 눌러 주세요. 누르지 않으면 원래대로 돌아가요.";
+            power.IsEnabled = core.IsEnabled = mem.IsEnabled = !b.GpuTuned;
+        }
+        Show(gpu);
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        timer.Tick += async (_, _) => Show(await Task.Run(WindowsBoostBackend.ReadGpu));
+        p.AttachedToVisualTree += (_, _) => timer.Start();
+        p.DetachedFromVisualTree += (_, _) => timer.Stop();
+        return p;
+    }
+
+    private static string Offset(int mhz) => $"{mhz:+0;-0;0} MHz";
+
+    /// Values from lo to hi that pass through anchor, so the default is always on the list.
+    private static List<int> Steps(int lo, int hi, int step, int anchor)
+    {
+        var below = lo + ((anchor - lo) % step);
+        var list = new List<int>();
+        for (int v = below; v <= hi; v += step) list.Add(v);
+        return list;
+    }
+
+    private static ComboBox Picker(List<int> values, int current, Func<int, string> label)
+    {
+        var box = new ComboBox { ItemsSource = values.Select(label).ToArray(), Width = 170 };
+        int at = values.IndexOf(current);
+        box.SelectedIndex = at >= 0 ? at : values.IndexOf(values.OrderBy(v => Math.Abs(v - current)).First());
+        return box;
     }
 
     private static Control Games(WindowsBoostBackend b, TextBlock status)

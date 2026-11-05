@@ -53,6 +53,15 @@ int main() {
     CHECK(isOldValue("none") && isOldValue("1"));
     CHECK(!isOldValue("") && !isOldValue("-1") && !isOldValue("12345678901"));
 
+    CHECK(isInt("0", 0, 1) && isInt("-200", -200, 100));
+    CHECK(!isInt("", 0, 1) && !isInt("-", -1, 1) && !isInt("+1", 0, 5) && !isInt("1 ", 0, 5) && !isInt("1.5", 0, 5));
+    CHECK(!isInt("99999999999", 0, 2000000000) && !isInt("-5", 0, 5) && !isInt("6", 0, 5));
+
+    CHECK(isCoreOffset("100") && isCoreOffset("-200") && !isCoreOffset("101") && !isCoreOffset("-201"));
+    CHECK(isMemOffset("300") && isMemOffset("-500") && !isMemOffset("301") && !isMemOffset("-501"));
+    CHECK(isTempLimit("85") && !isTempLimit("88") && !isTempLimit("39"));
+    CHECK(isPowerWatts("170") && !isPowerWatts("0") && !isPowerWatts("1001"));
+
     printf(failed ? "helper validate: %d failed\n" : "helper validate: all passed\n", failed);
     return failed ? 1 : 0;
 }

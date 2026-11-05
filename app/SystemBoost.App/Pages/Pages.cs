@@ -100,7 +100,7 @@ public sealed class BoostPage : UserControl
             var desc = f.Description;
             if (f.RequiresAdmin) desc = (desc.Length > 0 ? desc + " · " : "") + "관리자 권한 필요";
             if (f.NeedsReboot) desc += " · 재부팅 후 적용";
-            bool ready = backend.Connected && f.Ready;
+            bool ready = backend.Connected;
             var row = Ui.Row(f.Title, desc, ready ? sw : Ui.Pending(), first);
             if (f.Premium && row.Child is Grid g && g.Children[0] is StackPanel sp && sp.Children[0] is TextBlock tb)
             {

@@ -8,8 +8,8 @@
 //    must be SystemBoost.exe in this helper's own folder. Anything else is dropped.
 //  - Requests are matched against the fixed list in commands.cpp with checked
 //    arguments. Nothing here runs a program or writes a path chosen by the caller.
-//  - It holds no state: backups live in the app, and it never touches a game
-//    process, game memory or game files.
+//  - Backups live in the app. The one thing kept here is the GPU tuning to undo if
+//    the app goes away. It never touches a game process, game memory or game files.
 #include "commands.h"
 #include "validate.h"
 #include <windows.h>
@@ -58,6 +58,12 @@ bool callerAllowed(HANDLE pipe, DWORD parent) {
     return ok && _wcsicmp(image, expectedCaller().c_str()) == 0;
 }
 
+[[noreturn]] void leave(UINT code) {
+    ocShutdown();
+    fpsShutdown();
+    ExitProcess(code);
+}
+
 bool sendLine(HANDLE pipe, std::string line) {
     line += '\n';
     DWORD written;
@@ -91,7 +97,7 @@ int wmain(int argc, wchar_t** argv) {
 
     HANDLE parent = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, parentPid);
     if (!parent) return 3;
-    std::thread([parent] { WaitForSingleObject(parent, INFINITE); ExitProcess(0); }).detach();
+    std::thread([parent] { WaitForSingleObject(parent, INFINITE); leave(0); }).detach();
 
     std::wstring sid = sidOf(parent);
     if (sid.empty()) return 3;
@@ -115,5 +121,5 @@ int wmain(int argc, wchar_t** argv) {
     connected = true;
     if (!callerAllowed(pipe, parentPid)) return 6;
     serve(pipe);
-    return 0;
+    leave(0);
 }

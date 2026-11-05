@@ -25,9 +25,9 @@ nvapi_file(nvapi_lite_salend.h 92017f8e26f585601f4eaac475fa9e542eaa2f99a80e376dd
 nvapi_file(NvApiDriverSettings.h 95ffda903832840343a81189e052a0756774bd92e4b37f2dc49598d493f951d4)
 nvapi_file(amd64/nvapi64.lib 901e479e548d41c30688c7481f0c6353c0be7fdee978796d27d87c32e19ce172)
 
-add_executable(sb_helper src/main.cpp src/commands.cpp src/netpower.cpp src/nettop.cpp src/nvidia.cpp)
+add_executable(sb_helper src/main.cpp src/commands.cpp src/netpower.cpp src/nettop.cpp src/nvidia.cpp src/gpuoc.cpp src/driverlog.cpp src/fpsmeter.cpp)
 target_include_directories(sb_helper PRIVATE ${NVAPI_DIR})
 target_compile_definitions(sb_helper PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(sb_helper PRIVATE /W3 /utf-8)
-target_link_libraries(sb_helper PRIVATE ${NVAPI_DIR}/amd64/nvapi64.lib advapi32 ole32 oleaut32 wbemuuid iphlpapi ws2_32)
+target_link_libraries(sb_helper PRIVATE ${NVAPI_DIR}/amd64/nvapi64.lib advapi32 ole32 oleaut32 wbemuuid iphlpapi ws2_32 wevtapi)
 target_link_options(sb_helper PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'" /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup)

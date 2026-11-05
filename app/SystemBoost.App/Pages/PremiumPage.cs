@@ -51,11 +51,8 @@ public sealed class PremiumPage : UserControl
         ("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●"),
         ("자원 분배 · CPU 최대 사용량 제한", "—", "●"),
         ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "●"),
-        ("GPU 오버클럭 / 언더볼트 (Windows)", "—", "●"),
+        ("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "●"),
     };
-    // rows behind a feature that is not connected yet: shown as "준비 중"
-    private static readonly string[] NotReadyRows =
-        { "게임별 자동 최적화 (측정해서 효과 있는 것만)", "GPU 오버클럭 / 언더볼트 (Windows)" };
     private const string BoostRow = "게임 부스트";
     private readonly bool _boostReady;
 
@@ -87,7 +84,7 @@ public sealed class PremiumPage : UserControl
         Cell("기능", 0, 0, true); Cell("무료", 0, 1, true); Cell("프리미엄", 0, 2, true, true);
         for (int i = 0; i < Rows.Length; i++)
         {
-            bool pending = NotReadyRows.Contains(Rows[i].feature) || (!_boostReady && Rows[i].feature == BoostRow);
+            bool pending = !_boostReady && Rows[i].feature == BoostRow;
             Cell(Rows[i].feature, i + 1, 0);
             Cell(pending ? "준비 중" : Rows[i].free, i + 1, 1);
             Cell(pending ? "준비 중" : Rows[i].premium, i + 1, 2, accent: !pending && Rows[i].premium != "—");

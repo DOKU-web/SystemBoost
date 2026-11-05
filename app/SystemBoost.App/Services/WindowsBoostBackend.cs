@@ -5,7 +5,8 @@
 //   Stays until turned off   gpu.highperf, gpu.hags, gpu.driver, cpu.priority,
 //                            net.adapterpower, sys.gamemode, sys.dvr
 //   Only while a game runs   ram.standby, ram.workingset, cpu.ecores, cpu.power,
-//                            net.monitor, sys.focus
+//                            net.monitor, sys.focus, boost.profiles
+//   Only while the app runs  gpu.oc
 // Admin-only work goes through sb_helper (BoostHelper.cs).
 using Microsoft.Win32;
 using System;
@@ -28,7 +29,7 @@ namespace SystemBoost.App.Services;
 public sealed class BoostBackup
 {
     public string Feature { get; set; } = "";
-    public string Kind { get; set; } = "";     // hkcu, hags, ifeo, netpm, nv, power, wu, ecores
+    public string Kind { get; set; } = "";     // hkcu, hags, ifeo, netpm, nv, power, wu, ecores, oc
     public string Target { get; set; } = "";   // game path, exe name or adapter
     public string Key { get; set; } = "";
     public string Name { get; set; } = "";
@@ -47,10 +48,12 @@ public sealed class BoostState
     public List<string> OneClickOwned { get; set; } = new();  // what one-click turned on and must undo
     public int StandbyLimitMB { get; set; } = 1024;
     public List<string> TrimTargets { get; set; } = new();
+    public GpuChoice Gpu { get; set; } = new();
+    public Dictionary<string, GameProfile> GameProfiles { get; set; } = new();
 }
 
 [SupportedOSPlatform("windows")]
-public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
+public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
 {
     private const string GameBar = @"Software\Microsoft\GameBar";
     private const string GameConfig = @"System\GameConfigStore";
@@ -63,9 +66,9 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
     private const int HighPriorityClass = 3;
     private const int ExitWaitMs = 5000;
 
-    private static readonly string[] GameTime = { "ram.standby", "ram.workingset", "cpu.ecores", "cpu.power", "net.monitor", "sys.focus" };
+    private static readonly string[] GameTime = { "ram.standby", "ram.workingset", "cpu.ecores", "cpu.power", "net.monitor", "sys.focus", "boost.profiles" };
     private static readonly string[] PerGame = { "gpu.highperf", "cpu.priority", "gpu.driver" };
-    private static readonly string[] AdminKinds = { "hags", "ifeo", "netpm", "nv", "wu" };
+    private static readonly string[] AdminKinds = { "hags", "ifeo", "netpm", "nv", "wu", "oc" };
     private static readonly string[] BasicProfile = { "cpu.power", "cpu.ecores", "ram.workingset", "net.monitor", "sys.focus", "sys.gamemode", "sys.dvr" };
     private static readonly string[] FullProfile = BasicProfile.Append("ram.standby").ToArray();
     private static readonly (string start, string end)[] UpdatePauses =
@@ -173,6 +176,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
     // After a crash or a closed PC: what was only meant for the game goes back.
     private async Task RecoverAsync()
     {
+        await PutGpuBackAsync();
         if (RunningGames(ProcessNames()) != null) return;
         if (_s.OneClick) await OneClickOffAsync();
         await EndGameTimeAsync();
@@ -189,6 +193,9 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
             {
                 await EndGameTimeAsync();
                 if (_s.OneClick) await OneClickOffAsync();
+                // the helper does this too as it exits; here the backup is cleared as well
+                var gpu = _s.Backups.Where(b => b.Kind == "oc").ToList();
+                if (gpu.Count > 0 && _helper.Running) await RestoreAsync(gpu);
                 Save();
             }).Wait(ExitWaitMs);
         }
@@ -224,6 +231,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
 
     public async Task<string> ApplyAsync(string id)
     {
+        if (_measuring) return BusyMeasuring;
         await _gate.WaitAsync();
         try { var r = await ApplyCoreAsync(id, prompt: true); Save(); return r; }
         catch (Exception e) { return "실패했어요: " + e.Message; }
@@ -232,6 +240,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
 
     public async Task<string> RevertAsync(string id)
     {
+        if (_measuring && Measurable.Contains(id)) return BusyMeasuring;    // gpu.oc must always be able to go back
         await _gate.WaitAsync();
         try { var r = await RevertCoreAsync(id); Save(); return r; }
         catch (Exception e) { return "실패했어요: " + e.Message; }
@@ -248,6 +257,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
             _s.OneClick = false;
             _s.OneClickOwned.Clear();
             _s.Enabled.Clear();
+            _profileItems.Clear();
             if (_s.Backups.Any(IsAdminKind))
             {
                 var e = await _helper.EnsureAsync();
@@ -315,6 +325,8 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
             case "cpu.priority": return await ApplyPriorityAsync();
             case "gpu.driver": return await ApplyDriverAsync();
             case "net.adapterpower": return await ApplyAdapterPowerAsync();
+            case "gpu.oc": return await ApplyGpuTuningAsync();
+            case "boost.profiles" when !License.Allowed(PremiumFeature.PerGameProfiles): return "프리미엄 기능이에요 (바뀐 것 없음)";
         }
         if (!GameTime.Contains(id)) return "아직 준비 중이에요 (바뀐 것 없음)";
         if (id == "cpu.ecores" && EfficientMask() == 0) return "이 CPU는 E코어가 없어서 쓸 수 없어요 (바뀐 것 없음)";
@@ -331,6 +343,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
         return id switch
         {
             "ram.workingset" when _s.TrimTargets.Count == 0 => "켰어요. 아래에서 대상 프로그램을 고르세요",
+            "boost.profiles" => "켰어요. 아래에서 측정한 게임은 다음 실행부터 효과가 확인된 항목이 켜져요",
             _ => "켰어요. 게임이 실행되면 적용돼요." + limited,
         };
     }
@@ -341,6 +354,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
         if (GameTime.Contains(id))
         {
             _s.Enabled.Remove(id);
+            if (id == "boost.profiles") await EndGameProfileAsync();
             var r = await DeactivateAsync(id);
             return r ?? "껐어요";
         }
@@ -396,6 +410,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
             case "ifeo": return await HelperError(b.Existed ? new[] { "ifeo.set", b.Target, b.Value } : new[] { "ifeo.del", b.Target });
             case "netpm": return await HelperError("net.pm.set", b.Target, "1");
             case "nv": return await HelperError("nv.restore", b.Target, b.Name, b.Value);
+            case "oc": return await RestoreGpuAsync(b);
             case "wu": return await HelperError(b.Existed ? new[] { "wu.set", b.Name, b.Value } : new[] { "wu.del", b.Name });
             default: return null;
         }
@@ -605,6 +620,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
 
     private async Task TickAsync()
     {
+        await WatchGpuAsync();
         if (_s.Enabled.Count == 0 && !_s.OneClick && !_gameRunning) return;
         var game = RunningGames(ProcessNames());
         if (game != null && !_gameRunning)
@@ -621,6 +637,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
             _gameRunning = false;
             Log($"{_gameName} 종료를 감지했어요");
             _gameName = null;
+            _profileItems.Clear();
             await EndGameTimeAsync();
             if (_s.OneClick) Log(await OneClickOffAsync());
             Save();
@@ -664,6 +681,7 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
                 return $"백그라운드 프로그램 {MoveToEfficientCores()}개를 E코어로 옮겼어요";
             case "ram.workingset": return Trim();
             case "ram.standby": return $"여유 메모리가 {_s.StandbyLimitMB} MB 아래로 떨어지면 정리해요";
+            case "boost.profiles": return await ApplyGameProfileAsync();
             default: return "게임 중 다른 프로그램의 큰 전송을 살펴봐요";
         }
     }
@@ -697,8 +715,9 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
 
     private async Task InGameAsync()
     {
+        if (_measuring) return;     // nothing else may move while frames are compared
         var now = DateTime.UtcNow;
-        if (_s.Enabled.Contains("cpu.ecores") && now - _lastCores > TimeSpan.FromSeconds(10))
+        if (IsOn("cpu.ecores") && now - _lastCores > TimeSpan.FromSeconds(10))
         {
             _lastCores = now;
             MoveToEfficientCores();
@@ -855,6 +874,14 @@ public sealed class WindowsBoostBackend : IBoostBackend, IDisposable
             catch (Exception) { }
             finally { p.Dispose(); }
         }
+    }
+
+    private bool OnHighPlan()
+    {
+        if (PowerGetActiveScheme(IntPtr.Zero, out var ptr) != 0) return false;
+        var active = Marshal.PtrToStructure<Guid>(ptr);
+        LocalFree(ptr);
+        return IsHighPerformance(active);
     }
 
     private string ApplyPowerPlan()

@@ -78,6 +78,25 @@ inline bool isIsoTime(const std::string& s) {
 
 inline bool isBit(const std::string& s) { return s == "0" || s == "1"; }
 
+/// A whole decimal number from lo to hi.
+inline bool isInt(const std::string& s, long long lo, long long hi) {
+    size_t digits = !s.empty() && s[0] == '-' ? 1 : 0;
+    if (s.size() == digits || s.size() > 11) return false;
+    long long v = 0;
+    for (size_t i = digits; i < s.size(); i++) {
+        if (!std::isdigit((unsigned char)s[i])) return false;
+        v = v * 10 + (s[i] - '0');
+    }
+    if (digits) v = -v;
+    return v >= lo && v <= hi;
+}
+
+// What the app may ask of the GPU: much tighter than the driver's own limits.
+inline bool isCoreOffset(const std::string& s) { return isInt(s, -200, 100); }
+inline bool isMemOffset(const std::string& s) { return isInt(s, -500, 300); }
+inline bool isTempLimit(const std::string& s) { return isInt(s, 40, 87); }
+inline bool isPowerWatts(const std::string& s) { return isInt(s, 10, 1000); }
+
 /// Value that was in the driver profile before: "none" or a decimal number.
 inline bool isOldValue(const std::string& s) {
     if (s == "none") return true;
