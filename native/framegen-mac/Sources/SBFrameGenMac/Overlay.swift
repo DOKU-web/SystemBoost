@@ -12,8 +12,10 @@ final class Overlay {
     init(device: MTLDevice) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 16, height: 16),
                           styleMask: .borderless, backing: .buffered, defer: false)
-        window.isOpaque = true
-        window.backgroundColor = .black
+        // Not opaque: macOS treats a window fully under an opaque one as occluded and its
+        // drawing stops, and the capture with it. Generated frames have alpha 1 and stay solid.
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.hasShadow = false
         window.ignoresMouseEvents = true          // all input goes to the game
         window.sharingType = .none                // not captured by us or by recorders
@@ -25,7 +27,7 @@ final class Overlay {
         layer.framebufferOnly = false
         layer.displaySyncEnabled = true
         layer.maximumDrawableCount = 2
-        layer.isOpaque = true
+        layer.isOpaque = false
         let view = NSView(frame: window.contentLayoutRect)
         view.wantsLayer = true
         view.layer = layer

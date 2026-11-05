@@ -60,12 +60,13 @@ sleep 20
 screencapture -x "$OUT/screen-granted.png" 2>> "$OUT/screen-error.txt"
 pkill -x SystemBoost; sleep 2
 
-# A moving page gives the engine real source frames; a still window only delivers two.
+# A page moving at 30 fps gives the engine real source frames; a still window only delivers two.
+# Off runs without the overlay, so it shows whether the overlay is what stops the capture.
 cat > "$OUT/moving.html" <<'EOF'
 <!doctype html><title>SB moving test</title>
 <style>html,body{margin:0;height:100%;background:#111}
-#b{position:absolute;top:120px;width:160px;height:160px;background:#ff7a1a;animation:m 2s linear infinite alternate}
-@keyframes m{from{left:0}to{left:700px}}</style><div id=b></div>
+#b{position:absolute;top:120px;width:160px;height:160px;background:#ff7a1a}</style><div id=b></div>
+<script>let x=0,d=12;setInterval(()=>{x+=d;if(x<0||x>700)d=-d;b.style.left=x+'px'},33)</script>
 EOF
 open -a Safari "$OUT/moving.html"; sleep 8
 osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 2
@@ -101,12 +102,12 @@ for line in open(sys.argv[1]):
 use = rows[4:]
 if use:
     med = lambda k: round(statistics.median(r[k] for r in use), 1)
-    print(f"{len(rows)} stats, source {med('srcFps')} output {med('outFps')} x{med('multiplier')} gen {med('genMs')} ms analyze {med('analyzeMs')} ms hz {med('refreshHz')} late {use[-1]['late']} skipped {use[-1]['skipped']}")
+    print(f"{len(rows)} stats, source {med('srcFps')} output {med('outFps')} x{med('multiplier')} gen {med('genMs')} ms analyze {med('analyzeMs')} ms hz {med('refreshHz')} late {use[-1]['late']} skipped {use[-1]['skipped']} source frames {rows[-1]['srcFrames']}")
 else:
     print(f"{len(rows)} stats")
 EOF
 if [ -n "$ID" ]; then
-  for MODE in x2 auto; do
+  for MODE in off x2 auto; do
     osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 1
     (sleep 15) | limit 30 "$BIN/sb-framegen-mac" --hwnd "$ID" --mode "$MODE" --quality balanced > "$OUT/engine-$MODE.txt" 2>&1 &
     sleep 9
