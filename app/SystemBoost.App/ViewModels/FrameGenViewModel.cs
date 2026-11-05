@@ -143,7 +143,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             double hz = r.TryGetProperty("refreshHz", out var h) ? h.GetDouble() : 0;
             Status = $"실행 중 · 캡처 {cap} · 생성 GPU {gpu} · {hz:0}Hz";
         };
-        _engine.Message += (type, msg) => Status = (type == "error" ? "오류: " : "알림: ") + msg;
+        _engine.Message += (type, msg) => Status = type == "error" ? "오류: " + Friendly(msg) : "알림: " + msg;
         _engine.Exited += () =>
         {
             EndSession();
@@ -160,7 +160,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         var (list, err) = await FrameGenEngine.ListWindowsAsync();
         Windows.Clear();
         foreach (var w in list) Windows.Add(w);
-        if (err != null) Status = "오류: " + err;
+        if (err != null) Status = "오류: " + Friendly(err);
         if (SelectedWindow == null && Windows.Count > 0) SelectedWindow = Windows[0];
         if (Gpus.Count == 0)
         {
@@ -171,6 +171,11 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     }
 
     public void Notice(string text) => Status = text;
+
+    // The engine reports in English; every Mac user meets this one on the first run.
+    private static string Friendly(string msg) => msg.StartsWith("screen recording permission")
+        ? "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요."
+        : msg;
 
     public void Toggle()
     {
