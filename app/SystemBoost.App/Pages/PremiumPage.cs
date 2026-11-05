@@ -187,9 +187,11 @@ public sealed class PremiumPage : UserControl
         var keyP = new StackPanel { Spacing = 10 };
         keyP.Children.Add(Ui.Text("라이선스 키", "h2"));
         keyP.Children.Add(_keyNote);
-        var keyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var keyRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };   // keeps a long key inside the card
         keyRow.Children.Add(_key);
         var act = Ui.Button("등록", "primary");
+        act.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(act, 1);
         act.Click += (_, _) =>
         {
             var err = License.Activate(_key.Text ?? "");
@@ -198,6 +200,8 @@ public sealed class PremiumPage : UserControl
         };
         keyRow.Children.Add(act);
         var off = Ui.Button("이 기기에서 해제", "ghost");
+        off.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(off, 2);
         off.Click += (_, _) => { License.Deactivate(); _msg.Text = "이 기기에서 프리미엄을 해제했어요"; Refresh(); };
         keyRow.Children.Add(off);
         keyP.Children.Add(keyRow);

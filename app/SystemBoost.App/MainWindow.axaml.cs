@@ -101,7 +101,7 @@ public partial class MainWindow : Window
         var show = Updater.State == UpdateState.Ready && !_updateDismissed;
         UpdateBarBox.IsVisible = show;
         if (!show) return;
-        UpdateBarText.Text = $"새 버전 {Updater.NewVersion}이 준비됐어요. 지금 다시 시작하거나, 앱을 끌 때 자동으로 적용돼요.";
+        UpdateBarText.Text = $"새 버전({Updater.NewVersion})이 준비됐어요. 지금 다시 시작하거나, 앱을 끌 때 자동으로 적용돼요.";
         UpdateRestart.Content = _frameGen.Running ? "프레임 생성 끄고 다시 시작" : "지금 다시 시작";
     }
     private bool _updateDismissed;
