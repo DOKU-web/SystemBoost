@@ -38,6 +38,7 @@
                   <TextBlock Classes="big accent">
                     <Run Text="{Binding SrcFps}" /><Run Text=" → " Foreground="{StaticResource SbMuted}" /><Run Text="{Binding OutFps}" /><Run Text=" fps" FontSize="13" Foreground="{StaticResource SbMuted}" />
                   </TextBlock>
+                  <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding AutoReason}" IsVisible="{Binding HasAutoReason}" />
                 </StackPanel>
               </Border>
               <Border Grid.Column="4" Classes="tile"><StackPanel Spacing="6"><TextBlock Classes="muted" Text="현재 배수" />

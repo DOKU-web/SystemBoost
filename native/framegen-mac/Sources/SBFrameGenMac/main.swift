@@ -252,7 +252,7 @@ final class Engine {
             let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
             let active = commands.enabled && (front == gamePid || front == getpid())
             if !active {
-                if wasActive { setOverlay(false); wasActive = false }
+                if wasActive { meter.pause(t0); setOverlay(false); wasActive = false }
                 _ = capture.take()
                 held = nil
                 Thread.sleep(forTimeInterval: 0.02)
@@ -308,14 +308,14 @@ final class Engine {
             }
 
             let t2 = now()
-            if meter.elapsed(t2) * 1000 >= Double(s.statsMs) {
-                let m = meter.take(t2)
+            if meter.elapsed(t2) * 1000 >= Double(s.statsMs), let m = meter.take(t2) {
                 Out.emit(["type": "stats", "srcFps": m.srcFps, "outFps": m.outFps, "multiplier": m.multiplier,
                           "mode": mode.rawValue, "refreshHz": refreshHz, "delayMs": pacer.delayMs,
                           "addedLatencyMs": pacer.addedLatencyMs, "genMs": fg.genMs, "analyzeMs": fg.analyzeMs,
                           "transferMs": 0, "late": pacer.late, "skipped": pacer.skipped,
                           "srcFrames": meter.totalSrc, "outFrames": meter.totalOut, "repeatFrames": meter.totalRepeat,
-                          "measuredSec": m.seconds, "intervalMs": pacer.interval * 1000])
+                          "measuredSec": m.seconds, "activeSec": meter.activeSec,
+                          "divider": mode == .auto ? pacer.divider : 1, "intervalMs": pacer.interval * 1000])
             }
         }
         capture.stop()

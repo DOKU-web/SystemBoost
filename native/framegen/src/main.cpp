@@ -302,6 +302,7 @@ int Run(const Settings& s) {
                             (s.alwaysActive || fgw == gameRoot || fgw == overlay.Hwnd());
         if (!active) {
             if (wasActive) {
+                meter.pause(now);
                 overlay.Show(false);
                 cursor.Restore();
                 fg.SetCursor(nullptr, 0, 0, 0, 0);
@@ -403,8 +404,8 @@ int Run(const Settings& s) {
 
         // 4) stats
         const double t2 = QpcNow();
-        if (meter.elapsed(t2) * 1000.0 >= s.statsMs) {
-            const FrameMeter::Sample m = meter.take(t2);
+        FrameMeter::Sample m;
+        if (meter.elapsed(t2) * 1000.0 >= s.statsMs && meter.take(t2, m)) {
             UINT shown = 0;
             if (overlay.ShownCount(shown)) { totalShown += shown - lastShown; lastShown = shown; }
             char buf[900];
@@ -413,13 +414,15 @@ int Run(const Settings& s) {
                           "\"mode\":%d,\"refreshHz\":%.2f,\"delayMs\":%.1f,\"addedLatencyMs\":%.1f,"
                           "\"genMs\":%.2f,\"analyzeMs\":%.2f,\"transferMs\":%.2f,\"late\":%llu,\"skipped\":%llu,"
                           "\"srcFrames\":%llu,\"outFrames\":%llu,\"repeatFrames\":%llu,\"shownFrames\":%llu,"
-                          "\"clockSec\":%.4f,\"measuredSec\":%.3f,\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f}",
+                          "\"clockSec\":%.4f,\"measuredSec\":%.3f,\"activeSec\":%.3f,\"divider\":%d,"
+                          "\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f}",
                           m.srcFps(), m.outFps(), m.multiplier(), int(mode), disp.hz,
                           pacer.delayMs(), pacer.addedLatencyMs(), fg.GenMs(), fg.AnalyzeMs(),
                           xcopy ? xcopy->LastMs() : 0.0, (unsigned long long)pacer.stats.late,
                           (unsigned long long)pacer.stats.skipped, (unsigned long long)meter.totalSrc(),
                           (unsigned long long)meter.totalOut(), (unsigned long long)meter.totalRepeat(),
-                          (unsigned long long)totalShown, t2, m.seconds, pacer.interval() * 1000.0,
+                          (unsigned long long)totalShown, t2, m.seconds, meter.activeSec(),
+                          mode == MulMode::Auto ? pacer.divider() : 1, pacer.interval() * 1000.0,
                           pacer.percentile(0.1) * 1000.0, pacer.percentile(0.5) * 1000.0,
                           pacer.percentile(0.9) * 1000.0);
             Emit(buf);

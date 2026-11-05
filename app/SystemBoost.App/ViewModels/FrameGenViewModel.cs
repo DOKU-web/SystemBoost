@@ -109,14 +109,29 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public string AnalyzeMs { get => _analyze; private set => Set(ref _analyze, value); }
     public string Late { get => _late; private set => Set(ref _late, value); }
     public string Transfer { get => _transfer; private set => Set(ref _transfer, value); }
+    private string _autoReason = "";
+    public string AutoReason { get => _autoReason; private set { if (Set(ref _autoReason, value)) Raise(nameof(HasAutoReason)); } }
+    public bool HasAutoReason => _autoReason.Length > 0;
+
+    /// Auto shows a new image every `divider` refreshes, so the gaps between images stay equal.
+    /// Empty when every refresh gets one: the output simply matches the monitor.
+    public static string AutoReasonText(double refreshHz, int divider)
+    {
+        if (divider < 2 || refreshHz <= 0) return "";
+        double hz = Math.Round(refreshHz);   // 143.97 reads as 144
+        string part = divider == 2 ? "절반" : $"{divider}분의 1";
+        return $"화면 간격이 고르게 {hz.ToString("0", Inv)}Hz의 {part}({(hz / divider).ToString("0.#", Inv)}fps)에 맞췄어요";
+    }
 
     /// Last ~60 samples for the chart (src, out).
     public List<(double src, double outp)> History { get; } = new();
     public event Action? HistoryChanged;
 
-    // session accumulation
+    // Session figures are differences of the engine's running totals, so a late or lost
+    // stats line changes nothing.
     private DateTime _sessionStart;
-    private double _sumSrc, _sumOut, _sumLat; private int _n; private long _lastLate;
+    private FrameGenStats? _first, _last;
+    private double _latencyMsSec;   // added latency x active seconds
 
     public FrameGenViewModel()
     {
@@ -133,6 +148,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         {
             EndSession();
             Running = false;
+            AutoReason = "";
             ResourceManagers.GameProcess = null;
             if (!Status.StartsWith("오류")) Status = "중지됨";
         };
@@ -168,7 +184,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             Running = true;
             Status = "시작하는 중…";
             GameInfo = SelectedWindow.ToString();
-            _sessionStart = DateTime.Now; _sumSrc = _sumOut = _sumLat = 0; _n = 0; _lastLate = 0;
+            _sessionStart = DateTime.Now; _first = _last = null; _latencyMsSec = 0;
         }
         catch (Exception e) { Status = "오류: " + e.Message; }
     }
@@ -186,14 +202,20 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         History.Add((s.SrcFps, s.OutFps));
         if (History.Count > 60) History.RemoveAt(0);
         HistoryChanged?.Invoke();
-        if (s.SrcFps > 0) { _sumSrc += s.SrcFps; _sumOut += s.OutFps; _sumLat += s.AddedLatencyMs; _n++; _lastLate = s.Late; }
+        AutoReason = s.Mode == 0 ? AutoReasonText(s.RefreshHz, s.Divider) : "";
+        _first ??= s;
+        if (_last != null) _latencyMsSec += s.AddedLatencyMs * Math.Max(0, s.ActiveSec - _last.ActiveSec);
+        _last = s;
     }
 
     private void EndSession()
     {
-        if (_n == 0 || SelectedWindow == null) return;
-        Sessions.Insert(0, new SessionRecord(_sessionStart, SelectedWindow.Title, Mode, _sumSrc / _n, _sumOut / _n, _sumLat / _n, _lastLate));
-        _n = 0;
+        if (_first is not { } a || _last is not { } b || SelectedWindow == null) return;
+        _first = _last = null;
+        double sec = b.ActiveSec - a.ActiveSec;
+        if (sec <= 0) return;
+        Sessions.Insert(0, new SessionRecord(_sessionStart, SelectedWindow.Title, Mode, (b.SrcFrames - a.SrcFrames) / sec,
+                                             (b.OutFrames - a.OutFrames) / sec, _latencyMsSec / sec, b.Late));
         SaveSessions();
     }
 

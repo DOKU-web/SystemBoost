@@ -21,6 +21,10 @@ echo "== 2. frame pacing simulation"
 g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/pacer_sim.cpp" -o "$WORK/pacer_sim"
 "$WORK/pacer_sim" | tee "$OUT/pacing.txt"
 
+echo "== 2b. frame meter"
+g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/meter_test.cpp" -o "$WORK/meter_test"
+"$WORK/meter_test" | tee "$OUT/meter.txt"
+
 echo "== 3. interpolation quality (reference)"
 python3 -I "$FG/tests/measure_quality.py" "$FG" | tail -16 | tee "$OUT/quality.txt"
 

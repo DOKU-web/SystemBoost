@@ -30,7 +30,8 @@ public sealed record FrameGenOptions(string Mode, int MaxMultiplier, string Qual
 
 public sealed record FrameGenStats(double SrcFps, double OutFps, double Multiplier, double RefreshHz,
                                    double DelayMs, double AddedLatencyMs, double GenMs, double AnalyzeMs,
-                                   double TransferMs, long Late, long Skipped);
+                                   double TransferMs, long Late, long Skipped, int Mode, int Divider,
+                                   long SrcFrames, long OutFrames, double ActiveSec);
 
 public static class Platform
 {
@@ -161,7 +162,8 @@ public sealed class FrameGenEngine : IDisposable
     private static FrameGenStats ParseStats(JsonElement r) => new(
         D(r, "srcFps"), D(r, "outFps"), D(r, "multiplier"), D(r, "refreshHz"), D(r, "delayMs"),
         D(r, "addedLatencyMs"), D(r, "genMs"), D(r, "analyzeMs"), D(r, "transferMs"),
-        (long)D(r, "late"), (long)D(r, "skipped"));
+        (long)D(r, "late"), (long)D(r, "skipped"), (int)D(r, "mode"), (int)D(r, "divider"),
+        (long)D(r, "srcFrames"), (long)D(r, "outFrames"), D(r, "activeSec"));
 
     // ---- one-shot queries ---------------------------------------------------
     private static async Task<JsonElement?> QueryAsync(string arg)

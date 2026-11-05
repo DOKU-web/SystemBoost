@@ -1,5 +1,8 @@
 // Port of native/framegen/src/FrameMeter.h. Keep both in sync.
 final class FrameMeter {
+    static let rateSec = 1.0
+    static let settleSec = 0.5
+
     struct Sample {
         var seconds = 0.0
         var src: UInt64 = 0
@@ -10,20 +13,26 @@ final class FrameMeter {
         var multiplier: Double { src > 0 ? Double(out) / Double(src) : 0 }
     }
 
-    private static let windowCount = 4
+    private static let windowCount = 11
     private var start = 0.0
+    private var settleUntil = 0.0
     private var cur = Sample()
     private var windows = [Sample]()
-    private var next = 0
     private(set) var totalSrc: UInt64 = 0
     private(set) var totalOut: UInt64 = 0
     private(set) var totalRepeat: UInt64 = 0
+    private(set) var activeSec = 0.0
 
     func reset(_ now: Double) {
         start = now
+        settleUntil = now + Self.settleSec
         cur = Sample()
         windows.removeAll()
-        next = 0
+    }
+
+    func pause(_ now: Double) {
+        activeSec += now - start
+        start = now
     }
 
     func onSource() { cur.src += 1; totalSrc += 1 }
@@ -34,19 +43,24 @@ final class FrameMeter {
 
     func elapsed(_ now: Double) -> Double { now - start }
 
-    func take(_ now: Double) -> Sample {
+    /// Ends the window at `now`. Non-nil once the result covers at least rateSec.
+    func take(_ now: Double) -> Sample? {
         cur.seconds = now - start
-        if windows.count < Self.windowCount { windows.append(cur) } else { windows[next] = cur }
-        next = (next + 1) % Self.windowCount
+        activeSec += cur.seconds
+        let settled = start >= settleUntil
         start = now
+        let done = cur
         cur = Sample()
-        var sum = Sample()
-        for w in windows {
-            sum.seconds += w.seconds
-            sum.src += w.src
-            sum.out += w.out
-            sum.repeated += w.repeated
+        if !settled { return nil }
+        windows.append(done)
+        if windows.count > Self.windowCount { windows.removeFirst() }
+        var rate = Sample()
+        for w in windows.reversed() where rate.seconds < Self.rateSec {
+            rate.seconds += w.seconds
+            rate.src += w.src
+            rate.out += w.out
+            rate.repeated += w.repeated
         }
-        return sum
+        return rate.seconds >= Self.rateSec ? rate : nil
     }
 }
