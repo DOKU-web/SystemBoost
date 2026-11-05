@@ -1,0 +1,19 @@
+# Installs the newest released Mac package on a real macOS machine and starts it.
+# Started by hand: gh workflow run mac-smoke.yml. It publishes nothing.
+name: mac-smoke
+on:
+  workflow_dispatch:
+
+jobs:
+  apple-silicon:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the released package
+        run: curl -fsSL -o SystemBoost.pkg "https://github.com/${{ github.repository }}/releases/latest/download/SystemBoost-macOS-AppleSilicon.pkg"
+      - name: Install and start
+        run: bash tools/mac_smoke.sh SystemBoost.pkg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: mac-smoke, path: smoke }
