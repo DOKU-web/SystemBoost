@@ -3,7 +3,7 @@
 # shortcut gets the new build. The copy uses the same settings and license as the installed app.
 #   powershell -ExecutionPolicy Bypass -File build\windows\update_desktop_launcher.ps1
 #   ... -Restore   points the shortcut back at the installed app
-# The local post-commit hook runs this for commits that touch the app or the engines.
+# Run this after every change to the app or the engines.
 param([switch]$Restore)
 $ErrorActionPreference = "Continue"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
