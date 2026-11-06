@@ -6,7 +6,9 @@ using SystemBoost.App.Services;
 using SystemBoost.App.ViewModels;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 
 namespace SystemBoost.App.Pages;
 
@@ -225,7 +227,35 @@ public sealed class SettingsPage : UserControl
                                  Ui.Text(portable ? "포터블" : "설치판", "label")));
         root.Children.Add(Ui.Card(list));
         root.Children.Add(Ui.Card(UpdateCard()));
+        root.Children.Add(Ui.Card(LegalCard()));
         Content = new ScrollViewer { Content = root };
+    }
+
+    // The copyright line comes from the project file; the full texts ship next to the app.
+    private static Control LegalCard()
+    {
+        var p = new StackPanel { Spacing = 10 };
+        p.Children.Add(Ui.Text("저작권과 오픈소스 고지", "h2"));
+        var copyright = typeof(SettingsPage).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright;
+        if (copyright != null) p.Children.Add(Ui.Text(copyright, "label"));
+        p.Children.Add(Ui.Text("SystemBoost에는 오픈소스 구성 요소가 들어 있어요. 각 구성 요소의 저작권은 해당 권리자에게 있고, 각자의 라이선스를 따라요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text(
+            "Avalonia (MIT) · ANGLE (BSD-3-Clause) · SkiaSharp, HarfBuzzSharp (MIT) · MicroCom.Runtime (MIT) · " +
+            "NuGet.Versioning (Apache-2.0) · Tmds.DBus.Protocol (MIT) · Velopack (MIT) · .NET 8 (MIT) · NVAPI (MIT)", "muted", wrap: true));
+        if (Platform.IsMac)
+            p.Children.Add(Ui.Text("윈도우 게임 기능은 Wine (LGPL-2.1-or-later), DXVK-macOS (zlib), MoltenVK (Apache-2.0)를 처음 쓸 때 내려받아요. Wine 소스: https://gitlab.winehq.org/wine/wine", "muted", wrap: true));
+        var status = Ui.Text("전문 파일을 찾을 수 없어요. 앱을 다시 설치해 주세요.", "muted", wrap: true);
+        status.IsVisible = false;
+        var open = Ui.Button("라이선스 전문 보기", "ghost");
+        open.Click += async (_, _) =>
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "THIRD_PARTY_NOTICES.txt");
+            if (!File.Exists(path)) { status.IsVisible = true; return; }
+            if (TopLevel.GetTopLevel(open) is Window owner) await new NoticesDialog(path).ShowDialog(owner);
+        };
+        p.Children.Add(open);
+        p.Children.Add(status);
+        return p;
     }
 
     // automatic updates (installer / portable / macOS builds; Steam updates itself)

@@ -194,4 +194,4 @@ stdin: `mode x3`, `sharp 0.4`, `enable`, `disable`, `quit`. stdin이 닫히면(�
 
 ## 라이선스
 
-모든 코드와 셰이더는 이 프로젝트용으로 새로 작성했습니다. 외부 코드(Lossless Scaling, AMD FSR, NVIDIA NIS 등)는 쓰지 않았습니다.
+모든 코드와 셰이더는 이 프로젝트용으로 새로 작성했고, 외부 코드는 쓰지 않았습니다. 앱 전체의 고지는 저장소 최상위의 `LICENSE`와 `THIRD_PARTY_NOTICES.txt`를 보세요.

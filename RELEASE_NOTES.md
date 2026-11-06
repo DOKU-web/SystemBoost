@@ -1,3 +1,11 @@
+## SystemBoost 0.8.5
+
+### 저작권과 오픈소스 고지
+- 설정 화면에 저작권 표시와 오픈소스 고지를 넣었어요. "라이선스 전문 보기"로 전문을 앱에서 볼 수 있어요.
+- 앱에 들어 있는 구성 요소의 라이선스 전문을 `THIRD_PARTY_NOTICES.txt`로, 앱의 권리 표시를 `LICENSE.txt`로 함께 설치해요.
+- 빠져 있던 ANGLE, SkiaSharp, HarfBuzzSharp, MicroCom.Runtime, NuGet.Versioning, Tmds.DBus.Protocol 고지를 추가했어요.
+- 프레임 생성, 게임 부스트 등 다른 기능은 바뀌지 않았어요.
+
 ## SystemBoost 0.8.4
 
 0.8.0에서 바로 올려도 아래 0.8.1·0.8.2 내용이 모두 들어 있어요.

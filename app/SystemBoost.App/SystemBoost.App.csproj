@@ -7,7 +7,11 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>SystemBoost</AssemblyName>
     <RootNamespace>SystemBoost.App</RootNamespace>
-    <Version>0.8.4</Version>
+    <Version>0.8.5</Version>
+    <Product>SystemBoost</Product>
+    <Company>DOKKU</Company>
+    <Authors>DOKKU</Authors>
+    <Copyright>© 2026 DOKKU. All rights reserved.</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\assets\brand\SystemBoost.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
@@ -25,6 +29,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets/wine-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\THIRD_PARTY_NOTICES.txt" Link="THIRD_PARTY_NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets\SystemBoost.ico" />
     <AvaloniaResource Include="Assets\icon_128.png" />
   </ItemGroup>

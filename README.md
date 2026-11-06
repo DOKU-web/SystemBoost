@@ -119,7 +119,7 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
 - 설치 프로그램(.exe)이나 Windows용 Steam을 보틀 안에 설치하고, "설치된 게임 찾기"로 목록에 추가합니다. "실행 + 프레임 생성"으로 게임을 켠 뒤 그 창에 프레임 생성을 겁니다.
 - **안 되는 것**: 커널 안티치트(EasyAntiCheat, BattlEye, Vanguard 등) 게임은 대부분 실행되지 않습니다. 스타시티즌도 EAC를 써서 실행되지 않을 가능성이 높습니다. 게임마다 호환성이 다르고 윈도우 PC보다 느릴 수 있습니다.
 - 확인 필요: Wine 빌드에 MoltenVK가 들어 있는지(없으면 DXVK가 동작하지 않고 WineD3D로 실행), 컷신 재생용 GStreamer 필요 여부. 실제 Mac에서 확인해야 합니다.
-- 서드파티 라이선스: `THIRD_PARTY_NOTICES.md`
+- 권리와 라이선스: `LICENSE`, 외부 구성 요소는 `THIRD_PARTY_NOTICES.txt`
 
 ## 가상 메모리 (Windows, RAM 확보 메뉴)
 `Services/VirtualMemory.cs`, `Pages/VirtualMemoryCard.cs`. 설치된 RAM·지금 설정·드라이브 남은 공간을 보여 주고, 자동(Windows) / 권장(게임용: RAM만큼 시작, 최대 2배, 드라이브에 15GB 또는 10%는 남김) / 직접 입력 중 하나를 골라 관리자 확인 한 번으로 저장합니다. 처음 설정을 백업해 두고 '원래대로'로 되돌립니다. 다시 시작해야 적용되고, '지금 다시 시작'은 두 번 눌러야 실행됩니다.

@@ -1,0 +1,11 @@
+Copyright (c) 2026 DOKKU. All rights reserved.
+
+이 저장소의 코드, 셰이더, 디자인, 문서에 대한 권리는 DOKKU에게 있습니다.
+코드가 공개되어 있어도 사용, 복제, 수정, 배포를 허락하는 것은 아닙니다.
+별도의 서면 허락 없이 이 코드를 사용, 복제, 수정, 재배포, 판매할 수 없습니다.
+
+외부 구성 요소는 각자의 라이선스를 따릅니다. THIRD_PARTY_NOTICES.txt를 보세요.
+
+This repository is proprietary. Its visibility grants no permission to use,
+copy, modify, distribute or sell it. Third-party components stay under their
+own licenses, listed in THIRD_PARTY_NOTICES.txt.
