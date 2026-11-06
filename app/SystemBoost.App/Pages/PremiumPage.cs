@@ -15,8 +15,8 @@ public sealed class PremiumPage : UserControl
     // Prices shown in the app. TODO: set real prices (must match the shop / Steam).
     public const string PriceMonthly = "₩2,900 / 월";
     public const string PriceYearly = "₩19,900 / 년";
-    public const string PriceUltraMonthly = "₩4,900 / 월";
-    public const string PriceUltraYearly = "₩34,900 / 년";
+    public const string PriceUltraMonthly = "₩8,900 / 월";
+    public const string PriceUltraYearly = "₩59,900 / 년";
     public const string PriceSteamDlc = "₩14,000";
 
     private readonly TextBlock _state = Ui.Text("", "h2");
