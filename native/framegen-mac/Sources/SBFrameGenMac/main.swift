@@ -1,7 +1,7 @@
 // SystemBoost FrameGen for macOS - entry point. Same CLI options and JSON
 // protocol as native/framegen (Windows):
 //   stdout: {"type":"ready"|"stats"|"warning"|"error"|"exit"|"gpus"|"windows", ...}
-//   stdin : "mode auto|x2|x3|x4|off", "sharp 0..1", "enable", "disable", "quit"
+//   stdin : "mode auto|x2|x3|x4|x6|x8|off", "sharp 0..1", "enable", "disable", "quit"
 // Runs next to the game; never touches the game process (screen capture only).
 import AppKit
 import CoreGraphics

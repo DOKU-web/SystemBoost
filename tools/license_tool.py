@@ -1,7 +1,7 @@
 """SystemBoost license keys (ECDSA P-256, matches app/.../Services/License.cs).
 
   python3 license_tool.py genkey  <private.pem>             -> prints the public key for License.PublicKeyB64
-  python3 license_tool.py sign    <private.pem> <email> [--days N] [--plan premium]
+  python3 license_tool.py sign    <private.pem> <email> [--days N] [--plan premium|ultra]
                                                             -> prints a license key (no --days = no expiry)
 
 Key format: base64url(payload JSON) "." base64url(r||s)   (IEEE P1363 signature,

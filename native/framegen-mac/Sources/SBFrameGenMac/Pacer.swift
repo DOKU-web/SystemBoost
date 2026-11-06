@@ -2,7 +2,7 @@
 // the C++ version is the one covered by tests/pacer_sim.cpp.
 import Foundation
 
-enum MulMode: Int { case auto = 0, off = 1, x2 = 2, x3 = 3, x4 = 4 }
+enum MulMode: Int { case auto = 0, off = 1, x2 = 2, x3 = 3, x4 = 4, x6 = 6, x8 = 8 }
 
 struct PacerConfig {
     var mode: MulMode = .auto

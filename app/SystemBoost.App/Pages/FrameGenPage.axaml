@@ -92,29 +92,31 @@
             <Button x:Name="ApplyButton" Classes="primary" Content="적용 (다시 시작)" />
             <Button x:Name="DefaultsButton" Classes="ghost" Content="기본값" />
           </StackPanel>
-          <StackPanel>
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"><StackPanel>
             <Border Classes="row" BorderThickness="0">
-              <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="8">
                 <StackPanel Spacing="2"><TextBlock Classes="label" Text="배수" />
                   <TextBlock Classes="muted" Text="자동 = 모니터 주사율에 맞춰 채움" /></StackPanel>
-                <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="ModeSeg" Orientation="Horizontal">
+                <Border Classes="segbox" HorizontalAlignment="Right"><StackPanel x:Name="ModeSeg" Orientation="Horizontal">
                   <ToggleButton Classes="seg" Content="자동" Tag="auto" /><ToggleButton Classes="seg" Content="2배" Tag="x2" />
                   <ToggleButton Classes="seg" Content="3배" Tag="x3" /><ToggleButton Classes="seg" Content="4배" Tag="x4" />
+                  <ToggleButton Classes="seg" Content="6배" Tag="x6" /><ToggleButton Classes="seg" Content="8배" Tag="x8" />
                   <ToggleButton Classes="seg" Content="끄기" Tag="off" /></StackPanel></Border>
-              </Grid>
+              </StackPanel>
             </Border>
             <Border Classes="row">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="label" Text="자동 최대 배수" VerticalAlignment="Center" />
                 <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="MaxSeg" Orientation="Horizontal">
                   <ToggleButton Classes="seg" Content="2" Tag="2" /><ToggleButton Classes="seg" Content="3" Tag="3" />
-                  <ToggleButton Classes="seg" Content="4" Tag="4" /></StackPanel></Border>
+                  <ToggleButton Classes="seg" Content="4" Tag="4" /><ToggleButton Classes="seg" Content="6" Tag="6" />
+                  <ToggleButton Classes="seg" Content="8" Tag="8" /></StackPanel></Border>
               </Grid>
             </Border>
             <Border Classes="row">
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Spacing="2"><TextBlock Classes="label" Text="품질" />
-                  <TextBlock Classes="muted" Text="높을수록 GPU를 더 써요. 밀리면 자동으로 낮춰요" /></StackPanel>
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="높을수록 GPU를 더 써요. 밀리면 자동으로 낮춰요" /></StackPanel>
                 <Border Grid.Column="1" Classes="segbox"><StackPanel x:Name="QualitySeg" Orientation="Horizontal">
                   <ToggleButton Classes="seg" Content="저사양" Tag="low" /><ToggleButton Classes="seg" Content="성능" Tag="performance" />
                   <ToggleButton Classes="seg" Content="균형" Tag="balanced" />
@@ -123,8 +125,8 @@
             </Border>
             <Border Classes="row">
               <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Spacing="2"><TextBlock Classes="label" Text="프레임 생성 GPU (듀얼 GPU)" />
-                  <TextBlock Classes="muted" Text="내장 그래픽에 맡기면 외장 GPU는 게임만 처리" /></StackPanel>
+                <StackPanel Spacing="2"><TextBlock Classes="label" TextWrapping="Wrap" Text="프레임 생성 GPU (듀얼 GPU)" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="내장 그래픽에 맡기면 외장 GPU는 게임만 처리" /></StackPanel>
                 <ComboBox Grid.Column="1" ItemsSource="{Binding Gpus}" SelectedItem="{Binding SelectedGpu}" VerticalAlignment="Center" />
               </Grid>
             </Border>
@@ -140,7 +142,7 @@
             <Border Classes="note" Margin="0,14,0,0">
               <TextBlock x:Name="NoteText" Classes="muted" FontSize="12.5" TextWrapping="Wrap" LineHeight="20" />
             </Border>
-          </StackPanel>
+          </StackPanel></ScrollViewer>
         </DockPanel>
       </Border>
     </Grid>

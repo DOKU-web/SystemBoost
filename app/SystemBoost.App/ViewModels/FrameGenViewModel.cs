@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using License = SystemBoost.App.Services.License;
 
 namespace SystemBoost.App.ViewModels;
@@ -68,13 +69,17 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private GpuItem? _selectedGpu;
     public GpuItem? SelectedGpu { get => _selectedGpu; set => Set(ref _selectedGpu, value); }
 
-    private string _mode = License.IsPremium ? "auto" : "x2";
+    // What the plan may start with: the page opens here, and its 기본값 button comes back here.
+    public static string DefaultMode => License.IsPremium ? "auto" : "x2";
+    public static int DefaultMaxMul => License.IsPremium ? 4 : 2;
+
+    private string _mode = DefaultMode;
     public string Mode
     {
         get => _mode;
         set { if (Set(ref _mode, value) && Running) _engine.SetMode(value); }
     }
-    private int _maxMul = License.IsPremium ? 4 : 2;
+    private int _maxMul = DefaultMaxMul;
     public int MaxMul { get => _maxMul; set => Set(ref _maxMul, value); }
     private string _quality = "balanced";
     public string Quality { get => _quality; set => Set(ref _quality, value); }
@@ -123,6 +128,14 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         return $"화면 간격이 고르게 {hz.ToString("0", Inv)}Hz의 {part}({(hz / divider).ToString("0.#", Inv)}fps)에 맞췄어요";
     }
 
+    /// A fixed multiplier stops at the monitor: 4x of a 60 fps game is 120 fps on a 120 Hz monitor, so it reads 2.0.
+    public static string CapReasonText(double refreshHz, double srcFps, int mode)
+    {
+        if (mode < 2 || refreshHz <= 0 || srcFps * mode <= refreshHz * 1.05) return "";
+        double hz = Math.Round(refreshHz);
+        return $"모니터가 {hz.ToString("0", Inv)}Hz라 출력은 {hz.ToString("0", Inv)}fps까지 나와요. {mode}배를 골라도 {(hz / srcFps).ToString("0.0", Inv)}배로 보여요";
+    }
+
     /// Last ~60 samples for the chart (src, out).
     public List<(double src, double outp)> History { get; } = new();
     public event Action? HistoryChanged;
@@ -133,9 +146,23 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private FrameGenStats? _first, _last;
     private double _latencyMsSec;   // added latency x active seconds
 
+    // The engine goes quiet while the game is behind another window. Without this the last numbers
+    // would stay up, and a multiplier picked here would look like it did nothing.
+    private readonly DispatcherTimer _statsWatch = new() { Interval = TimeSpan.FromSeconds(1) };
+    private long _lastStats;
+    private const long StatsGapMs = 2500;   // a stats line comes every 500 ms
+
+    private void ClearStaleStats()
+    {
+        if (Environment.TickCount64 - _lastStats < StatsGapMs) return;
+        SrcFps = OutFps = Multiplier = Latency = GenMs = AnalyzeMs = Late = Transfer = "—";
+        AutoReason = "프레임 생성과 측정은 게임 창이 앞에 있을 때만 돌아가요. 게임으로 돌아가면 이어져요";
+    }
+
     public FrameGenViewModel()
     {
         _engine.Stats += OnStats;
+        _statsWatch.Tick += (_, _) => ClearStaleStats();
         _engine.Ready += r =>
         {
             string cap = r.TryGetProperty("capture", out var c) ? c.GetString() ?? "" : "";
@@ -147,10 +174,12 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         _engine.Exited += () =>
         {
             EndSession();
+            _statsWatch.Stop();
             Running = false;
             AutoReason = "";
             ResourceManagers.GameProcess = null;
             if (!Status.StartsWith("오류")) Status = "중지됨";
+            if (_restart) { _restart = false; Toggle(); }
         };
     }
 
@@ -177,6 +206,16 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         ? "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요."
         : msg;
 
+    /// For settings that only count at start. Running stays true until Exited is handled, so the
+    /// new start has to wait for that.
+    public void Restart()
+    {
+        if (!Running) { Toggle(); return; }
+        _restart = true;
+        _engine.Stop();
+    }
+    private bool _restart;
+
     public void Toggle()
     {
         if (Running) { _engine.Stop(); return; }
@@ -187,6 +226,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             _engine.Start(SelectedWindow.Id, o);
             ResourceManagers.GameProcess = ResourceManagers.ProcessOfWindow(SelectedWindow);
             Running = true;
+            _lastStats = Environment.TickCount64;
+            _statsWatch.Start();
             Status = "시작하는 중…";
             GameInfo = SelectedWindow.ToString();
             _sessionStart = DateTime.Now; _first = _last = null; _latencyMsSec = 0;
@@ -196,6 +237,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
 
     private void OnStats(FrameGenStats s)
     {
+        _lastStats = Environment.TickCount64;
         SrcFps = s.SrcFps.ToString("0", Inv);
         OutFps = s.OutFps.ToString("0", Inv);
         Multiplier = s.Multiplier.ToString("0.00", Inv);
@@ -207,7 +249,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         History.Add((s.SrcFps, s.OutFps));
         if (History.Count > 60) History.RemoveAt(0);
         HistoryChanged?.Invoke();
-        AutoReason = s.Mode == 0 ? AutoReasonText(s.RefreshHz, s.Divider) : "";
+        AutoReason = s.Mode == 0 ? AutoReasonText(s.RefreshHz, s.Divider) : CapReasonText(s.RefreshHz, s.SrcFps, s.Mode);
         _first ??= s;
         if (_last != null) _latencyMsSec += s.AddedLatencyMs * Math.Max(0, s.ActiveSec - _last.ActiveSec);
         _last = s;
@@ -224,5 +266,9 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         SaveSessions();
     }
 
-    public void Dispose() => _engine.Dispose();
+    public void Dispose()
+    {
+        _statsWatch.Stop();
+        _engine.Dispose();
+    }
 }

@@ -26,7 +26,7 @@
 
 namespace sbfg {
 
-enum class MulMode : int { Off = 1, X2 = 2, X3 = 3, X4 = 4, Auto = 0 };
+enum class MulMode : int { Off = 1, X2 = 2, X3 = 3, X4 = 4, X6 = 6, X8 = 8, Auto = 0 };
 
 struct PacerConfig {
     MulMode mode = MulMode::Auto;

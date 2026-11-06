@@ -2,6 +2,7 @@
 // Build: g++ -std=c++20 -O2 -I../src fit_test.cpp -o fit_test
 #include "GpuFit.h"
 #include "Pacer.h"
+#include "Settings.h"
 #include <cstdio>
 
 using namespace sbfg;
@@ -28,10 +29,11 @@ static void feed(Pacer& p, double t) {
     p.onSource(t, 0.002);
 }
 
-static Pacer fed(MulMode mode, double hz, double fps) {
+static Pacer fed(MulMode mode, double hz, double fps, int maxMul = 4) {
     PacerConfig c;
     c.mode = mode;
     c.refreshHz = hz;
+    c.maxMul = maxMul;
     Pacer p(c);
     double t = 1;
     for (int i = 0; i < 400; ++i, t += 1.0 / fps) feed(p, t);
@@ -84,6 +86,24 @@ int main() {
         p.setConfig(p.config());
         for (double t2 = 20; t2 < 22; t2 += 1.0 / 40) feed(p, t2);
         check(p.outputFps() > 119, "changing the mode clears the cap");
+    }
+    {   // a slow game: the limit decides between every vblank and every second one
+        check(fed(MulMode::Auto, 144, 25).outputFps() < 73, "25 fps, limit 4: half the refresh rate");
+        check(fed(MulMode::Auto, 144, 25, 8).outputFps() > 143, "25 fps, limit 8: every vblank");
+        check(fed(MulMode::Auto, 144, 15, 8).outputFps() > 143, "15 fps, limit 8: every vblank, 25% over the limit");
+        check(fed(MulMode::Auto, 144, 12, 8).outputFps() < 73, "12 fps, limit 8: half the refresh rate");
+    }
+    {   // fixed x6 and x8: that many times the source, up to the refresh rate
+        const auto near = [](double a, double b) { return a > b - 1 && a < b + 1; };
+        check(near(fed(MulMode::X6, 144, 20).outputFps(), 120), "x6 at 20 fps outputs 120");
+        check(near(fed(MulMode::X8, 144, 15).outputFps(), 120), "x8 at 15 fps outputs 120");
+        check(near(fed(MulMode::X8, 144, 12).outputFps(), 96), "x8 at 12 fps outputs 96");
+        check(near(fed(MulMode::X6, 144, 30).outputFps(), 144), "x6 at 30 fps stops at the refresh rate");
+        check(near(fed(MulMode::X8, 120, 60).outputFps(), 120), "x8 at 60 fps stops at the refresh rate");
+        Settings s;
+        check(parseArgs({"--hwnd", "1", "--mode", "x6"}, s).empty() && s.mode == MulMode::X6, "--mode x6 parses");
+        check(parseArgs({"--hwnd", "1", "--mode", "x8"}, s).empty() && s.mode == MulMode::X8, "--mode x8 parses");
+        check(!parseArgs({"--hwnd", "1", "--mode", "x5"}, s).empty(), "--mode x5 is refused");
     }
     {   // a frame kept waiting: frames that were never used still set the rate
         PacerConfig c;

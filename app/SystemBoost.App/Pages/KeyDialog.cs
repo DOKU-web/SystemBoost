@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform;
+using SystemBoost.App.Services;
 
 namespace SystemBoost.App.Pages;
 
@@ -21,7 +22,7 @@ public sealed class KeyDialog : Window
         var title = Ui.Text("결제가 확인됐어요 ★", "h1");
         title.Foreground = new SolidColorBrush(Color.Parse("#FF7A1A"));
         p.Children.Add(title);
-        p.Children.Add(Ui.Text(note ?? "프리미엄이 켜졌어요. 아래 키는 다른 PC에 등록하거나 다시 설치할 때 필요하니 따로 보관하세요.", "sub", wrap: true));
+        p.Children.Add(Ui.Text(note ?? (License.IsUltra ? "울트라가" : "프리미엄이") + " 켜졌어요. 아래 키는 다른 PC에 등록하거나 다시 설치할 때 필요하니 따로 보관하세요.", "sub", wrap: true));
         var box = new TextBox { Text = key, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, Height = 96, FontFamily = new FontFamily("Consolas, Menlo, monospace") };
         p.Children.Add(box);
         var bar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };

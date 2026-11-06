@@ -42,7 +42,8 @@ async function salesMode(env) {
 
 const CODE_RE = /^SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;   // no 0/O/1/I: easy to read aloud
 function validSession(s) { return /^[A-Za-z0-9-]{16,64}$/.test(s) || CODE_RE.test(s); }
-const PLANS = { monthly: "월간", yearly: "연간", lifetime: "평생" };
+const PLANS = { monthly: "월간", yearly: "연간", lifetime: "평생",
+                ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간", ultra_lifetime: "울트라 평생" };
 const PLAN_DAYS = { monthly: 31, yearly: 366 };            // manual subscription keys (+3 days grace)
 
 async function payLinks(env) {
@@ -465,14 +466,16 @@ async function adminIssue(env, b) {
   const note = String(b.note || "").trim().slice(0, 200);
   const code = String(b.code || "").trim().toUpperCase();
   if (code && !CODE_RE.test(code)) return { error: "주문 코드 형식이 아니에요 (SB-XXXX-XXXX)" };
+  const period = String(b.plan || "").replace(/^ultra_/, "");   // orders say ultra_monthly etc.
   let days = 0;
-  if (b.plan === "days") days = Math.floor(Number(b.days));
-  else if (PLAN_DAYS[b.plan]) days = PLAN_DAYS[b.plan] + GRACE_DAYS;
-  else if (b.plan !== "lifetime") return { error: "플랜을 고르세요" };
-  if (b.plan === "days" && !(days >= 1 && days <= 3650)) return { error: "기간은 1~3650일이에요" };
+  if (period === "days") days = Math.floor(Number(b.days));
+  else if (PLAN_DAYS[period]) days = PLAN_DAYS[period] + GRACE_DAYS;
+  else if (period !== "lifetime") return { error: "플랜을 고르세요" };
+  if (period === "days" && !(days >= 1 && days <= 3650)) return { error: "기간은 1~3650일이에요" };
   if (!note && !code) return { error: "주문 코드나 메모(발급 이유) 중 하나는 적어 주세요" };
   const src = code ? "payment" : "manual";
-  const key = await makeKey(env, { plan: "premium", email, expires: days ? addDays(now(), days) : undefined, src,
+  const tier = b.tier === "ultra" || period !== b.plan ? "ultra" : "premium";   // the key's "plan"; ultra also opens frame generation x6 and x8
+  const key = await makeKey(env, { plan: tier, email, expires: days ? addDays(now(), days) : undefined, src,
                                    note: (code ? code + (note ? " · " : "") : "") + note });
   const id = await keyId(key);
   if (code) {   // the buyer's app is polling /claim?session=<code> -> popup
@@ -482,7 +485,7 @@ async function adminIssue(env, b) {
     await putOrder(env, o);
   }
   await audit(env, "admin", "키 발급", id + " · " + (code || "코드 없음") + " · " + (email || "메일 없음") + " · " +
-              (days ? days + "일" : "평생") + (note ? " · " + note : ""));
+              (days ? days + "일" : "평생") + (tier === "ultra" ? " · 울트라" : "") + (note ? " · " + note : ""));
   return { key, id };
 }
 async function lookup(env, key) {

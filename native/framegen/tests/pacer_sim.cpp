@@ -116,6 +116,7 @@ int main() {
         {"48fps,  auto", 48, 48, 0, MulMode::Auto},
         {"40-70fps, auto", 40, 70, 0, MulMode::Auto},
         {"30fps,  x4", 30, 30, 4, MulMode::X4},
+        {"15fps,  x8", 15, 15, 8, MulMode::X8},
         {"33-37fps, auto", 33, 37, 0, MulMode::Auto},   // at the 144 Hz divider limit
     };
     std::printf("%-16s %-6s %9s %8s %6s %7s %7s %s\n", "case", "sched", "judder_ms", "repeat%",

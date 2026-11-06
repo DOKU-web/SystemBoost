@@ -14,8 +14,8 @@ enum class CaptureApi { Wgc, Dxgi };
 
 struct Settings {
     uint64_t hwnd = 0;                 // target game window (required unless listGpus)
-    MulMode mode = MulMode::Auto;      // auto | x2 | x3 | x4 | off
-    int maxMul = 4;                    // auto upper bound (2..4)
+    MulMode mode = MulMode::Auto;      // auto | x2 | x3 | x4 | x6 | x8 | off
+    int maxMul = 4;                    // auto upper bound (2..8)
     Quality quality = Quality::Balanced;
     bool upscale = false;              // scale game window to its monitor (aspect kept)
     float sharpness = 0.5f;            // 0..1, upscaling only
@@ -58,11 +58,13 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
             else if (*v == "x2") s.mode = MulMode::X2;
             else if (*v == "x3") s.mode = MulMode::X3;
             else if (*v == "x4") s.mode = MulMode::X4;
+            else if (*v == "x6") s.mode = MulMode::X6;
+            else if (*v == "x8") s.mode = MulMode::X8;
             else if (*v == "off") s.mode = MulMode::Off;
             else return "bad --mode " + *v;
         } else if (k == "--max-mul") {
             s.maxMul = std::atoi(v->c_str());
-            if (s.maxMul < 2 || s.maxMul > 4) return "--max-mul must be 2..4";
+            if (s.maxMul < 2 || s.maxMul > 8) return "--max-mul must be 2..8";
         } else if (k == "--quality") {
             if (*v == "low") s.quality = Quality::Low;
             else if (*v == "performance") s.quality = Quality::Performance;

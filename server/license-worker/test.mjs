@@ -97,6 +97,18 @@ console.log("issue w/o code+note:", (await (await adm("/issue", { plan: "lifetim
 writeFileSync("/tmp/manual.key", iss.key);
 const m30 = await (await adm("/issue", { plan: "monthly", note: "리뷰용" })).json();
 console.log("monthly payload:", Buffer.from(m30.key.split(".")[0], "base64url").toString());
+const planOf = k => JSON.parse(Buffer.from(k.split(".")[0], "base64url").toString()).plan;
+const ul = await (await adm("/issue", { plan: "lifetime", tier: "ultra", note: "울트라 시험" })).json();
+const odd = await (await adm("/issue", { plan: "lifetime", tier: "gold", note: "모르는 등급" })).json();
+console.log("tiers:", planOf(m30.key), planOf(ul.key), planOf(odd.key), "| listed:", (await (await adm("/keys?q=" + encodeURIComponent("울트라 시험"))).json()).keys[0].plan);
+await adm("/pay-links", { lifetime: "https://pay.example/sb-lifetime", monthly: "https://pay.example/sb-month", ultra_monthly: "https://pay.example/sb-ultra-month", ultra_lifetime: "https://pay.example/sb-ultra" });
+console.log("status with ultra:", JSON.stringify((await (await call("/status")).json()).methods.manual));
+const uo = await (await call("/order?plan=ultra_lifetime", { method: "POST" })).json();
+const ua = await (await adm("/orders/approve", { code: uo.code, email: "ultra@example.com" })).json();
+const uom = await (await call("/order?plan=ultra_monthly", { method: "POST" })).json();
+const uam = await (await adm("/orders/approve", { code: uom.code, email: "ultra2@example.com" })).json();
+console.log("ultra orders:", uo.url, uo.method, planOf(ua.key), "|", uom.url, planOf(uam.key), "expires:", !!JSON.parse(Buffer.from(uam.key.split(".")[0], "base64url").toString()).expires,
+            "| ultra yearly (no link):", (await call("/order?plan=ultra_yearly", { method: "POST" })).status, "| bad plan:", (await call("/order?plan=ultra_days", { method: "POST" })).status);
 const sm = await (await adm("/summary")).json(); console.log("summary:", JSON.stringify(sm.counts), sm.sales);
 const ks = await (await adm("/keys?q=buyer2")).json(); console.log("search buyer2:", ks.keys.length, ks.keys[0].state, ks.keys[0].src);
 console.log("check before:", JSON.stringify(await (await call("/check?id=" + iss.id)).json()));

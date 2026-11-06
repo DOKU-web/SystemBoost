@@ -6,7 +6,7 @@
 //
 // Protocol with the WPF app (one JSON object per line):
 //   stdout: {"type":"ready"|"stats"|"warning"|"error"|"exit", ...}
-//   stdin : "mode auto|x2|x3|x4|off", "sharp 0..1", "enable", "disable", "quit"
+//   stdin : "mode auto|x2|x3|x4|x6|x8|off", "sharp 0..1", "enable", "disable", "quit"
 #include "Capture.h"
 #include "Cursor.h"
 #include "FrameGenGpu.h"

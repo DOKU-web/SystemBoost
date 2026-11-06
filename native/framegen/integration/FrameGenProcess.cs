@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 namespace SystemBoost.FrameGen;
 
 public sealed record FrameGenOptions(
-    string Mode = "auto",          // auto | x2 | x3 | x4 | off
+    string Mode = "auto",          // auto | x2 | x3 | x4 | x6 | x8 | off
     int MaxMultiplier = 4,         // 2..4 (auto)
     string Quality = "balanced",   // performance | balanced | quality
     bool Upscale = false,

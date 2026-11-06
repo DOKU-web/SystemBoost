@@ -90,8 +90,8 @@ public partial class MainWindow : Window
 
     private void UpdatePlan()
     {
-        PlanTitle.Text = License.IsPremium ? "프리미엄 ★" : "무료";
-        PlanText.Text = License.IsPremium ? "모든 기능 사용 중" : "누르면 프리미엄 안내";
+        PlanTitle.Text = License.IsUltra ? "울트라 ★" : License.IsPremium ? "프리미엄 ★" : "무료";
+        PlanText.Text = License.IsUltra ? "모든 기능 사용 중" : License.IsPremium ? "프리미엄 기능 사용 중" : "누르면 프리미엄 안내";
     }
 
     public void Shutdown(bool applyUpdateOnExit = true)

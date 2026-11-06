@@ -26,6 +26,8 @@ struct Settings {
         case "x2": return .x2
         case "x3": return .x3
         case "x4": return .x4
+        case "x6": return .x6
+        case "x8": return .x8
         case "off": return .off
         default: return nil
         }
@@ -54,7 +56,7 @@ struct Settings {
                 guard let v = value(), let m = parseMode(v) else { return (s, "bad --mode") }
                 s.mode = m
             case "--max-mul":
-                guard let v = value(), let n = Int(v), (2...4).contains(n) else { return (s, "--max-mul must be 2..4") }
+                guard let v = value(), let n = Int(v), (2...8).contains(n) else { return (s, "--max-mul must be 2..8") }
                 s.maxMul = n
             case "--quality":
                 switch value() {

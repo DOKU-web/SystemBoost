@@ -79,16 +79,19 @@ dialog::backdrop{background:#000a}
       </div>
       <div class="row" style="margin-bottom:8px"><input id="iEmail" placeholder="구매자 메일 (선택)"></div>
       <div class="row" style="margin-bottom:8px"><input id="iNote" placeholder="메모: 입금자명, 결제 번호, 선물 이유 등"></div>
-      <div class="row"><button class="p" id="issue">키 발급</button><span id="iMsg" class="mut"></span></div>
+      <div class="row"><button class="p" id="issue">프리미엄 키 발급</button><button class="p" id="issueUltra">울트라 키 발급</button><span id="iMsg" class="mut"></span></div>
       <textarea id="iKey" class="hide" rows="4" readonly style="margin-top:10px"></textarea>
-      <p class="mut">월간·연간은 만료 3일 여유를 더해 발급해요. 다음 결제를 받으면 같은 방식으로 새 키를 발급하면 돼요.</p>
+      <p class="mut">울트라 키는 프리미엄 기능에 프레임 생성 6·8배가 더해져요. 월간·연간은 만료 3일 여유를 더해 발급해요. 다음 결제를 받으면 같은 방식으로 새 키를 발급하면 돼요.</p>
     </div>
     <div class="card">
       <h2>결제 링크 <small>수동 확인 방식에서 써요. 비워 둔 플랜은 앱에서 '결제 준비 중'으로 잠겨요</small></h2>
       <div style="display:grid;gap:8px">
         <label class="mut">월간 ₩2,900<input id="pMonthly" placeholder="https://…"></label>
         <label class="mut">연간 ₩19,900<input id="pYearly" placeholder="https://…"></label>
-        <label class="mut">평생 ₩29,900<input id="pLifetime" placeholder="https://…"></label>
+        <label class="mut">평생 ₩49,900<input id="pLifetime" placeholder="https://…"></label>
+        <label class="mut">울트라 월간 ₩4,900<input id="pUltraMonthly" placeholder="https://…"></label>
+        <label class="mut">울트라 연간 ₩34,900<input id="pUltraYearly" placeholder="https://…"></label>
+        <label class="mut">울트라 평생 ₩89,900<input id="pUltraLifetime" placeholder="https://…"></label>
         <div class="row"><button class="p" id="saveLinks">링크 저장</button><span id="pMsg" class="mut"></span></div>
       </div>
     </div>
@@ -126,7 +129,10 @@ dialog::backdrop{background:#000a}
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-const PLAN = { monthly: "월간", yearly: "연간", lifetime: "평생", premium: "프리미엄" };
+const PLAN = { monthly: "월간", yearly: "연간", lifetime: "평생", premium: "프리미엄",
+               ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간", ultra_lifetime: "울트라 평생" };
+const LINKS = { monthly: "pMonthly", yearly: "pYearly", lifetime: "pLifetime",
+                ultra_monthly: "pUltraMonthly", ultra_yearly: "pUltraYearly", ultra_lifetime: "pUltraLifetime" };
 const ST = { active: "사용 중", revoked: "차단", expired: "만료", test: "테스트" };
 const OS = { requested: "신청 중", paid: "결제 확인 요청", approved: "승인", rejected: "거절" };
 let ostatus = "open";
@@ -192,7 +198,7 @@ async function loadKeys() {
   $("keys").innerHTML = keys.length ? keys.map(k => `<tr>
     <td><code>${esc(k.id)}</code></td>
     <td>${esc(k.email) || '<span class="m">메일 없음</span>'}<div class="mut">${esc(k.note)}${k.revoked ? " · 차단 사유: " + esc(k.revoked) : ""}</div></td>
-    <td>${k.expires ? (k.sub ? "구독" : "기간제") : "평생"}<div class="mut">${{ order: "자동 결제", subscription: "자동 구독", payment: "직접 결제", manual: "수동 발급" }[k.src] || ""}</div></td>
+    <td>${k.plan === "ultra" ? "울트라" : "프리미엄"} · ${k.expires ? (k.sub ? "구독" : "기간제") : "평생"}<div class="mut">${{ order: "자동 결제", subscription: "자동 구독", payment: "직접 결제", manual: "수동 발급" }[k.src] || ""}</div></td>
     <td class="m">${day(k.issued)}</td><td class="m">${k.expires ? day(k.expires) : "없음"}</td>
     <td><span class="tag t-${k.state}">${ST[k.state]}</span></td>
     <td style="text-align:right"><button data-copy="${esc(k.id)}">키 복사</button> ${k.revoked ? `<button data-unrev="${esc(k.id)}">해제</button>` : `<button class="d" data-rev="${esc(k.id)}">차단</button>`}</td></tr>`).join("")
@@ -206,17 +212,17 @@ async function loadLog() {
 }
 async function loadLinks() {
   const { pay } = await api("/pay-links");
-  const on = ["monthly", "yearly", "lifetime"].filter(p => pay[p]).map(p => PLAN[p]);
+  const on = Object.keys(LINKS).filter(p => pay[p]).map(p => PLAN[p]);
   $("manualHelp").textContent = on.length ? "— 켜짐: " + on.join(" · ") + ". 사장님이 확인해서 승인하면 키가 나가요." : "— 결제 링크를 넣으면 켜져요.";
-  $("pMonthly").value = pay.monthly || ""; $("pYearly").value = pay.yearly || ""; $("pLifetime").value = pay.lifetime || "";
+  for (const p in LINKS) $(LINKS[p]).value = pay[p] || "";
 }
 
 // ------------------------------------------------------------ actions
 $("iPlan").onchange = () => $("iDays").classList.toggle("hide", $("iPlan").value !== "days");
-$("issue").onclick = async () => {
+const issueKey = tier => async () => {
   $("iMsg").textContent = ""; $("iMsg").className = "mut";
-  const b = { code: $("iCode").value.trim(), plan: $("iPlan").value, days: $("iDays").value, email: $("iEmail").value.trim(), note: $("iNote").value.trim() };
-  const label = b.plan === "days" ? (b.days || "?") + "일" : PLAN[b.plan];
+  const b = { code: $("iCode").value.trim(), tier, plan: $("iPlan").value, days: $("iDays").value, email: $("iEmail").value.trim(), note: $("iNote").value.trim() };
+  const label = (b.tier === "ultra" ? "울트라" : "프리미엄") + " · " + (b.plan === "days" ? (b.days || "?") + "일" : PLAN[b.plan]);
   if (!(await ask("키를 발급할까요?", `플랜: <b>${esc(label)}</b><br>주문 코드: ${esc(b.code) || "없음 (키를 직접 보내야 해요)"}<br>메일: ${esc(b.email) || "없음"}<br>메모: ${esc(b.note) || "없음"}<br><br>결제를 확인했을 때만 발급하세요.`, "발급"))) return;
   try {
     const r = await api("/issue", b);
@@ -228,9 +234,11 @@ $("issue").onclick = async () => {
     loadAll();
   } catch (e) { if (e.message !== "401") { $("iMsg").textContent = e.message; $("iMsg").className = "err"; } }
 };
+$("issue").onclick = issueKey("premium");
+$("issueUltra").onclick = issueKey("ultra");
 $("iKey").onclick = () => { $("iKey").select(); copy($("iKey").value); };
 $("saveLinks").onclick = async () => {
-  try { await api("/pay-links", { monthly: $("pMonthly").value, yearly: $("pYearly").value, lifetime: $("pLifetime").value });
+  try { await api("/pay-links", Object.fromEntries(Object.keys(LINKS).map(p => [p, $(LINKS[p]).value])));
         $("pMsg").textContent = "저장했어요. 앱은 다음에 프리미엄 화면을 열 때 반영해요."; $("pMsg").className = "okc"; loadLinks(); }
   catch (e) { $("pMsg").textContent = e.message; $("pMsg").className = "err"; }
 };
@@ -272,7 +280,7 @@ $("look").onclick = async () => {
   const p = r.payload || {};
   $("lOut").innerHTML = (r.valid ? '<span class="okc">서명 확인: 우리가 만든 키예요</span>' : '<span class="err">서명이 맞지 않아요: 위조됐거나 다른 키로 만든 키예요</span>') +
     `<br>키 번호 <code>${esc(r.id)}</code> · ${r.registered ? "발급 목록에 있음" : "발급 목록에 없음 (오프라인 도구로 만든 키)"}` +
-    `<br>메일 ${esc(p.email) || "없음"} · 발급 ${day(p.issued)} · 만료 ${p.expires ? day(p.expires) : "없음"}${p.test ? " · 테스트 키" : ""}` +
+    `<br>메일 ${esc(p.email) || "없음"} · 등급 ${p.plan === "ultra" ? "울트라" : "프리미엄"} · 발급 ${day(p.issued)} · 만료 ${p.expires ? day(p.expires) : "없음"}${p.test ? " · 테스트 키" : ""}` +
     (r.revoked ? `<br><span class="err">차단됨: ${esc(r.revoked)}</span> <button data-unrev="${esc(r.id)}">해제</button>` : (r.valid ? ` <button class="d" data-rev="${esc(r.id)}">차단</button>` : ""));
 };
 $("reload").onclick = () => loadAll();
@@ -292,7 +300,7 @@ function demoApi(path, b) {
   if (!demo) {
     const d = n => new Date(Date.now() + n * 864e5).toISOString().replace(/\.\d+Z$/, "Z");
     demo = { mode: "live", links: { monthly: "https://pay.example/m", yearly: "", lifetime: "https://pay.example/l" }, log: [], n: 0,
-      orders: [{ code: "SB-7K2M-Q9XD", plan: "lifetime", at: d(-0.03), paidAt: d(-0.02), status: "paid", method: "manual", payer: "김민준", msg: "토스 송금 29,900원" },
+      orders: [{ code: "SB-7K2M-Q9XD", plan: "lifetime", at: d(-0.03), paidAt: d(-0.02), status: "paid", method: "manual", payer: "김민준", msg: "토스 송금 49,900원" },
                { code: "SB-H4WT-3RZP", plan: "monthly", at: d(-0.3), status: "requested", method: "manual" },
                { code: "SB-PX7Q-2MKC", plan: "lifetime", at: d(-12), status: "approved", method: "manual", payer: "김민수", email: "minsu@example.com", keyId: "3fa91c0e5b7d2a14" },
                { code: "SB-9TNE-WQ4A", plan: "monthly", at: d(-20), status: "approved", method: "card", email: "jy.park@example.com", keyId: "a07be2d9c4113f68" },
@@ -327,7 +335,7 @@ function demoApi(path, b) {
     if (!b.code && !b.note) return R({ error: "주문 코드나 메모(발급 이유) 중 하나는 적어 주세요" });
     const days = b.plan === "monthly" ? 34 : b.plan === "yearly" ? 369 : b.plan === "days" ? +b.days : 0;
     const id = [...crypto.getRandomValues(new Uint8Array(8))].map(x => x.toString(16).padStart(2, "0")).join("");
-    demo.keys.unshift({ id, email: b.email, note: (b.code ? b.code.toUpperCase() + (b.note ? " · " : "") : "") + b.note, plan: "premium", issued: new Date().toISOString(),
+    demo.keys.unshift({ id, email: b.email, note: (b.code ? b.code.toUpperCase() + (b.note ? " · " : "") : "") + b.note, plan: b.tier === "ultra" ? "ultra" : "premium", issued: new Date().toISOString(),
                         expires: days ? new Date(Date.now() + days * 864e5).toISOString() : "", src: b.code ? "payment" : "manual", revoked: "" });
     L("키 발급", id + " · " + (b.code || "코드 없음"));
     return R({ id, key: "eyJwbGFuIjoicHJlbWl1bSIsImRlbW8iOnRydWV9.시연용-키-실제로는-동작하지-않아요" });

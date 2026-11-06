@@ -1,5 +1,5 @@
-// Free / Premium.
-// Two ways to own Premium:
+// Free / Premium / Ultra.
+// Two ways to own Premium (Ultra = a key whose plan is "ultra": Premium plus x6 and x8):
 //  1) Steam build: the "SystemBoost Premium" DLC (checked through Steamworks;
 //     ISteamOwnership is the hook - wire Steamworks.NET here).
 //  2) Direct downloads (installer / portable / macOS): a license key bought on
@@ -17,6 +17,7 @@ namespace SystemBoost.App.Services;
 public enum PremiumFeature
 {
     AutoAndHighMultiplier,   // auto, x3, x4 (x2 stays free)
+    UltraMultiplier,         // x6, x8: ultra keys only
     QualityMode,             // "quality" preset
     DualGpu,                 // frame generation on another GPU
     CpuLimit,                // resource sharing: hard CPU cap
@@ -48,11 +49,13 @@ public static class License
         {
             Load();
             if (Steam?.OwnsPremiumDlc() == true) return true;
-            return _info != null && (_info.Expires == null || _info.Expires > DateTime.UtcNow);
+            return KeyActive;
         }
     }
+    public static bool IsUltra { get { Load(); return KeyActive && _info!.Plan == "ultra"; } }
+    private static bool KeyActive => _info != null && (_info.Expires == null || _info.Expires > DateTime.UtcNow);
 
-    public static bool Allowed(PremiumFeature f) => IsPremium;
+    public static bool Allowed(PremiumFeature f) => f == PremiumFeature.UltraMultiplier ? IsUltra : IsPremium;
 
     // Activation can happen on a background thread (order watcher, revocation check): UI handlers run on the UI thread.
     private static void RaiseChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => Changed?.Invoke());
@@ -250,7 +253,7 @@ public static class License
                 using var doc = JsonDocument.Parse(await Http.GetStringAsync($"{ServerUrl}/check?id={id}"));
                 if (doc.RootElement.TryGetProperty("revoked", out var rv) && rv.ValueKind == JsonValueKind.True)
                 {
-                    Notice = "이 기기의 프리미엄 키가 판매자에 의해 해제됐어요(환불 또는 키 공유). 문의가 필요하면 결제한 곳으로 연락하세요.";
+                    Notice = "이 기기의 라이선스 키가 판매자에 의해 해제됐어요(환불 또는 키 공유). 문의가 필요하면 결제한 곳으로 연락하세요.";
                     Deactivate();
                     return;
                 }

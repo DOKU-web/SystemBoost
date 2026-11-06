@@ -72,7 +72,7 @@ open -a Safari "$OUT/moving.html"; sleep 8
 osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 2
 limit 30 "$BIN/sb-framegen-mac" --list-windows > "$OUT/windows.json" 2>&1
 say "engine --list-windows: exit $? $(head -c 160 "$OUT/windows.json")"
-ID=$(python3 - "$OUT/windows.json" <<'EOF'
+cat > "$OUT/pick.py" <<'EOF'
 import json, sys
 best = None
 for line in open(sys.argv[1]):
@@ -81,12 +81,12 @@ for line in open(sys.argv[1]):
     except ValueError:
         continue
     for w in d.get('list', []):
-        if w.get('app') == 'Safari' and (best is None or w['w'] * w['h'] > best['w'] * best['h']):
+        if w.get('app') == 'Safari' and sys.argv[2] in w.get('title', '') and (best is None or w['w'] * w['h'] > best['w'] * best['h']):
             best = w
 if best:
     print(best['id'])
 EOF
-)
+ID=$(python3 "$OUT/pick.py" "$OUT/windows.json" "")
 cat > "$OUT/stats.py" <<'EOF'
 import json, statistics, sys
 rows = []
@@ -101,25 +101,45 @@ for line in open(sys.argv[1]):
         print('error', r.get('msg'))
 use = rows[4:]
 if use:
-    med = lambda k: round(statistics.median(r[k] for r in use), 1)
-    print(f"{len(rows)} stats, source {med('srcFps')} output {med('outFps')} x{med('multiplier')} gen {med('genMs')} ms analyze {med('analyzeMs')} ms hz {med('refreshHz')} late {use[-1]['late']} skipped {use[-1]['skipped']} source frames {rows[-1]['srcFrames']}")
+    med = lambda k, rs=use: round(statistics.median(r[k] for r in rs), 1)
+    line = f"{len(rows)} stats, source {med('srcFps')} output {med('outFps')} x{med('multiplier')} gen {med('genMs')} ms analyze {med('analyzeMs')} ms hz {med('refreshHz')} late {use[-1]['late']} skipped {use[-1]['skipped']} source frames {rows[-1]['srcFrames']}"
+    modes = sorted({r['mode'] for r in use})
+    if len(modes) > 1:    # the mode changed during the run
+        line += ' | ' + ', '.join(f"mode {m} output {med('outFps', [r for r in use if r['mode'] == m])}" for m in modes)
+    print(line)
 else:
     print(f"{len(rows)} stats")
 EOF
+run_engine() {    # name, window, mode, quality, max-mul, stdin line sent after 5 s
+  osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 1
+  (sleep 5; [ -z "$6" ] || echo "$6"; sleep 10) | limit 30 "$BIN/sb-framegen-mac" --hwnd "$2" --mode "$3" --max-mul "$5" --quality "$4" > "$OUT/engine-$1.txt" 2>&1 &
+  sleep 9
+  screencapture -x "$OUT/screen-engine-$1.png" 2>> "$OUT/screen-error.txt"
+  wait $!; CODE=$?
+  say "engine $1: exit $CODE $(python3 "$OUT/stats.py" "$OUT/engine-$1.txt"), fit lines $(grep -c '"type":"fit"' "$OUT/engine-$1.txt")"
+}
 if [ -n "$ID" ]; then
-  for RUN in off x2 auto x2-low; do
-    MODE=${RUN%-low}
-    QUALITY=balanced
-    if [ "$RUN" = x2-low ]; then QUALITY=low; fi
-    osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 1
-    (sleep 15) | limit 30 "$BIN/sb-framegen-mac" --hwnd "$ID" --mode "$MODE" --quality "$QUALITY" > "$OUT/engine-$RUN.txt" 2>&1 &
-    sleep 9
-    screencapture -x "$OUT/screen-engine-$RUN.png" 2>> "$OUT/screen-error.txt"
-    wait $!; CODE=$?
-    say "engine $RUN: exit $CODE $(python3 "$OUT/stats.py" "$OUT/engine-$RUN.txt"), fit lines $(grep -c '"type":"fit"' "$OUT/engine-$RUN.txt")"
-  done
+  run_engine off "$ID" off balanced 4 ""
+  run_engine x2 "$ID" x2 balanced 4 ""
+  run_engine auto "$ID" auto balanced 4 ""
+  run_engine x2-low "$ID" x2 low 4 ""
 else
   say "engine run: skipped, no window id"
+fi
+
+# This screen shows 60 images a second at most, so a 30 fps page reads the same at x2 and x8.
+# About 7 fps keeps every multiplier under that limit: x2 14, x4 28, x6 42, x8 56.
+sed 's/SB moving test/SB slow test/; s/,33)/,143)/' "$OUT/moving.html" > "$OUT/slow.html"
+open -a Safari "$OUT/slow.html"; sleep 6
+limit 30 "$BIN/sb-framegen-mac" --list-windows > "$OUT/windows-slow.json" 2>&1
+SLOW=$(python3 "$OUT/pick.py" "$OUT/windows-slow.json" "SB slow")
+if [ -n "$SLOW" ]; then
+  for MODE in x2 x4 x6 x8; do run_engine "slow-$MODE" "$SLOW" "$MODE" balanced 8 ""; done
+  run_engine slow-auto4 "$SLOW" auto balanced 4 ""
+  run_engine slow-auto8 "$SLOW" auto balanced 8 ""
+  run_engine slow-live "$SLOW" x2 balanced 8 "mode x8"
+else
+  say "slow run: skipped, no window id $(head -c 200 "$OUT/windows-slow.json")"
 fi
 
 mkdir -p "$OUT/crash"

@@ -15,7 +15,10 @@ public sealed class PremiumPage : UserControl
     // Prices shown in the app. TODO: set real prices (must match the shop / Steam).
     public const string PriceMonthly = "₩2,900 / 월";
     public const string PriceYearly = "₩19,900 / 년";
-    public const string PriceLifetime = "₩29,900 · 한 번 결제";
+    public const string PriceLifetime = "₩49,900 · 한 번 결제";
+    public const string PriceUltraMonthly = "₩4,900 / 월";
+    public const string PriceUltraYearly = "₩34,900 / 년";
+    public const string PriceUltraLifetime = "₩89,900 · 한 번 결제";
     public const string PriceSteamDlc = "₩14,000";
 
     private readonly TextBlock _state = Ui.Text("", "h2");
@@ -25,6 +28,8 @@ public sealed class PremiumPage : UserControl
     private readonly TextBlock _msg = Ui.Text("", "muted", wrap: true);
     private readonly TextBlock _buyMsg = Ui.Text("", "muted", wrap: true);
     private string _plan = "yearly";
+    private bool _ultra;
+    private string PlanId => _ultra ? "ultra_" + _plan : _plan;
     private readonly Button _buyBtn = Ui.Button("결제 준비 중", "primary");
     private System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>> _methods = new() { ["card"] = new(), ["manual"] = new() };
     private string _method = "card";
@@ -40,24 +45,24 @@ public sealed class PremiumPage : UserControl
     private readonly TextBlock _keyNote = Ui.Text("", "muted", wrap: true);
     private readonly Border _buyCard;   // shown only while something is on sale
 
-    private static readonly (string feature, string free, string premium)[] CommonRows =
+    private static readonly (string feature, string free, string premium, string ultra)[] CommonRows =
     {
-        ("프레임 생성 배수", "2배", "자동 · 2 · 3 · 4배"),
-        ("품질 모드", "저사양 · 성능 · 균형", "저사양 · 성능 · 균형 · 품질"),
-        ("업스케일링 + 선명화", "●", "●"),
-        ("듀얼 GPU (내장 그래픽에 생성 맡기기)", "—", "●"),
-        ("게임 부스트", "●", "●"),
-        ("모니터링 · 벤치마크", "●", "●"),
-        ("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●"),
+        ("프레임 생성 배수", "2배", "자동 · 2 · 3 · 4배", "자동 · 2 · 3 · 4 · 6 · 8배"),
+        ("품질 모드", "저사양 · 성능 · 균형", "저사양 · 성능 · 균형 · 품질", "저사양 · 성능 · 균형 · 품질"),
+        ("업스케일링 + 선명화", "●", "●", "●"),
+        ("듀얼 GPU (내장 그래픽에 생성 맡기기)", "—", "●", "●"),
+        ("게임 부스트", "●", "●", "●"),
+        ("모니터링 · 벤치마크", "●", "●", "●"),
+        ("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●", "●"),
     };
     // macOS does not allow these, see MacBoostBackend
-    private static readonly (string feature, string free, string premium)[] WindowsRows =
+    private static readonly (string feature, string free, string premium, string ultra)[] WindowsRows =
     {
-        ("자원 분배 · CPU 최대 사용량 제한", "—", "●"),
-        ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "●"),
-        ("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "●"),
+        ("자원 분배 · CPU 최대 사용량 제한", "—", "●", "●"),
+        ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "●", "●"),
+        ("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "●", "●"),
     };
-    private static readonly (string feature, string free, string premium)[] Rows =
+    private static readonly (string feature, string free, string premium, string ultra)[] Rows =
         Platform.IsWindows ? CommonRows.Concat(WindowsRows).ToArray() : CommonRows;
     private const string BoostRow = "게임 부스트";
     private readonly bool _boostReady;
@@ -66,7 +71,7 @@ public sealed class PremiumPage : UserControl
     {
         _boostReady = boostReady;
         var root = new StackPanel();
-        root.Children.Add(Ui.Header("프리미엄", "무료로도 기본 기능은 계속 쓸 수 있어요. 프리미엄은 고급 기능을 열어 줘요. 효과는 게임과 PC마다 달라서, 벤치마크로 직접 확인하고 결정하세요."));
+        root.Children.Add(Ui.Header("프리미엄", "무료로도 기본 기능은 계속 쓸 수 있어요. 프리미엄은 고급 기능을, 울트라는 프레임 생성 6배·8배까지 열어 줘요. 효과는 게임과 PC마다 달라서, 벤치마크로 직접 확인하고 결정하세요."));
 
         var status = new StackPanel { Spacing = 4 };
         status.Children.Add(_state);
@@ -74,7 +79,7 @@ public sealed class PremiumPage : UserControl
         root.Children.Add(Ui.Card(status));
 
         // comparison
-        var table = new Grid { ColumnDefinitions = new ColumnDefinitions("*,170,220") };
+        var table = new Grid { ColumnDefinitions = new ColumnDefinitions("*,140,190,190") };
         void Cell(string text, int row, int col, bool head = false, bool accent = false)
         {
             var t = Ui.Text(text, head ? "h2" : "label");
@@ -87,19 +92,37 @@ public sealed class PremiumPage : UserControl
             table.Children.Add(b);
         }
         table.RowDefinitions = new RowDefinitions(string.Join(",", Enumerable.Repeat("Auto", Rows.Length + 1)));
-        Cell("기능", 0, 0, true); Cell("무료", 0, 1, true); Cell("프리미엄", 0, 2, true, true);
+        Cell("기능", 0, 0, true); Cell("무료", 0, 1, true); Cell("프리미엄", 0, 2, true, true); Cell("울트라", 0, 3, true, true);
         for (int i = 0; i < Rows.Length; i++)
         {
             bool pending = !_boostReady && Rows[i].feature == BoostRow;
             Cell(Rows[i].feature, i + 1, 0);
             Cell(pending ? "준비 중" : Rows[i].free, i + 1, 1);
             Cell(pending ? "준비 중" : Rows[i].premium, i + 1, 2, accent: !pending && Rows[i].premium != "—");
+            Cell(pending ? "준비 중" : Rows[i].ultra, i + 1, 3, accent: !pending && Rows[i].ultra != "—");
         }
         root.Children.Add(Ui.Card(table));
 
         // buy
         var buy = new StackPanel { Spacing = 12 };
         buy.Children.Add(Ui.Text("구독하기", "h2"));
+        var tierP = new StackPanel { Orientation = Orientation.Horizontal };
+        var tierBox = new Border { Child = tierP, HorizontalAlignment = HorizontalAlignment.Left };
+        tierBox.Classes.Add("segbox");
+        foreach (var (ultra, text) in new[] { (false, "프리미엄"), (true, "울트라 (6·8배 포함)") })
+        {
+            var t = new ToggleButton { Content = text, IsChecked = ultra == _ultra };
+            t.Classes.Add("seg");
+            t.Click += (_, _) =>
+            {
+                _ultra = ultra;
+                foreach (var o in tierP.Children.OfType<ToggleButton>()) o.IsChecked = o == t;
+                _price.Text = Price();
+                UpdateBuy();
+            };
+            tierP.Children.Add(t);
+        }
+        buy.Children.Add(tierBox);
         var periodP = new StackPanel { Orientation = Orientation.Horizontal };
         var periodBox = new Border { Child = periodP, HorizontalAlignment = HorizontalAlignment.Left };
         periodBox.Classes.Add("segbox");
@@ -199,14 +222,14 @@ public sealed class PremiumPage : UserControl
         act.Click += (_, _) =>
         {
             var err = License.Activate(_key.Text ?? "");
-            _msg.Text = err ?? "프리미엄이 켜졌어요. 고급 기능을 바로 쓸 수 있어요.";
+            _msg.Text = err ?? (License.IsUltra ? "울트라가 켜졌어요. 6배·8배까지 바로 쓸 수 있어요." : "프리미엄이 켜졌어요. 고급 기능을 바로 쓸 수 있어요.");
             Refresh();
         };
         keyRow.Children.Add(act);
         var off = Ui.Button("이 기기에서 해제", "ghost");
         off.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(off, 2);
-        off.Click += (_, _) => { License.Deactivate(); _msg.Text = "이 기기에서 프리미엄을 해제했어요"; Refresh(); };
+        off.Click += (_, _) => { License.Deactivate(); _msg.Text = "이 기기에서 키를 해제했어요"; Refresh(); };
         keyRow.Children.Add(off);
         keyP.Children.Add(keyRow);
         keyP.Children.Add(_msg);
@@ -234,8 +257,8 @@ public sealed class PremiumPage : UserControl
 
     private void UpdateBuy()
     {
-        var card = _methods["card"].Contains(_plan);
-        var manual = _methods["manual"].Contains(_plan);
+        var card = _methods["card"].Contains(PlanId);
+        var manual = _methods["manual"].Contains(PlanId);
         if (_method == "card" && !card && manual) _method = "manual";      // fall back to what is open for this plan
         if (_method == "manual" && !manual && card) _method = "card";
         _methodBox.IsVisible = card && manual;                              // choice only when both are open
@@ -255,7 +278,8 @@ public sealed class PremiumPage : UserControl
         _orderPanel.IsVisible = o != null;
         if (o == null) return;
         _orderCode.Text = o.Code;
-        var plan = o.Plan switch { "monthly" => "월간", "lifetime" => "평생", _ => "연간" };
+        var period = o.Plan.Replace("ultra_", "") switch { "monthly" => "월간", "lifetime" => "평생", _ => "연간" };
+        var plan = o.Plan.StartsWith("ultra_") ? "울트라 " + period : period;
         var auto = o.Method is "card" or "auto";
         _paidPanel.IsVisible = !auto && o.Status != "paid";
         _orderSub.Text = auto
@@ -271,12 +295,16 @@ public sealed class PremiumPage : UserControl
         if (top != null) await top.Launcher.LaunchUriAsync(new Uri(url));
     }
 
-    private string Price() => _plan switch { "monthly" => PriceMonthly, "lifetime" => PriceLifetime, _ => PriceYearly };
+    private string Price() => (_ultra, _plan) switch
+    {
+        (false, "monthly") => PriceMonthly, (false, "lifetime") => PriceLifetime, (false, _) => PriceYearly,
+        (true, "monthly") => PriceUltraMonthly, (true, "lifetime") => PriceUltraLifetime, _ => PriceUltraYearly,
+    };
 
     /// Gets an order code, shows it, opens the seller's payment page. The key arrives later (License.KeyArrived).
     private async System.Threading.Tasks.Task Buy()
     {
-        if (License.Pending is { } prev && prev.Plan == _plan && prev.Method == _method && prev.Url.Length > 0)
+        if (License.Pending is { } prev && prev.Plan == PlanId && prev.Method == _method && prev.Url.Length > 0)
         {   // same plan already ordered: reuse the code instead of making a new one
             _buyMsg.Text = "이미 만든 주문이 있어요. 같은 주문으로 결제하세요.";
             await Open(prev.Url);
@@ -284,7 +312,7 @@ public sealed class PremiumPage : UserControl
         }
         _buyBtn.IsEnabled = false;
         _buyMsg.Text = "주문을 만드는 중…";
-        var (code, url, err) = await License.CreateOrderAsync(_plan, _method);
+        var (code, url, err) = await License.CreateOrderAsync(PlanId, _method);
         UpdateBuy();
         if (code == null || url == null) { _buyMsg.Text = err ?? "주문을 만들지 못했어요."; return; }
         ShowPending();
@@ -304,7 +332,7 @@ public sealed class PremiumPage : UserControl
         var info = License.Info;
         if (License.IsPremium)
         {
-            _state.Text = "프리미엄 사용 중 ★";
+            _state.Text = License.IsUltra ? "울트라 사용 중 ★" : "프리미엄 사용 중 ★";
             _stateSub.Text = info?.Expires is DateTime e ? $"{e.ToLocalTime():yyyy-MM-dd}까지 · {info.Email}" : "스팀 DLC 또는 기간 없는 키";
         }
         else
