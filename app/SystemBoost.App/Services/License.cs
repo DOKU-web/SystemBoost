@@ -185,7 +185,7 @@ public static class License
     }
 
     /// Status "paid" = the buyer said they paid and the seller is checking.
-    public sealed record PendingOrder(string Code, string Plan, DateTime Created, string Url = "", string Method = "manual", string Status = "requested");
+    public sealed record PendingOrder(string Code, string Plan, DateTime Created, string Url = "", string Method = "manual", string Status = "requested", bool Ticket = false);
     private static string PendingFile => Path.Combine(Platform.DataDir, "pending-order.json");
     public static PendingOrder? Pending
     {
@@ -220,19 +220,26 @@ public static class License
     }
 
     /// Gets an order code + the payment link for a plan. error is a message for the user.
-    public static async System.Threading.Tasks.Task<(string? code, string? url, string? error)> CreateOrderAsync(string plan, string method)
+    public static async System.Threading.Tasks.Task<(string? code, string? url, string? error)> CreateOrderAsync(string plan, string method, bool ticket = false)
     {
         if (!ServerConfigured) return (null, null, "결제 준비 중이에요. 결제가 열리면 여기서 바로 살 수 있어요.");
         try
         {
-            var r = await Http.PostAsync($"{ServerUrl}/order?plan={Uri.EscapeDataString(plan)}&method={Uri.EscapeDataString(method)}", null);
+            using var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post,
+                $"{ServerUrl}/order?plan={Uri.EscapeDataString(plan)}&method={Uri.EscapeDataString(method)}{(ticket ? "&ticket=1" : "")}");
+            if (ticket && Account.Token is { } session) req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session);
+            var r = await Http.SendAsync(req);
             if ((int)r.StatusCode == 503) return (null, null, "이 플랜은 아직 결제 준비 중이에요.");
+            if (ticket && (int)r.StatusCode == 409)
+                return (null, null, (await r.Content.ReadAsStringAsync()).Contains("ticket link")
+                    ? "이 플랜은 할인 결제 링크가 아직 없어요. 할인 티켓 체크를 끄면 정가로 결제할 수 있어요."
+                    : "할인 티켓을 쓸 수 없어요. 기간이 끝났거나 이미 썼어요.");
             if (!r.IsSuccessStatusCode) return (null, null, "주문을 만들지 못했어요. 잠시 뒤 다시 시도하세요.");
             using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
             var code = doc.RootElement.GetProperty("code").GetString()!;
             var url = doc.RootElement.GetProperty("url").GetString();
             var serverMethod = doc.RootElement.TryGetProperty("method", out var m) ? m.GetString() ?? "manual" : "manual";
-            SavePending(new PendingOrder(code, plan, DateTime.UtcNow, url ?? "", serverMethod));
+            SavePending(new PendingOrder(code, plan, DateTime.UtcNow, url ?? "", serverMethod, Ticket: ticket));
             WatchPending();
             return (code, url, null);
         }

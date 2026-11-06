@@ -18,7 +18,7 @@ This agreement applies between the Seller and the person who installs or uses Sy
 ! 5. A key is for the buyer's own use only. It may not be given to others or made public.
 6. If a key is made public or misused, the Seller may block it. A blocked key returns to the Free plan when the app starts online.
 7. A key received with a referral code or an invite code can be used only for the period shown. The Seller may end a referral code at any time. A key already received stays usable for its period.
-8. Members can create invite codes. Invite rewards are received as Premium keys for the period shown in the app. The Seller may cancel rewards obtained by improper means, such as false accounts, and block those accounts.
+8. Members can create invite codes. Invite rewards are received as Premium keys for the period shown in the app. A member who uses an invite code at sign-up receives the discount ticket shown in the app. A ticket can be used once on a direct payment within the period shown, and cannot be exchanged for cash or given to anyone else. The Seller may cancel rewards obtained by improper means, such as false accounts, and block those accounts.
 
 ## Article 4 (Prohibited acts)
 The User may not:

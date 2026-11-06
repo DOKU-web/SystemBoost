@@ -50,9 +50,12 @@ const PLANS = { monthly: "월간", yearly: "연간", lifetime: "평생",
                 ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간", ultra_lifetime: "울트라 평생" };
 const PLAN_DAYS = { monthly: 31, yearly: 366 };            // manual subscription keys (+3 days grace)
 
+// A fixed-price payment link cannot take a discount, so a discount ticket has its own link for each plan.
+const LINK_KEYS = Object.keys(PLANS).flatMap(p => [p, p + "_ticket"]);
+
 async function payLinks(env) {
   try { const o = JSON.parse((await env.LICENSES.get("config:pay_urls")) || "{}"); 
-        return Object.fromEntries(Object.keys(PLANS).filter(p => /^https:\/\/\S+$/.test(o[p] || "")).map(p => [p, o[p]])); }
+        return Object.fromEntries(LINK_KEYS.filter(p => /^https:\/\/\S+$/.test(o[p] || "")).map(p => [p, o[p]])); }
   catch { return {}; }
 }
 
@@ -85,7 +88,7 @@ function lsVariant(env, plan) {
 async function openPlans(env) {   // plans the app may sell right now, per method
   const mode = await salesMode(env);
   return { methods: { card: mode === "off" ? [] : Object.keys(PLANS).filter(p => lsVariant(env, p)),
-                      manual: Object.keys(await payLinks(env)) } };
+                      manual: Object.keys(await payLinks(env)).filter(p => PLANS[p]) } };
 }
 
 async function order(req, url, env) {
@@ -101,10 +104,17 @@ async function order(req, url, env) {
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", r = crypto.getRandomValues(new Uint8Array(8));
   const c = [...r].map(b => A[b % A.length]).join("");
   const code = "SB-" + c.slice(0, 4) + "-" + c.slice(4);
-  let payUrl;
+  let payUrl, ticket = 0;
   if (method === "card") { payUrl = await lsCheckout(env, plan, code); if (!payUrl) return json({ error: "checkout failed" }, 502); }
+  else if (url.searchParams.get("ticket") === "1") {
+    payUrl = (await payLinks(env))[plan + "_ticket"];
+    if (!payUrl) return json({ error: "ticket link" }, 409);
+    const t = await accounts(env, "ticket", { token: (req.headers.get("Authorization") || "").replace(/^Bearer /, ""), order: code });
+    if (t.error) return json({ error: "ticket" }, 409);
+    ticket = t.percent;
+  }
   else payUrl = (await payLinks(env))[plan];
-  await putOrder(env, { code, plan, at: now(), status: "requested", method });
+  await putOrder(env, { code, plan, at: now(), status: "requested", method, ...(ticket ? { ticket } : {}) });
   return json({ code, url: payUrl, method });
 }
 
@@ -430,6 +440,7 @@ async function admin(req, url, env) {
       if (!o) return json({ error: "주문을 찾지 못했어요" }, 404, false);
       if (o.status === "approved") return json({ error: "이미 승인된 주문이에요" }, 409, false);
       const r = await adminIssue(env, { code: o.code, plan: o.plan, email: body.email, note: body.note || [o.payer, o.msg].filter(Boolean).join(" · ") });
+      if (!r.error && o.ticket) await accounts(env, "ticket/used", { order: o.code });
       return json(r, r.error ? 400 : 200, false);
     }
     case "POST /orders/reject": {
@@ -438,11 +449,14 @@ async function admin(req, url, env) {
       if (o.status === "approved") return json({ error: "승인된 주문은 거절할 수 없어요. 키를 차단하세요" }, 409, false);
       o.status = "rejected"; o.reason = String(body.reason || "").trim().slice(0, 100) || "결제를 확인하지 못했어요";
       await putOrder(env, o);
+      if (o.ticket) await accounts(env, "ticket/release", { order: o.code });
       await audit(env, "admin", "거절", o.code + " · " + o.reason);
       return json({ ok: true }, 200, false);
     }
     case "POST /orders/delete": {
       if (!CODE_RE.test(body.code || "")) return json({ error: "bad code" }, 400, false);
+      const o = await getOrder(env, body.code);
+      if (o?.ticket && o.status !== "approved") await accounts(env, "ticket/release", { order: o.code });
       await env.LICENSES.delete("ord:" + body.code);
       await audit(env, "admin", "주문 삭제", body.code);
       return json({ ok: true }, 200, false);
@@ -455,9 +469,9 @@ async function admin(req, url, env) {
     case "GET /pay-links": return json({ pay: await payLinks(env) }, 200, false);
     case "POST /pay-links": {
       const o = {};
-      for (const p of Object.keys(PLANS)) {
+      for (const p of LINK_KEYS) {
         const v = String(body[p] || "").trim();
-        if (v && !/^https:\/\/\S+$/.test(v)) return json({ error: PLANS[p] + " 링크는 https:// 로 시작해야 해요" }, 400, false);
+        if (v && !/^https:\/\/\S+$/.test(v)) return json({ error: (PLANS[p] || PLANS[p.replace("_ticket", "")] + " 할인") + " 링크는 https:// 로 시작해야 해요" }, 400, false);
         if (v) o[p] = v;
       }
       await env.LICENSES.put("config:pay_urls", JSON.stringify(o));
@@ -600,7 +614,7 @@ async function signup(env, b) {
   const seller = await getRef(env, invite);
   const stop = (seller && refClosed(seller)) || (await refBlocked(env, device));
   if (stop) return stop;
-  const r = await accounts(env, "signup", { ...b, invite: seller ? "" : invite });
+  const r = await accounts(env, "signup", { ...b, invite: seller ? "" : invite, ticket: true });
   if (r.error) return r;
   return { ...r, ...(seller ? await useRef(env, seller, device) : await grant(env, invite, device, "premium", INVITE_DAYS)) };
 }

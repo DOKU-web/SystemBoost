@@ -696,7 +696,6 @@
 "가입일 {0}": "Joined {0}",
 "로그아웃": "Log out",
 "친구 초대": "Invite friends",
-"내 초대 코드로 가입한 사람은 프리미엄 {0}일을 받고, 나는 한 명당 {1}일을 받아요. 받을 수 있는 보상은 모두 {2}일까지예요.": "Whoever signs up with your invite code gets {0} days of Premium, and you get {1} days for each person, up to {2} days in total.",
 "초대 코드 만들기": "Create invite code",
 "새 코드로 바꾸기": "Change to a new code",
 "코드를 바꾸면 지금 코드는 쓸 수 없게 돼요. 초대한 기록과 보상은 남아요.": "The current code stops working when you change it. Your invitation records and rewards stay.",
@@ -724,5 +723,13 @@
 "회원의 초대 코드는 회원 가입할 때 입력해요. 왼쪽 '계정'에서 가입하세요": "A member's invite code is entered at sign-up. Sign up under 'Account' on the left",
 "새 비밀번호 ({0}자 이상)": "New password ({0} characters or more)",
 "수집 항목: 아이디, 비밀번호(암호화해서 저장), 가입·로그인 시각, 초대 코드와 초대 관계. 목적: 회원 관리와 초대 혜택. 보관: Supabase 데이터베이스에 탈퇴할 때까지. 메일이나 이름은 받지 않아요. 동의하지 않으면 가입할 수 없지만, 앱은 회원이 아니어도 쓸 수 있어요.": "Collected: ID, password (stored encrypted), sign-up and login times, invite code and invitation records. Purpose: managing members and invite benefits. Kept: in a Supabase database until you leave. No email or name is collected. Without agreement you cannot sign up, but you can use the app without an account.",
-"회원 서버가 응답하지 않아요. 잠시 뒤 다시 해 주세요. 키와 앱 기능은 그대로 쓸 수 있어요": "The member server is not responding. Please try again soon. Your key and the app keep working"
+"회원 서버가 응답하지 않아요. 잠시 뒤 다시 해 주세요. 키와 앱 기능은 그대로 쓸 수 있어요": "The member server is not responding. Please try again soon. Your key and the app keep working",
+"내 초대 코드로 가입한 사람은 프리미엄 {0}일과 {1}% 할인 티켓을 받고, 나는 한 명당 {2}일을 받아요. 받을 수 있는 보상은 모두 {3}일까지예요.": "Whoever signs up with your invite code gets {0} days of Premium and a {1}% discount ticket, and you get {2} days for each person, up to {3} days in total.",
+"할인 티켓 {0}% 쓰기 ({1}까지)": "Use the {0}% discount ticket (until {1})",
+"할인 티켓 {0}% · {1}까지 · 프리미엄 화면의 직접 결제에서 쓸 수 있어요": "{0}% discount ticket · until {1} · usable on a direct payment on the Premium page",
+"이 플랜은 할인 결제 링크가 아직 없어요. 할인 티켓 체크를 끄면 정가로 결제할 수 있어요.": "This plan has no discount payment link yet. Uncheck the discount ticket to pay the full price.",
+"할인 티켓을 쓸 수 없어요. 기간이 끝났거나 이미 썼어요.": "The discount ticket cannot be used. It has expired or was already used.",
+"₩{0} / 월": "₩{0} / month",
+"₩{0} / 년": "₩{0} / year",
+"₩{0} · 한 번 결제": "₩{0} · one payment"
 }

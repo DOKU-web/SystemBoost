@@ -22,7 +22,11 @@ create table if not exists public.accounts (
   earned_days integer not null default 0,
   fails integer not null default 0,
   locked_until timestamptz,
-  blocked boolean not null default false
+  blocked boolean not null default false,
+  ticket_percent integer,
+  ticket_expires timestamptz,
+  ticket_order text,
+  ticket_used timestamptz
 );
 create table if not exists public.account_sessions (
   token text primary key,
@@ -132,8 +136,10 @@ begin
     end if;
     perform account_count('signup:' || (b->>'ip'));
     perform account_count('signup:all');
-    insert into accounts (id, hash, recovery, last_login, consent, invited_by)
-      values (b->>'id', crypt(b->>'pw', gen_salt('bf', 10)), b->>'proof', now(), b->>'consent', inviter.id)
+    insert into accounts (id, hash, recovery, last_login, consent, invited_by, ticket_percent, ticket_expires)
+      values (b->>'id', crypt(b->>'pw', gen_salt('bf', 10)), b->>'proof', now(), b->>'consent', inviter.id,
+              case when (b->>'ticket')::boolean then (b->>'ticketPercent')::integer end,
+              case when (b->>'ticket')::boolean then now() + make_interval(days => (b->>'ticketDays')::integer) end)
       on conflict (id) do nothing;
     if not found then return account_fail(409, 'taken'); end if;
     if inviter.id is not null then
@@ -194,13 +200,33 @@ begin
     return jsonb_build_object('ok', true);
   end if;
 
+  -- a ticket is spent when the seller approves the order, and comes back if the order is refused
+  if action = 'ticket/used' then
+    update accounts set ticket_used = now() where ticket_order = b->>'order';
+    return jsonb_build_object('ok', true);
+  end if;
+  if action = 'ticket/release' then
+    update accounts set ticket_order = null where ticket_order = b->>'order' and ticket_used is null;
+    return jsonb_build_object('ok', true);
+  end if;
+
   -- everything below needs a session
   select * into a from account_member(b->>'token');
   if a.id is null then return account_fail(401, 'session'); end if;
 
   if action = 'me' then
     return jsonb_build_object('id', a.id, 'created', account_ms(a.created), 'code', a.invite_code, 'invites', a.invites,
-                              'rewardDays', a.reward_days, 'earnedDays', a.earned_days);
+                              'rewardDays', a.reward_days, 'earnedDays', a.earned_days,
+                              'ticket', case when a.ticket_percent is not null and a.ticket_used is null and a.ticket_expires > now()
+                                             then jsonb_build_object('percent', a.ticket_percent, 'expires', account_ms(a.ticket_expires)) end);
+  end if;
+
+  if action = 'ticket' then
+    if a.ticket_percent is null or a.ticket_used is not null or a.ticket_expires <= now() then
+      return account_fail(409, 'ticket');
+    end if;
+    update accounts set ticket_order = b->>'order' where id = a.id;
+    return jsonb_build_object('percent', a.ticket_percent);
   end if;
 
   if action = 'invite' then

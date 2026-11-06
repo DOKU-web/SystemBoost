@@ -27,6 +27,8 @@ public sealed class PremiumPage : UserControl
     private readonly TextBox _key = new() { Watermark = "XXXX.XXXX 형식 라이선스 키", MinWidth = 360 };
     private readonly TextBlock _msg = Ui.Text("", "muted", wrap: true);
     private readonly TextBlock _buyMsg = Ui.Text("", "muted", wrap: true);
+    private readonly CheckBox _ticketBox = new() { IsVisible = false };
+    private int _ticketPercent;
     private string _plan = "yearly";
     private bool _ultra;
     private string PlanId => _ultra ? "ultra_" + _plan : _plan;
@@ -141,7 +143,6 @@ public sealed class PremiumPage : UserControl
             {
                 _ultra = ultra;
                 foreach (var o in tierP.Children.OfType<ToggleButton>()) o.IsChecked = o == t;
-                _price.Text = Price();
                 UpdateBuy();
             };
             tierP.Children.Add(t);
@@ -158,7 +159,6 @@ public sealed class PremiumPage : UserControl
             {
                 _plan = plan;
                 foreach (var o in periodP.Children.OfType<ToggleButton>()) o.IsChecked = o == t;
-                _price.Text = Price();
                 UpdateBuy();
             };
             periodP.Children.Add(t);
@@ -167,6 +167,8 @@ public sealed class PremiumPage : UserControl
         buy.Children.Add(periodBox);
         _price.Foreground = new SolidColorBrush(Color.Parse("#FF7A1A"));
         buy.Children.Add(_price);
+        _ticketBox.Click += (_, _) => ShowPrice();
+        buy.Children.Add(_ticketBox);
         buy.Children.Add(Ui.Text("월간·연간은 그 기간 동안, 평생은 한 번 결제로 계속 써요. " +
             $"스팀에서 받았다면 스팀 상점의 'SystemBoost Premium'({PriceSteamDlc}, 한 번 결제)으로 구매하세요.", "muted", wrap: true));
         // payment method: card (saved card, automatic) or bank transfer / direct payment (seller approves)
@@ -265,6 +267,7 @@ public sealed class PremiumPage : UserControl
         Refresh();
         ShowPending();
         AttachedToVisualTree += async (_, _) => await LoadShop();   // links may change in the dashboard
+        AttachedToVisualTree += async (_, _) => await LoadTicket();
     }
 
     private async System.Threading.Tasks.Task LoadShop()
@@ -291,6 +294,8 @@ public sealed class PremiumPage : UserControl
         var open = _method == "card" ? card : manual;
         _buyBtn.IsEnabled = open;
         _buyBtn.Content = !open ? "결제 준비 중" : _method == "card" ? "카드로 결제하기" : "결제하기";
+        _ticketBox.IsVisible = _ticketPercent > 0 && open && _method == "manual";   // a card checkout cannot take it
+        ShowPrice();
         _methodNote.IsVisible = open;
         _methodNote.Text = _method == "card"
             ? (_plan == "lifetime" ? "카드로 한 번 결제하면 키가 바로 떠요." : "카드를 등록하면 기간마다 자동으로 결제되고 키도 자동으로 연장돼요. 해지는 결제 메일의 구독 관리 링크에서 언제든 할 수 있어요.")
@@ -320,6 +325,33 @@ public sealed class PremiumPage : UserControl
         if (top != null) await top.Launcher.LaunchUriAsync(new Uri(url));
     }
 
+    private async System.Threading.Tasks.Task LoadTicket()
+    {
+        _ticketPercent = 0;
+        if (Account.SignedIn && (await Account.ProfileAsync()).profile is { TicketPercent: int percent } p)
+        {
+            _ticketPercent = percent;
+            _ticketBox.Content = $"할인 티켓 {percent}% 쓰기 ({p.TicketExpires?.LocalDateTime:yyyy-MM-dd}까지)";
+            _ticketBox.IsChecked = true;
+        }
+        UpdateBuy();
+    }
+
+    private bool UseTicket => _ticketBox.IsVisible && _ticketBox.IsChecked == true;
+
+    private void ShowPrice()
+    {
+        var text = Price();
+        if (UseTicket)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(text, @"₩([\d,]+)");
+            var won = int.Parse(m.Groups[1].Value.Replace(",", ""), System.Globalization.CultureInfo.InvariantCulture);
+            var sale = won * (100 - _ticketPercent) / 100;
+            text = text.Replace(m.Value, "₩" + sale.ToString("N0", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        _price.Text = text;
+    }
+
     private string Price() => (_ultra, _plan) switch
     {
         (false, "monthly") => PriceMonthly, (false, "lifetime") => PriceLifetime, (false, _) => PriceYearly,
@@ -329,7 +361,7 @@ public sealed class PremiumPage : UserControl
     /// Gets an order code, shows it, opens the seller's payment page. The key arrives later (License.KeyArrived).
     private async System.Threading.Tasks.Task Buy()
     {
-        if (License.Pending is { } prev && prev.Plan == PlanId && prev.Method == _method && prev.Url.Length > 0)
+        if (License.Pending is { } prev && prev.Plan == PlanId && prev.Method == _method && prev.Ticket == UseTicket && prev.Url.Length > 0)
         {   // same plan already ordered: reuse the code instead of making a new one
             _buyMsg.Text = "이미 만든 주문이 있어요. 같은 주문으로 결제하세요.";
             await Open(prev.Url);
@@ -337,7 +369,7 @@ public sealed class PremiumPage : UserControl
         }
         _buyBtn.IsEnabled = false;
         _buyMsg.Text = "주문을 만드는 중…";
-        var (code, url, err) = await License.CreateOrderAsync(PlanId, _method);
+        var (code, url, err) = await License.CreateOrderAsync(PlanId, _method, UseTicket);
         UpdateBuy();
         if (code == null || url == null) { _buyMsg.Text = err ?? "주문을 만들지 못했어요."; return; }
         ShowPending();

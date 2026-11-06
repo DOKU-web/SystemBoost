@@ -165,6 +165,7 @@ await run("UPDATE public.accounts SET invites = 3 WHERE id = 'alice_1'");
 
 // a seller's code works at sign-up too, and a member's code is refused on the Premium page
 await adm("/referrals", { code: "SELLER1", plan: "ultra", days: 7, max: 1 });
+await adm("/referrals", { code: "SELLER2", days: 3, max: 5 });
 const s = await send("/account/signup", okUser("friend7", { invite: "SELLER1", device: device(107) }));
 assert.equal(payload(s.key).plan, "ultra");
 assert.equal((await send("/account/signup", okUser("friend8", { invite: "SELLER1", device: device(108) }))).error, "used up");
@@ -211,6 +212,37 @@ assert.equal(c3.status, 200);
 const fresh = (await adm("/members/recovery", { id: "bobby" })).recovery;
 assert.equal((await send("/account/recover", { id: "bobby", recovery: fresh, next: "bobbyspass" })).status, 200);
 assert.equal((await adm("/members/recovery", { id: "ghost" })).status, 404);
+
+// a discount ticket: only with a code, on its own payment link, spent on approval, back on refusal
+const order = (query, token) => worker.fetch(new Request("https://lic.example/order?" + query, { method: "POST", headers: token ? { Authorization: "Bearer " + token } : {} }), env)
+  .then(async r => ({ status: r.status, ...(await r.json()) }));
+const buy = "plan=monthly&method=manual";
+const t1 = await send("/account/signup", okUser("ticket1", { invite: c2, device: device(120) }));
+const t2 = await send("/account/signup", okUser("ticket2", { invite: "SELLER2", device: device(121) }));
+const left = async token => (await send("/account/me", undefined, token)).ticket;
+assert.equal((await left(t1.token)).percent, 10);
+assert.ok((await left(t1.token)).expires > Date.now() + 29 * 864e5);
+assert.equal((await send("/account/me", undefined, t1.token)).inviteTicket, 10);
+assert.equal(await left(c3.token), null);   // no code at sign-up, no ticket
+await adm("/pay-links", { monthly: "https://pay.example/m" });
+assert.equal((await order(buy + "&ticket=1", t1.token)).error, "ticket link");
+await adm("/pay-links", { monthly: "https://pay.example/m", monthly_ticket: "https://pay.example/m-sale" });
+assert.equal((await order(buy, t1.token)).url, "https://pay.example/m");
+assert.equal((await order(buy + "&ticket=1")).error, "ticket");
+assert.equal((await order(buy + "&ticket=1", c3.token)).error, "ticket");
+const o1 = await order(buy + "&ticket=1", t1.token);
+assert.equal(o1.url, "https://pay.example/m-sale");
+assert.equal((await adm("/orders?status=all")).orders.find(o => o.code === o1.code).ticket, 10);
+await adm("/orders/reject", { code: o1.code, reason: "x" });
+assert.equal((await left(t1.token)).percent, 10);
+const o2 = await order(buy + "&ticket=1", t1.token);
+assert.equal((await adm("/orders/approve", { code: o2.code, email: "" })).error, undefined);
+assert.equal(await left(t1.token), null);
+assert.equal((await order(buy + "&ticket=1", t1.token)).error, "ticket");
+await run("UPDATE public.accounts SET ticket_expires = now() - interval '1 minute' WHERE id = 'ticket2'");
+assert.equal(await left(t2.token), null);
+assert.equal((await order(buy + "&ticket=1", t2.token)).error, "ticket");
+assert.equal((await send("/account/ticket", { order: "SB-AAAA-AAAA" }, t1.token)).status, 404);   // not a public route
 
 // leaving: the password is needed, the record goes, the one they invited keeps their account
 assert.equal((await send("/account/delete", { password: "wrong-pass" }, a.token)).error, "wrong");

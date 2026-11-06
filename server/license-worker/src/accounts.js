@@ -10,6 +10,8 @@ export const INVITE_DAYS = 3;   // Premium for whoever signs up with a member's 
 const LIMITS = {
   rewardDays: 3,                // Premium for the member who invited them
   rewardCap: 30,                // the most days one member can earn
+  ticketPercent: 10,            // discount for whoever signs up with a code
+  ticketDays: 30,               // how long that ticket lasts
   inviteMax: 50,                // sign-ups on one member's code
   sessionDays: 90, sessionsKept: 5,
   loginTries: 5, lockMin: 15,
@@ -70,6 +72,8 @@ export async function accounts(env, action, b) {
     case "signup": return signup(env, s, b);
     case "login": return login(env, s, b);
     case "recover": return recover(env, s, b);
+    case "ticket/used":
+    case "ticket/release": return db(env, action, { order: b.order });
     case "admin/recovery": {
       const recovery = newRecovery(), id = cleanId(b.id);
       const r = await db(env, action, { id, proof: await s.proof(recovery) });
@@ -83,7 +87,7 @@ export async function accounts(env, action, b) {
   switch (action) {
     case "me": {
       const r = await db(env, "me", { token });
-      return r.error ? r : { ...r, rewardCap: LIMITS.rewardCap, rewardEach: LIMITS.rewardDays, inviteDays: INVITE_DAYS };
+      return r.error ? r : { ...r, rewardCap: LIMITS.rewardCap, rewardEach: LIMITS.rewardDays, inviteDays: INVITE_DAYS, inviteTicket: LIMITS.ticketPercent };
     }
     case "invite":
       for (let i = 0; i < 5; i++) {
@@ -93,6 +97,7 @@ export async function accounts(env, action, b) {
       return fail(503, "unavailable");
     case "reward":
     case "logout": return db(env, action, { token });
+    case "ticket": return db(env, "ticket", { token, order: b.order });
     case "password": return changePassword(env, s, token, b);
     case "delete": return db(env, "delete", { token, pw: await s.password(String(b.password || "").slice(0, 100)) });
   }
@@ -106,7 +111,7 @@ async function signup(env, s, b) {
   if (b.agree !== true || b.age14 !== true) return fail(400, "consent");
   const token = newToken(), recovery = newRecovery();
   const r = await db(env, "signup", { id, pw: await s.password(password), proof: await s.proof(recovery), session: await sha(token),
-                                      invite: String(b.invite || ""), ip: await s.ip(b.ip), consent: CONSENT + " " + new Date().toISOString() });
+                                      invite: String(b.invite || ""), ticket: !!b.ticket, ip: await s.ip(b.ip), consent: CONSENT + " " + new Date().toISOString() });
   return r.error ? r : { id, token, recovery };
 }
 

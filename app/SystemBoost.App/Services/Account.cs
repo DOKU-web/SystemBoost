@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace SystemBoost.App.Services;
 
 public sealed record AccountProfile(string Id, DateTimeOffset Created, string? Code, int Invites, int RewardDays, int EarnedDays,
-                                    int RewardCap, int RewardEach, int InviteDays);
+                                    int RewardCap, int RewardEach, int InviteDays, int InviteTicket, int? TicketPercent, DateTimeOffset? TicketExpires);
 
 public static class Account
 {
@@ -24,6 +24,7 @@ public static class Account
     private static Saved? _saved = Read();
 
     public static string? Id => _saved?.Id;
+    public static string? Token => _saved?.Token;
     public static bool SignedIn => _saved != null;
     public static event Action? Changed;
 
@@ -148,8 +149,11 @@ public static class Account
         var (r, error) = await Send("me");
         if (r is not { } ok) return (null, error);
         int N(string name) => ok.GetProperty(name).GetInt32();
+        var ticket = ok.TryGetProperty("ticket", out var t) && t.ValueKind == JsonValueKind.Object ? t : (JsonElement?)null;
         return (new AccountProfile(Text(ok, "id")!, DateTimeOffset.FromUnixTimeMilliseconds(ok.GetProperty("created").GetInt64()), Text(ok, "code"),
-                                   N("invites"), N("rewardDays"), N("earnedDays"), N("rewardCap"), N("rewardEach"), N("inviteDays")), null);
+                                   N("invites"), N("rewardDays"), N("earnedDays"), N("rewardCap"), N("rewardEach"), N("inviteDays"), N("inviteTicket"),
+                                   ticket?.GetProperty("percent").GetInt32(),
+                                   ticket is { } v ? DateTimeOffset.FromUnixTimeMilliseconds(v.GetProperty("expires").GetInt64()) : null), null);
     }
 
     public static async Task<string?> NewInviteCodeAsync() => (await Send("invite", new { })).error;
