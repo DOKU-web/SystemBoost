@@ -7,6 +7,19 @@ compatibility_date = "2026-11-01"
 binding = "LICENSES"
 id = "55d7a49d2e7940d5a261cdf568169480"
 
+# Usage statistics (src/stats.js): every ping writes, which KV's free plan cannot take.
+[[durable_objects.bindings]]
+name = "STATS"
+class_name = "Stats"
+
+[[migrations]]
+tag = "stats-1"
+new_sqlite_classes = ["Stats"]
+
+# Hourly GitHub download counts, so the daily numbers have no holes while the dashboard is closed.
+[triggers]
+crons = ["7 * * * *"]
+
 [vars]
 # Lemon Squeezy auto-payments only (manual payment links do not use this):
 # off  = closed: no checkout, no keys (default)

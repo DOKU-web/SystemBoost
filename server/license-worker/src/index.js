@@ -1,4 +1,6 @@
 import { ADMIN_HTML } from "./admin_page.js";
+import { cleanPing } from "./stats.js";
+export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
 //   POST /checkout?plan=monthly|yearly|lifetime&session=<id>
@@ -13,6 +15,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 //                                the owner confirms the payment and issues the key for that code in /admin,
 //                                and the app (polling /claim?session=<code>) pops it up
 //   GET  /check?id=<key id>      {revoked} - the app asks this at start (offline = keeps working)
+//   POST /ping                   usage statistics from a running app -> {next: seconds until the next ping}
 //   GET  /admin                  owner dashboard (HTML); its API is /admin/api/* with
 //                                "Authorization: Bearer <ADMIN_TOKEN>"
 //
@@ -26,7 +29,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 //   LS_API_KEY            Lemon Squeezy API key (for /checkout)
 //   ADMIN_TOKEN           dashboard password, 6+ characters (unset = dashboard off; wrong tries lock out)
 // Vars (wrangler.toml [vars]): SALES_MODE ("off" | "test" | "live"), LS_STORE_ID, LS_VARIANT_MONTHLY, LS_VARIANT_YEARLY, LS_VARIANT_LIFETIME, PUBLIC_URL
-// KV namespace binding: LICENSES
+// KV namespace binding: LICENSES. Durable Object binding: STATS (stats.js). Cron: hourly download counts.
 
 // SALES_MODE gate (default "off" = no checkout, no keys, whatever arrives):
 //   off  -> /checkout 503, webhooks acknowledged but ignored
@@ -136,13 +139,29 @@ export default {
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env);
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
+      if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       return json({ error: "not found" }, 404);
     } catch (e) {
       return json({ error: "server error" }, 500);
     }
   },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(stats(env, "/tick"));
+  },
 };
+
+// ---------------------------------------------------------------- usage statistics
+async function stats(env, path, body) {
+  const object = env.STATS.get(env.STATS.idFromName("all"));
+  const res = await object.fetch("https://stats" + path, body === undefined ? undefined : { method: "POST", body: JSON.stringify(body) });
+  if (!res.ok) throw new Error("stats " + res.status);
+  return res.json();
+}
+async function ping(req, env) {
+  const p = cleanPing(await req.json().catch(() => null), req.cf?.country);
+  return p ? json(await stats(env, "/ping", p)) : json({ error: "bad ping" }, 400);
+}
 
 // ---------------------------------------------------------------- checkout (automatic payments)
 async function checkout(url, env) {   // kept for direct use; the app goes through /order
@@ -310,7 +329,7 @@ async function admin(req, url, env) {
   if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 6) return json({ error: "not found" }, 404);   // off unless configured
   if (url.pathname === "/admin" && req.method === "GET")
     return new Response(ADMIN_HTML.replace("/*SB_SERVED*/false", "true"), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
-      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; frame-ancestors 'none'",
+      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://api.github.com; img-src data:; frame-ancestors 'none'",
       "x-frame-options": "DENY", "referrer-policy": "no-referrer" } });
   // Wrong-password lockout: 5 misses per IP per 15 min, 20 misses in total per hour.
   // A short PIN is only safe because of this (20 guesses an hour vs 1,000,000 six-digit PINs).
@@ -332,6 +351,8 @@ async function admin(req, url, env) {
     case "GET /summary": return json(await summary(env), 200, false);
     case "GET /keys": return json(await listKeys(env, url.searchParams.get("q") || "", url.searchParams.get("status") || "all"), 200, false);
     case "GET /log": return json(await listLog(env), 200, false);
+    case "GET /stats": return json(await stats(env, "/read"), 200, false);
+    case "POST /downloads": return json(await stats(env, "/downloads", body.releases), 200, false);
     case "POST /issue": return json(await adminIssue(env, body), 200, false);
     case "POST /revoke": {
       if (!/^[0-9a-f]{16}$/.test(body.id || "")) return json({ error: "bad id" }, 400, false);

@@ -94,6 +94,10 @@ public partial class MainWindow : Window
         PlanText.Text = License.IsUltra ? "모든 기능 사용 중" : License.IsPremium ? "프리미엄 기능 사용 중" : "누르면 프리미엄 안내";
     }
 
+    // What the usage statistics report about this moment.
+    public async System.Threading.Tasks.Task<(int frameGen, bool boost)> UsageNow() =>
+        (_frameGen.UsageMultiplier, await _backend.IsAppliedAsync("boost.oneclick"));
+
     public void Shutdown(bool applyUpdateOnExit = true)
     {
         if (_shutDown) return;

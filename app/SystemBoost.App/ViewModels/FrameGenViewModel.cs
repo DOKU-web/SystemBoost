@@ -96,6 +96,9 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public string Capture { get => _capture; set => Set(ref _capture, value); }
     public bool ShowCaptureOption => Platform.IsWindows;
 
+    /// For the usage statistics: the multiplier in use, 0 while stopped.
+    public int UsageMultiplier => !Running ? 0 : Mode == "auto" ? MaxMul : int.TryParse(Mode.TrimStart('x'), out var m) ? m : 0;
+
     private bool _running;
     public bool Running { get => _running; private set { if (Set(ref _running, value)) Raise(nameof(StartText)); } }
     public string StartText => Running ? "중지" : "시작";
