@@ -19,12 +19,12 @@
         <StackPanel x:Name="NavPanel" DockPanel.Dock="Top" Spacing="4" />
         <StackPanel DockPanel.Dock="Bottom" Spacing="10">
           <Button x:Name="NavSettings" Classes="nav" Content="⚙   설정" />
-          <Border x:Name="PlanCard" BorderBrush="{StaticResource SbLine}" BorderThickness="1" CornerRadius="12" Padding="14" Cursor="Hand">
+          <Button x:Name="PlanCard" Classes="plancard" Cursor="Hand">
             <StackPanel Spacing="4">
               <TextBlock x:Name="PlanTitle" Text="무료" FontWeight="Bold" FontSize="14" />
               <TextBlock x:Name="PlanText" Classes="muted" Text="" TextWrapping="Wrap" />
             </StackPanel>
-          </Border>
+          </Button>
         </StackPanel>
       </DockPanel>
     </Border>

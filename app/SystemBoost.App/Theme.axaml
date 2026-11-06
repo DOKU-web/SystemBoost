@@ -62,6 +62,21 @@
   <Style Selector="TextBlock.accent"><Setter Property="Foreground" Value="{StaticResource SbOrange}" /></Style>
   <Style Selector="TextBlock.label"><Setter Property="FontSize" Value="14" /></Style>
 
+  <!-- sidebar plan card: a button, so all of it can be clicked -->
+  <Style Selector="Button.plancard">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource SbLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.plancard:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#1A1A1D" />
+    <Setter Property="BorderBrush" Value="{StaticResource SbOrange}" />
+  </Style>
+
   <!-- sidebar navigation -->
   <Style Selector="Button.nav">
     <Setter Property="Background" Value="Transparent" />

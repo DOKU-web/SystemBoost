@@ -48,7 +48,7 @@ public partial class MainWindow : Window
         NavSettings.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
         UpdatePlan();
         License.Changed += UpdatePlan;
-        PlanCard.PointerPressed += (_, _) => OpenPlans();
+        PlanCard.Click += (_, _) => OpenPlans();
         Updater.Changed += UpdateBar;
         UpdateNotes.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
         UpdateLater.Click += (_, _) => { _updateDismissed = true; UpdateBar(); };
