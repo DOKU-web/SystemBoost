@@ -43,6 +43,7 @@ public partial class MainWindow : Window
             AddNav("🍷   윈도우 게임", "wine", () => new WindowsGamesPage(Go));
         AddNav("▧   벤치마크 · 기록", "bench", () => new BenchmarkPage());
         AddNav("★   프리미엄", "premium", () => new PremiumPage(_backend.Connected));
+        AddNav("◈   계정", "account", () => new AccountPage());
         AddNav("↺   백업 · 되돌리기", "backup", () => new BackupPage(_backend));
         NavSettings.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
         UpdatePlan();

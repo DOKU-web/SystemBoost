@@ -17,7 +17,8 @@ This agreement applies between the Seller and the person who installs or uses Sy
 4. A lifetime key has no limit on its period of use. This does not mean it will work on every future operating system and game.
 ! 5. A key is for the buyer's own use only. It may not be given to others or made public.
 6. If a key is made public or misused, the Seller may block it. A blocked key returns to the Free plan when the app starts online.
-7. A key received with a referral code can be used only for the period shown for that code. The Seller may end a code at any time. A key already received stays usable for its period.
+7. A key received with a referral code or an invite code can be used only for the period shown. The Seller may end a referral code at any time. A key already received stays usable for its period.
+8. Members can create invite codes. Invite rewards are received as Premium keys for the period shown in the app. The Seller may cancel rewards obtained by improper means, such as false accounts, and block those accounts.
 
 ## Article 4 (Prohibited acts)
 The User may not:
@@ -49,7 +50,9 @@ Use small values first, after understanding the risks.
 2. While it is on, the Program sends the Seller's server a randomly created install number, the app version, operating system, plan, frame generation multiplier, and whether one-click game boost is in use, for usage statistics. The server also records the country of the connection. Keys, email addresses, game names and hardware information are not sent, and the Seller does not store IP addresses. The install number is deleted 90 days after the last connection.
 3. The User can turn off usage statistics in the app's settings.
 4. When the User enters a referral code, the Program sends the code and a randomly created device number to the Seller's server. The device number is used only to stop the same device from using a code again, and is deleted after 90 days.
-5. How personal information is handled is shown on the sales page.
+5. Signing up as a member is optional and open only to people aged 14 or over. For members, the Seller keeps the ID, the encrypted password and recovery code, the times of sign-up and last login, the time of consent, and the invite code and invitation records in Supabase's database service. This information is used only to manage members and invite benefits, and is deleted at once when a member leaves.
+6. To prevent abuse of sign-up and login, the Seller's server keeps a one-way value made from the connecting IP address for up to 1 hour.
+7. How personal information is handled is shown on the sales page.
 
 ## Article 9 (Purchase and withdrawal)
 1. The User may withdraw from the purchase within 7 days of receiving the key.

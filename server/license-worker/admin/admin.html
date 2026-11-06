@@ -118,6 +118,13 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
   </div>
 
   <div class="card">
+    <h2>회원 <small id="mSum"></small></h2>
+    <div class="row" style="margin-bottom:10px"><input id="mQ" placeholder="아이디나 초대 코드로 찾기"><button id="mFind">찾기</button><span id="mMsg"></span></div>
+    <div class="tbl"><table><thead><tr><th>아이디</th><th>가입</th><th>마지막 로그인</th><th>초대 코드</th><th>초대</th><th>초대 보상</th><th>상태</th><th></th></tr></thead><tbody id="members"></tbody></table></div>
+    <p class="mut">비밀번호와 복구 코드는 여기서도 볼 수 없어요. 비밀번호를 잊은 회원에게는 '복구 코드'를 눌러 새 코드를 전해 주세요. 본인인지 먼저 확인하세요.</p>
+  </div>
+
+  <div class="card">
     <h2>추천 코드 <small>코드를 입력한 사람은 정한 기간의 키를 바로 받아요. 기기 한 대에 한 번만 쓸 수 있어요. 코드를 나눠 준 사람의 보상은 사용 횟수를 보고 직접 챙겨 주세요.</small></h2>
     <div class="row" style="margin-bottom:10px">
       <input id="rCode" maxlength="16" placeholder="코드 (비우면 자동으로 만들어요)">
@@ -231,7 +238,20 @@ async function api(path, body) {
 }
 
 // ------------------------------------------------------------ views
-async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs()]); }
+async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers()]); }
+async function loadMembers() {
+  let list;
+  try { list = await api("/members?q=" + encodeURIComponent($("mQ").value.trim())); }
+  catch (e) { if (e.message !== "401") { $("mSum").textContent = e.message; $("members").innerHTML = ""; } return; }   // the rest of the page does not need Supabase
+  const { members, summary: s } = list;
+  $("mSum").textContent = `전체 ${num(s.total)}명 · 이번 주 가입 ${num(s.week)}명 · 이번 주 로그인 ${num(s.active)}명 · 초대로 가입 ${num(s.invited)}명 · 차단 ${num(s.blocked)}명`;
+  $("members").innerHTML = members.length ? members.map(m => `<tr>
+    <td><code>${esc(m.id)}</code>${m.invitedBy ? `<div class="mut">초대: ${esc(m.invitedBy)}</div>` : ""}</td><td class="m">${when(new Date(m.created).toISOString())}</td>
+    <td class="m">${m.lastLogin ? when(new Date(m.lastLogin).toISOString()) : "—"}</td><td><code>${esc(m.code) || "—"}</code></td><td class="m">${Number(m.invites)}명</td>
+    <td class="m">${Number(m.earned)}일${m.waiting ? ` (미수령 ${Number(m.waiting)}일)` : ""}</td><td>${m.blocked ? "차단" : "정상"}</td>
+    <td style="text-align:right;white-space:nowrap"><button data-mem-block="${esc(m.id)}" data-on="${m.blocked ? "" : "1"}">${m.blocked ? "차단 해제" : "차단"}</button> <button data-mem-rec="${esc(m.id)}">복구 코드</button> <button class="d" data-mem-del="${esc(m.id)}">삭제</button></td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">회원이 없어요</td></tr>`;
+}
 async function loadRefs() {
   const { refs } = await api("/referrals");
   $("refs").innerHTML = refs.length ? refs.map(r => `<tr>
@@ -441,6 +461,8 @@ $("saveLinks").onclick = async () => {
         $("pMsg").textContent = "저장했어요. 앱은 다음에 프리미엄 화면을 열 때 반영해요."; $("pMsg").className = "okc"; loadLinks(); }
   catch (e) { $("pMsg").textContent = e.message; $("pMsg").className = "err"; }
 };
+$("mFind").onclick = () => loadMembers();
+$("mQ").onkeydown = e => { if (e.key === "Enter") loadMembers(); };
 $("rAdd").onclick = async () => {
   const msg = t => { $("rMsg").textContent = t; $("rMsg").className = "err"; };
   try {
@@ -453,6 +475,18 @@ $("rAdd").onclick = async () => {
 };
 document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.memBlock) { await api("/members/block", { id: t.dataset.memBlock, on: !!t.dataset.on }); loadMembers(); loadLog(); return; }
+  if (t.dataset.memRec) {
+    if (await ask("복구 코드를 새로 만들까요?", `<code>${esc(t.dataset.memRec)}</code> — 본인인지 확인했을 때만 만드세요. 지금 코드는 쓸 수 없게 돼요.`)) {
+      const r = await api("/members/recovery", { id: t.dataset.memRec });
+      $("mMsg").textContent = t.dataset.memRec + "의 새 복구 코드: " + r.recovery + " (다시 볼 수 없어요)"; $("mMsg").className = "okc"; loadLog();
+    }
+    return;
+  }
+  if (t.dataset.memDel) {
+    if (await ask("회원을 삭제할까요?", `<code>${esc(t.dataset.memDel)}</code> — 되돌릴 수 없어요. 이미 받은 키는 그대로 쓸 수 있어요.`)) { await api("/members/delete", { id: t.dataset.memDel }); loadMembers(); loadLog(); }
+    return;
+  }
   if (t.dataset.refSet) { await api("/referrals/set", { code: t.dataset.refSet, on: !!t.dataset.on }); loadRefs(); loadLog(); return; }
   if (t.dataset.refDel) {
     if (await ask("추천 코드를 지울까요?", `<code>${esc(t.dataset.refDel)}</code> — 이미 받은 키는 그대로 쓸 수 있어요.`)) { await api("/referrals/delete", { code: t.dataset.refDel }); loadRefs(); loadLog(); }
@@ -548,6 +582,14 @@ function demoApi(path, b) {
     demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length; return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c }); }
   if (p === "/orders") { const w = q.get("status"); const count = { requested: 0, paid: 0, approved: 0, rejected: 0 }; demo.orders.forEach(o => count[o.status]++);
     return R({ count, orders: demo.orders.filter(o => w === "all" || (w === "open" ? ["requested", "paid"].includes(o.status) : o.status === w)) }); }
+  if (p.startsWith("/members")) {
+    demo.members = demo.members || [{ id: "gamer_kim", created: Date.now() - 864e5, lastLogin: Date.now() - 36e5, code: "K7M2QX9D", invitedBy: null, invites: 4, earned: 12, waiting: 3, blocked: 0 }, { id: "newbie01", created: Date.now() - 36e5, lastLogin: Date.now() - 36e5, code: null, invitedBy: "gamer_kim", invites: 0, earned: 0, waiting: 0, blocked: 0 }];
+    if (p === "/members/block") { demo.members.find(m => m.id === b.id).blocked = b.on ? 1 : 0; L(b.on ? "회원 차단" : "회원 차단 해제", b.id); return R({ ok: true }); }
+    if (p === "/members/recovery") { L("복구 코드 재발급", b.id); return R({ recovery: "DEMO-CODE-ABCD-EFGH" }); }
+    if (p === "/members/delete") { demo.members = demo.members.filter(m => m.id !== b.id); L("회원 삭제", b.id); return R({ ok: true }); }
+    const ms = demo.members.filter(m => !q.get("q") || m.id.includes(q.get("q")));
+    return R({ members: ms, summary: { total: demo.members.length, week: 2, active: 2, invited: 1, blocked: demo.members.filter(m => m.blocked).length } });
+  }
   if (p === "/referrals") { demo.refs = demo.refs || [{ code: "FRIEND3", label: "방송 시청자용", plan: "premium", days: 3, max: 100, on: true, used: 17, at: new Date().toISOString() }];
     if (b) { const code = (b.code || "DEMO" + (++demo.n)).toUpperCase(); demo.refs.unshift({ code, label: b.label, plan: b.plan, days: Number(b.days), max: Number(b.max), on: true, used: 0, at: new Date().toISOString() }); L("추천 코드 생성", code); return R({ ok: true, code }); }
     return R({ refs: demo.refs }); }

@@ -1,4 +1,5 @@
 import { ADMIN_HTML } from "./admin_page.js";
+import { INVITE_DAYS, accounts } from "./accounts.js";
 import { cleanPing } from "./stats.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
@@ -141,6 +142,7 @@ export default {
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
+      if (url.pathname.startsWith("/account/")) return await account(req, url, env);
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -149,6 +151,7 @@ export default {
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(stats(env, "/tick"));
+    ctx.waitUntil(accounts(env, "ping", {}));
   },
 };
 
@@ -355,6 +358,29 @@ async function admin(req, url, env) {
     case "GET /stats": return json(await stats(env, "/read"), 200, false);
     case "POST /downloads": return json(await stats(env, "/downloads", body.releases), 200, false);
     case "POST /issue": return json(await adminIssue(env, body), 200, false);
+    case "GET /members": {
+      const r = await accounts(env, "admin/list", { q: url.searchParams.get("q") || "" });
+      if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
+      return json(r, 200, false);
+    }
+    case "POST /members/block": {
+      const r = await accounts(env, "admin/block", body);
+      if (r.error) return json({ error: r.error }, r.status, false);
+      await audit(env, "admin", body.on ? "회원 차단" : "회원 차단 해제", String(body.id));
+      return json(r, 200, false);
+    }
+    case "POST /members/recovery": {
+      const r = await accounts(env, "admin/recovery", body);
+      if (r.error) return json({ error: r.error }, r.status, false);
+      await audit(env, "admin", "복구 코드 재발급", String(body.id));
+      return json(r, 200, false);
+    }
+    case "POST /members/delete": {
+      const r = await accounts(env, "admin/delete", body);
+      if (r.error) return json({ error: r.error }, r.status, false);
+      await audit(env, "admin", "회원 삭제", String(body.id));
+      return json(r, 200, false);
+    }
     case "GET /referrals": return json(await listRefs(env), 200, false);
     case "POST /referrals": return json(await addRef(env, body), 200, false);
     case "POST /referrals/set": {
@@ -513,24 +539,78 @@ async function getRef(env, code) {
 }
 async function putRef(env, r) { await env.LICENSES.put("ref:" + r.code, JSON.stringify(r), { metadata: r }); }
 
+const refDay = () => "count:ref:" + now().slice(0, 10);
+const REF_DEVICE = /^[0-9a-f]{32}$/;
+
+// What stops a device from taking a gift; null when nothing does.
+async function refBlocked(env, device) {
+  if (Number((await env.LICENSES.get(refDay())) || 0) >= REF_DAILY) return { status: 429, error: "busy" };
+  if (await env.LICENSES.get("refdev:" + device)) return { status: 409, error: "already" };
+  return null;
+}
+function refClosed(r) {
+  if (!r.on) return { status: 404, error: "unknown" };
+  return r.used >= r.max ? { status: 409, error: "used up" } : null;
+}
+async function grant(env, code, device, plan, days) {
+  await env.LICENSES.put("refdev:" + device, code, { expirationTtl: REF_DEVICE_TTL });
+  const day = refDay();
+  await env.LICENSES.put(day, String(Number((await env.LICENSES.get(day)) || 0) + 1), { expirationTtl: 60 * 60 * 48 });
+  const key = await makeKey(env, { plan, email: "", expires: addDays(now(), days), src: "referral", note: "추천 코드 " + code });
+  await audit(env, "app", "추천 코드 사용", code + " · " + (plan === "ultra" ? "울트라" : "프리미엄") + " " + days + "일");
+  return { key, plan, days };
+}
+async function useRef(env, r, device) {
+  r.used += 1;
+  await putRef(env, r);
+  return grant(env, r.code, device, r.plan, r.days);
+}
+
 async function referral(req, env) {
   const b = await req.json().catch(() => ({}));
   const code = String(b.code || "").trim().toUpperCase(), device = String(b.device || "");
-  if (!REF_RE.test(code) || !/^[0-9a-f]{32}$/.test(device)) return json({ error: "bad request" }, 400);
-  const day = "count:ref:" + now().slice(0, 10);
-  const n = Number((await env.LICENSES.get(day)) || 0);
-  if (n >= REF_DAILY) return json({ error: "busy" }, 429);
+  if (!REF_RE.test(code) || !REF_DEVICE.test(device)) return json({ error: "bad request" }, 400);
   const r = await getRef(env, code);
-  if (!r || !r.on) return json({ error: "unknown" }, 404);
-  if (r.used >= r.max) return json({ error: "used up" }, 409);
-  if (await env.LICENSES.get("refdev:" + device)) return json({ error: "already" }, 409);
-  await env.LICENSES.put("refdev:" + device, code, { expirationTtl: REF_DEVICE_TTL });
-  await env.LICENSES.put(day, String(n + 1), { expirationTtl: 60 * 60 * 48 });
-  r.used += 1;
-  await putRef(env, r);
-  const key = await makeKey(env, { plan: r.plan, email: "", expires: addDays(now(), r.days), src: "referral", note: "추천 코드 " + code });
-  await audit(env, "app", "추천 코드 사용", code + " · " + (r.plan === "ultra" ? "울트라" : "프리미엄") + " " + r.days + "일");
-  return json({ key, plan: r.plan, days: r.days });
+  if (!r) return json({ error: (await accounts(env, "code", { code })).member ? "signup" : "unknown" }, 409);
+  const stop = refClosed(r) || (await refBlocked(env, device));
+  return stop ? json({ error: stop.error }, stop.status) : json(await useRef(env, r, device));
+}
+
+// ---------------------------------------------------------------- member accounts (src/accounts.js)
+const ACCOUNT_ACTIONS = ["signup", "login", "recover", "me", "invite", "reward", "logout", "password", "delete"];
+
+async function account(req, url, env) {
+  const action = url.pathname.slice("/account/".length);
+  if (!ACCOUNT_ACTIONS.includes(action)) return json({ error: "not found" }, 404);
+  const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+  body.ip = req.headers.get("CF-Connecting-IP") || "unknown";
+  body.token = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
+  const r = action === "signup" ? await signup(env, body)
+          : action === "reward" ? await reward(env, body)
+          : await accounts(env, action, body);
+  const { status = 200, ...rest } = r;
+  return json(rest, status);
+}
+
+// A problem with the code stops the sign-up, so nothing is left half done and the user can fix it.
+async function signup(env, b) {
+  const invite = String(b.invite || "").trim().toUpperCase(), device = String(b.device || "");
+  if (!invite) return accounts(env, "signup", { ...b, invite: "" });
+  if (!REF_RE.test(invite) || !REF_DEVICE.test(device)) return { status: 400, error: "bad request" };
+  const seller = await getRef(env, invite);
+  const stop = (seller && refClosed(seller)) || (await refBlocked(env, device));
+  if (stop) return stop;
+  const r = await accounts(env, "signup", { ...b, invite: seller ? "" : invite });
+  if (r.error) return r;
+  return { ...r, ...(seller ? await useRef(env, seller, device) : await grant(env, invite, device, "premium", INVITE_DAYS)) };
+}
+
+async function reward(env, b) {
+  const r = await accounts(env, "reward", b);
+  if (r.error) return r;
+  const key = await makeKey(env, { plan: "premium", email: "", expires: addDays(now(), r.days), src: "referral", note: "초대 보상 " + r.id });
+  await audit(env, "app", "초대 보상", r.id + " · " + r.days + "일");
+  return { key, days: r.days };
 }
 
 async function listRefs(env) {

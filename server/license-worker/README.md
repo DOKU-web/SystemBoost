@@ -57,6 +57,19 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 관리자 API는 다른 사이트에서 호출할 수 없게(CORS 없음) 했고, 페이지는 CSP로 외부 스크립트를 막습니다.
 - 더 막고 싶다면 Cloudflare Zero Trust Access로 `/admin*` 경로에 본인 메일 로그인을 추가하세요(무료 50명).
 
+## 회원 (`src/accounts.js`, `supabase/accounts.sql`)
+앱의 '계정' 화면에서 가입합니다. 회원이 아니어도 앱은 그대로 쓸 수 있습니다.
+- 회원 정보는 Supabase(무료 플랜)의 Postgres에 있습니다. 앱은 이 Worker만 부르고, Worker만 비밀 키로 Supabase에 갑니다. 키, 추천 코드, 통계는 Cloudflare에 그대로 있습니다.
+- 처음 한 번: Supabase SQL Editor에서 `supabase/accounts.sql` 전체를 실행하고, `wrangler secret put SUPABASE_URL`, `wrangler secret put SUPABASE_SECRET_KEY`를 넣습니다.
+- 공개 키(publishable)로는 표도 함수도 닿지 않습니다. SQL 끝에서 이것을 확인하고, 다르면 오류로 멈춥니다.
+- 아이디와 비밀번호로 가입합니다. 메일은 받지 않습니다. 가입할 때 복구 코드를 한 번 보여 주고, 비밀번호를 잊으면 그 코드로 바꿉니다.
+- 비밀번호는 Worker에서 섞는 값(pepper)과 합친 뒤 DB에서 bcrypt로 저장합니다. 섞는 값은 서명 키에서 만들기 때문에 서명 키를 바꾸면 모든 비밀번호와 복구 코드가 끝납니다.
+- 가입에는 개인정보 수집·이용 동의와 만 14세 이상 확인이 필요합니다. 동의한 시각을 저장합니다.
+- 초대 코드: 회원이 앱에서 만듭니다. 그 코드로 가입한 사람은 프리미엄 3일을 받고, 초대한 회원은 한 명당 3일을 쌓아 앱에서 키로 받습니다(모두 30일까지, 코드당 50명). 숫자는 `src/accounts.js`의 `LIMITS`에 있습니다.
+- 대시보드 '회원'에서 찾기, 차단, 복구 코드 재발급, 삭제를 합니다.
+- 무료 플랜은 활동이 없으면 프로젝트가 일시 중지되고 백업이 없습니다. 매시간 작업이 Supabase를 한 번 부르지만, 어떤 활동을 인정하는지는 공개되어 있지 않습니다. 중지되면 Supabase 화면에서 복구합니다. 그동안 회원 기능만 멈추고 키 확인은 그대로 됩니다.
+- 테스트: `npm i --no-save @electric-sql/pglite` 후 `node test_accounts.mjs`
+
 ## 추천 코드
 대시보드 '추천 코드'에서 만듭니다. 코드, 메모, 플랜, 기간(1~30일), 사용 횟수 한도를 정하고 켜고 끌 수 있습니다.
 - 앱의 프리미엄 화면에서 코드를 입력하면 `POST /referral`로 서명된 키를 바로 받습니다. 키는 키 목록에 메모 `추천 코드 <코드>`로 남습니다.

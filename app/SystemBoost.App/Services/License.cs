@@ -87,7 +87,7 @@ public static class License
     private static string DeviceFile => Path.Combine(Platform.DataDir, "referral.txt");
 
     // Random, and not the statistics install number: a code has to work with statistics off.
-    private static string ReferralDevice()
+    public static string ReferralDevice()
     {
         try
         {
@@ -118,6 +118,7 @@ public static class License
                 "used up" => "이 코드는 사용 횟수가 다 찼어요",
                 "already" => "이 기기는 이미 추천 코드를 썼어요",
                 "busy" => "오늘은 더 받을 수 없어요. 내일 다시 해 주세요",
+                "signup" => "회원의 초대 코드는 회원 가입할 때 입력해요. 왼쪽 '계정'에서 가입하세요",
                 _ => "코드는 영문과 숫자 4~16자예요",
             };
         }
