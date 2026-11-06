@@ -181,7 +181,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     }
 
     private const string StoppedReason =
-        "GPU 여유가 없어 프레임 생성을 멈추고 게임 화면을 그대로 보여 주고 있어요. 게임에서 프레임 제한을 걸거나 그래픽 설정을 낮춘 뒤 배수 버튼을 다시 누르세요";
+        "GPU 여유가 없어 프레임 생성을 멈추고 게임 화면을 그대로 보여 주고 있어요. 게임 프레임을 지금의 4분의 3쯤으로 제한하거나 그래픽 설정을 낮춘 뒤, 2배부터 다시 눌러 보세요";
 
     /// Last ~60 samples for the chart (src, out).
     public List<(double src, double outp)> History { get; } = new();

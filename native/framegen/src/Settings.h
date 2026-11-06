@@ -35,7 +35,7 @@ struct Settings {
     // Pipeline parameters derived from quality (mirror ref PARAMS)
     int procFactor() const { return quality == Quality::Low ? 8 : quality == Quality::Performance ? 4 : 2; }
     int refineIters() const { return quality == Quality::Quality ? 2 : 1; }
-    int coarseRadius() const { return quality == Quality::Performance ? 4 : 6; }
+    int coarseRadius() const { return quality == Quality::Low || quality == Quality::Performance ? 4 : 6; }
 };
 
 inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {

@@ -59,7 +59,7 @@ def last_stats(lines):
 
 def target_fps(mode, rate, refresh, max_mul):
     if mode == "auto":
-        k = max(1, math.ceil(refresh / (rate * max_mul) - 0.05))
+        k = max(1, math.ceil(refresh / (rate * max_mul * 1.25) - 0.05))  # Pacer::kDividerSlack
         return refresh / k
     return min(rate * int(mode[1:]), refresh)
 

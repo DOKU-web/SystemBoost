@@ -334,6 +334,8 @@ int Run(const Settings& s) {
     FrameMeter meter;
     meter.reset(lastDisplayQuery);
     GpuFit fit;
+    GameAlone alone;
+    bool readingAlone = false, startedOnce = false;
     UINT lastShown = 0;
     uint64_t totalShown = 0;
     bool wasActive = false;
@@ -350,7 +352,9 @@ int Run(const Settings& s) {
             std::lock_guard<std::mutex> l(g_cmd.m);
             if (g_cmd.hasMode) {
                 g_cmd.hasMode = false;
+                const bool resumed = mode == MulMode::Off && g_cmd.mode != MulMode::Off;
                 setMode(g_cmd.mode);
+                if (resumed && !s.upscale) alone.start(now, meter.totalSrc());
             }
             if (g_cmd.hasSharp) {
                 g_cmd.hasSharp = false;
@@ -404,6 +408,8 @@ int Run(const Settings& s) {
             fg.ResetHistory();
             meter.reset(now);
             if (s.upscale) cursor.Activate(s.clipCursor ? &layout.client : nullptr);
+            if (!startedOnce && mode != MulMode::Off && !s.upscale) alone.start(now, meter.totalSrc());
+            startedOnce = true;
             wasActive = true;
         } else if (s.upscale && s.clipCursor) {
             cursor.UpdateClip(layout.client);
@@ -417,7 +423,10 @@ int Run(const Settings& s) {
             pacer.onArrival(f.time > 0 ? f.time : now, f.frames);
         }
         holding = holding && f.texture;
-        const bool bypass = mode == MulMode::Off && !s.upscale;
+        const bool read = alone.reading(now, meter.totalSrc());
+        if (readingAlone && !read) meter.reset(now);    // the output count starts with generation
+        readingAlone = read;
+        const bool bypass = (mode == MulMode::Off || readingAlone) && !s.upscale;
         if (holding && bypass) {  // nothing to add: show the game itself and leave it the GPU
             holding = false;
             cap->Release();
@@ -504,18 +513,21 @@ int Run(const Settings& s) {
             Emit(buf);
 
             // Fewer frames than the game, and fewer than asked for (a rate under the game's is the user's choice).
-            const double outFloor = std::min(m.srcFps() * 1.05, pacer.outputFps() * 0.9);
-            if (mode != MulMode::Off && !s.upscale && fit.behind(t2, m.outFps(), outFloor)) {
-                setMode(MulMode::Off);
-                Emit("{\"type\":\"fit\",\"stopped\":true}");
-            } else if (mode != MulMode::Off && fit.update(t2, pacer.stats.skipped)) {
+            // Early on, also fewer than the game had on its own: generation is costing more than it adds.
+            double beat = std::min(alone.fps(t2) * 1.05, disp.hz * 0.9);
+            if (pc.targetFps > 0) beat = std::min(beat, pc.targetFps * 0.9);
+            const bool losing = m.outFps() < beat;
+            const double outFloor = std::max(std::min(m.srcFps() * 1.05, pacer.outputFps() * 0.9), beat);
+            const bool under = mode != MulMode::Off && !s.upscale && fit.behind(t2, m.outFps(), outFloor);
+            const bool missing = mode != MulMode::Off && fit.update(t2, pacer.stats.skipped);
+            if (under || missing) {
                 if (cur.quality != Quality::Low) {
-                    cur.quality = Quality(int(cur.quality) - 1);
+                    cur.quality = under ? Quality::Low : Quality(int(cur.quality) - 1);
                     fg.Resize(layout.capW, layout.capH, layout.outW, layout.outH, cur);
                     pacer.reset();
                     static const char* const names[] = {"low", "performance", "balanced"};
                     Emit(std::string("{\"type\":\"fit\",\"quality\":\"") + names[int(cur.quality)] + "\"}");
-                } else if (pacer.slowDown()) {
+                } else if (!losing && pacer.slowDown()) {
                     std::snprintf(buf, sizeof buf, "{\"type\":\"fit\",\"maxOut\":%.0f}", pacer.outputCap());
                     Emit(buf);
                 } else {    // the game alone is the better picture now

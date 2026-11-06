@@ -289,6 +289,8 @@ final class Engine {
         let meter = FrameMeter()
         meter.reset(now())
         let fit = GpuFit()
+        let alone = GameAlone()
+        var readingAlone = false, startedOnce = false
         var wasActive = false
         var held: WindowCapture.Frame?  // waits for the output clock (Pacer.wantsSource)
         var top = false, topAt = 0.0
@@ -300,7 +302,11 @@ final class Engine {
         while !commands.quit {
             let t0 = now()
             guard windowBounds(capture.window.windowID) != nil, !capture.stopped else { break }
-            if let m = commands.takeMode() { setMode(m) }
+            if let m = commands.takeMode() {
+                let resumed = mode == .off && m != .off
+                setMode(m)
+                if resumed && !s.upscale { alone.start(t0, srcFrames: meter.totalSrc) }
+            }
             if let sh = commands.takeSharp() { fg.sharpness = sh }
             if let f = commands.takeTarget() { pacer.setTarget(f) }
 
@@ -336,6 +342,8 @@ final class Engine {
                 pacer.reset(); fg.resetHistory()
                 meter.reset(t0)
                 if mode != .off || s.upscale { setOverlay(true) }
+                if !startedOnce && mode != .off && !s.upscale { alone.start(t0, srcFrames: meter.totalSrc) }
+                startedOnce = true
                 wasActive = true
                 saidAway = false
                 lastFrame = t0
@@ -354,7 +362,10 @@ final class Engine {
                 saidNoFrames = true
                 Out.msg("warning", "no frames from the game window")
             }
-            let bypass = mode == .off && !s.upscale
+            let read = alone.reading(t0, srcFrames: meter.totalSrc)
+            if readingAlone && !read { meter.reset(t0) }  // the output count starts with generation
+            readingAlone = read
+            let bypass = (mode == .off || readingAlone) && !s.upscale
             if held != nil && bypass {  // nothing to add: show the game itself and leave it the GPU
                 held = nil
                 setOverlay(false)
@@ -394,16 +405,20 @@ final class Engine {
                           "divider": mode == .auto ? pacer.divider : 1, "intervalMs": pacer.interval * 1000])
 
                 // Fewer frames than the game, and fewer than asked for (a rate under the game's is the user's choice).
-                let outFloor = min(m.srcFps * 1.05, pacer.outputFps * 0.9)
-                if mode != .off && !s.upscale && fit.behind(t2, outFps: m.outFps, floorFps: outFloor) {
-                    setMode(.off)
-                    Out.emit(["type": "fit", "stopped": true])
-                } else if mode != .off && fit.update(t2, skipped: pacer.skipped) {
-                    if let lower = Quality(rawValue: cur.quality.rawValue - 1) {
+                // Early on, also fewer than the game had on its own: generation is costing more than it adds.
+                var beat = min(alone.fps(t2) * 1.05, refreshHz * 0.9)
+                if pacer.cfg.targetFps > 0 { beat = min(beat, pacer.cfg.targetFps * 0.9) }
+                let losing = m.outFps < beat
+                let outFloor = max(min(m.srcFps * 1.05, pacer.outputFps * 0.9), beat)
+                let under = mode != .off && !s.upscale && fit.behind(t2, outFps: m.outFps, floorFps: outFloor)
+                let missing = mode != .off && fit.update(t2, skipped: pacer.skipped)
+                if under || missing {
+                    let step: Quality? = under && cur.quality != .low ? .low : Quality(rawValue: cur.quality.rawValue - 1)
+                    if let lower = step {
                         cur.quality = lower
                         resizeEngine(layout)
                         Out.emit(["type": "fit", "quality": "\(lower)"])
-                    } else if pacer.slowDown() {
+                    } else if !losing && pacer.slowDown() {
                         Out.emit(["type": "fit", "maxOut": pacer.outputCap.rounded()])
                     } else {  // the game alone is the better picture now
                         setMode(.off)

@@ -19,7 +19,7 @@ struct Settings {
 
     var procFactor: Int { quality == .low ? 8 : quality == .performance ? 4 : 2 }
     var refineIters: Int { quality == .quality ? 2 : 1 }
-    var coarseRadius: Int { quality == .performance ? 4 : 6 }
+    var coarseRadius: Int { quality == .low || quality == .performance ? 4 : 6 }
 
     static func parseMode(_ v: String) -> MulMode? {
         switch v {

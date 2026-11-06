@@ -99,13 +99,54 @@ int main() {
     check(firstBehind(0, 30) < 0, "output above the floor stays");
     check(firstBehind(2, 30) < 0, "2 s under the floor stays");
     const double b = firstBehind(30, 30);
-    check(b >= 2.5 && b <= 3.5, "under the floor stops after about 3 s");
+    check(b >= 2.5 && b <= 3.5, "under the floor steps down after about 3 s");
+    {   // no step left: a run that stays under the floor still ends, in a few steps' time
+        GpuFit fit;
+        int steps = 0;
+        for (double s2 = 0; s2 < 12; s2 += 0.5) steps += fit.behind(s2, 8, 40);
+        check(steps >= 3, "under the floor keeps stepping, about every 3.5 s");
+    }
+    {   // a step just taken needs a moment: the pacer starts over after a quality change
+        GpuFit fit;
+        double second = -1;
+        bool first = false;
+        for (double s2 = 0; s2 < 12 && second < 0; s2 += 0.5) {
+            const bool hit = fit.behind(s2, 8, 40);
+            if (hit && first) second = s2;
+            first = first || hit;
+        }
+        check(second >= 6, "no second step before the first one has settled");
+    }
 
     check(firstStep(0, 60) < 0, "no misses stays");
     check(firstStep(1, 60) < 0, "one miss a second stays");
     const double t = firstStep(4, 60);
     check(t >= 3 && t <= 4.5, "4 misses a second steps down after about 3 s");
+    const double t2 = firstStep(30, 60);
+    check(t2 >= 1.5 && t2 <= 2.5, "30 misses a second steps down after about 2 s");
+    {   // a card far behind reaches the lowest step quickly
+        GpuFit fit;
+        uint64_t skipped = 0;
+        int steps = 0;
+        for (double s2 = 0; s2 < 9; s2 += 0.5) {
+            skipped += 15;
+            steps += fit.update(s2, skipped);
+        }
+        check(steps >= 3, "30 misses a second: three steps within 9 s");
+    }
 
+    {   // the game's own rate, read before generation starts
+        GameAlone a;
+        check(!a.reading(1, 0) && a.fps(1) == 0, "not started: nothing to compare with");
+        a.start(10, 500);
+        check(a.reading(10.5, 520), "reads for a second");
+        check(!a.reading(11, 540), "then generation starts");
+        check(near(a.fps(11), 40), "40 frames in a second read as 40 fps");
+        check(near(a.fps(25), 40), "still compared 14 s later");
+        check(a.fps(27) == 0, "not compared after that");
+        a.start(30, 800);
+        check(a.reading(30.2, 805) && a.fps(30.2) == 0, "a new reading replaces the old one");
+    }
     {   // one hitch in the middle of a healthy run
         GpuFit fit;
         bool fired = false;
