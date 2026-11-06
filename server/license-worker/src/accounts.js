@@ -48,7 +48,8 @@ async function db(env, action, b) {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (res.ok) return await res.json();
-    console.log("supabase", action, res.status);
+    const e = await res.json().catch(() => ({}));
+    console.log("supabase", action, res.status, e.code, e.message);   // never details or hint: they can repeat what was sent
   } catch (e) {
     console.log("supabase", action, e.name);
   }

@@ -7,7 +7,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>SystemBoost</AssemblyName>
     <RootNamespace>SystemBoost.App</RootNamespace>
-    <Version>0.8.6</Version>
+    <Version>0.8.7</Version>
     <Product>SystemBoost</Product>
     <Company>DOKKU</Company>
     <Authors>DOKKU</Authors>
