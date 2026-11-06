@@ -253,7 +253,15 @@ public sealed class SettingsPage : UserControl
             if (!File.Exists(path)) { status.IsVisible = true; return; }
             if (TopLevel.GetTopLevel(open) is Window owner) await new NoticesDialog(path).ShowDialog(owner);
         };
-        p.Children.Add(open);
+        var eula = Ui.Button("사용권 계약 보기", "ghost");
+        eula.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(eula) is Window owner) await new EulaDialog(consent: false).ShowDialog(owner);
+        };
+        var buttons = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 10 };
+        buttons.Children.Add(eula);
+        buttons.Children.Add(open);
+        p.Children.Add(buttons);
         p.Children.Add(status);
         return p;
     }

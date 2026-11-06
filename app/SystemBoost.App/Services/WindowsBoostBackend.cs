@@ -170,7 +170,9 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
         catch (Exception e) { Log("복구하지 못했어요: " + e.Message); }
         finally { _gate.Release(); }
         Publish();
-        _ = Task.Run(WatchLoopAsync);
+        // The recovery above also runs for someone who refuses the agreement;
+        // applying boosts to a game does not start until it is accepted.
+        _ = Task.Run(async () => { await Eula.WhenAccepted; await WatchLoopAsync(); });
     }
 
     // After a crash or a closed PC: what was only meant for the game goes back.

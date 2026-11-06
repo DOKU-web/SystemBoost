@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using System;
 
 namespace SystemBoost.App;
 
@@ -15,10 +16,27 @@ public partial class App : Application
             var main = new MainWindow();
             desktop.MainWindow = main;
             desktop.ShutdownRequested += (_, _) => main.Shutdown();
-            _ = Services.License.RenewIfNeededAsync();   // revoked keys off; subscriptions: renewed key
-            Services.License.WatchPending();              // an order paid while the app was closed
-            Services.Updater.Start();                     // direct-download builds: check GitHub Releases
+            if (Services.Eula.Accepted) StartOnline();
+            else main.Opened += AskForAgreement;
         }
         base.OnFrameworkInitializationCompleted();
+    }
+
+    // Asked over the main window, so a refusal closes through the normal exit path
+    // and everything the app changed earlier still goes back.
+    private async void AskForAgreement(object? sender, EventArgs e)
+    {
+        var main = (MainWindow)sender!;
+        main.Opened -= AskForAgreement;
+        if (!await new Pages.EulaDialog(consent: true).ShowDialog<bool>(main)) { main.Close(); return; }
+        Services.Eula.Accept();
+        StartOnline();
+    }
+
+    private static void StartOnline()
+    {
+        _ = Services.License.RenewIfNeededAsync();   // revoked keys off; subscriptions: renewed key
+        Services.License.WatchPending();              // an order paid while the app was closed
+        Services.Updater.Start();                     // direct-download builds: check GitHub Releases
     }
 }

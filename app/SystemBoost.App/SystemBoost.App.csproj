@@ -7,7 +7,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>SystemBoost</AssemblyName>
     <RootNamespace>SystemBoost.App</RootNamespace>
-    <Version>0.8.5</Version>
+    <Version>0.8.6</Version>
     <Product>SystemBoost</Product>
     <Company>DOKKU</Company>
     <Authors>DOKKU</Authors>
@@ -33,5 +33,6 @@
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets\SystemBoost.ico" />
     <AvaloniaResource Include="Assets\icon_128.png" />
+    <AvaloniaResource Include="Assets\eula.txt" />
   </ItemGroup>
 </Project>
