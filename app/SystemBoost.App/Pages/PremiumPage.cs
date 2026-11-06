@@ -45,25 +45,22 @@ public sealed class PremiumPage : UserControl
     private readonly TextBlock _keyNote = Ui.Text("", "muted", wrap: true);
     private readonly Border _buyCard;   // shown only while something is on sale
 
-    private static readonly (string feature, string free, string premium, string ultra)[] CommonRows =
+    // Must match License.UltraOnly. windowsOnly: macOS does not allow these, see MacBoostBackend.
+    private static readonly (string feature, string free, string premium, string ultra, bool windowsOnly)[] AllRows =
     {
-        ("프레임 생성 배수", "2배", "자동 · 2 · 3 · 4배", "자동 · 2 · 3 · 4 · 6 · 8배"),
-        ("품질 모드", "저사양 · 성능 · 균형", "저사양 · 성능 · 균형 · 품질", "저사양 · 성능 · 균형 · 품질"),
-        ("업스케일링 + 선명화", "●", "●", "●"),
-        ("듀얼 GPU (내장 그래픽에 생성 맡기기)", "—", "●", "●"),
-        ("게임 부스트", "●", "●", "●"),
-        ("모니터링 · 벤치마크", "●", "●", "●"),
-        ("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●", "●"),
+        ("프레임 생성 배수", "2배", "자동 · 2 · 3 · 4배", "자동 · 2 · 3 · 4 · 6 · 8배", false),
+        ("품질 모드", "저사양 · 성능 · 균형", "저사양 · 성능 · 균형 · 품질", "저사양 · 성능 · 균형 · 품질", false),
+        ("업스케일링 + 선명화", "●", "●", "●", false),
+        ("게임 부스트", "●", "●", "●", false),
+        ("모니터링 · 벤치마크", "●", "●", "●", false),
+        ("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●", "●", false),
+        ("자원 분배 · CPU 최대 사용량 제한", "—", "●", "●", true),
+        ("듀얼 GPU (내장 그래픽에 생성 맡기기)", "—", "—", "●", false),
+        ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "—", "●", true),
+        ("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "—", "●", true),
     };
-    // macOS does not allow these, see MacBoostBackend
-    private static readonly (string feature, string free, string premium, string ultra)[] WindowsRows =
-    {
-        ("자원 분배 · CPU 최대 사용량 제한", "—", "●", "●"),
-        ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "●", "●"),
-        ("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "●", "●"),
-    };
-    private static readonly (string feature, string free, string premium, string ultra)[] Rows =
-        Platform.IsWindows ? CommonRows.Concat(WindowsRows).ToArray() : CommonRows;
+    private static readonly (string feature, string free, string premium, string ultra, bool windowsOnly)[] Rows =
+        AllRows.Where(r => Platform.IsWindows || !r.windowsOnly).ToArray();
     private const string BoostRow = "게임 부스트";
     private readonly bool _boostReady;
 
@@ -71,7 +68,7 @@ public sealed class PremiumPage : UserControl
     {
         _boostReady = boostReady;
         var root = new StackPanel();
-        root.Children.Add(Ui.Header("프리미엄", "무료로도 기본 기능은 계속 쓸 수 있어요. 프리미엄은 고급 기능을, 울트라는 프레임 생성 6배·8배까지 열어 줘요. 효과는 게임과 PC마다 달라서, 벤치마크로 직접 확인하고 결정하세요."));
+        root.Children.Add(Ui.Header("프리미엄", $"무료로도 기본 기능은 계속 쓸 수 있어요. 프리미엄은 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 {(Platform.IsWindows ? "6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭" : "6·8배와 듀얼 GPU")}까지 더해요. 효과는 게임과 PC마다 달라서, 벤치마크로 직접 확인하고 결정하세요."));
 
         var status = new StackPanel { Spacing = 4 };
         status.Children.Add(_state);
@@ -109,7 +106,7 @@ public sealed class PremiumPage : UserControl
         var tierP = new StackPanel { Orientation = Orientation.Horizontal };
         var tierBox = new Border { Child = tierP, HorizontalAlignment = HorizontalAlignment.Left };
         tierBox.Classes.Add("segbox");
-        foreach (var (ultra, text) in new[] { (false, "프리미엄"), (true, "울트라 (6·8배 포함)") })
+        foreach (var (ultra, text) in new[] { (false, "프리미엄"), (true, "울트라 (모든 기능)") })
         {
             var t = new ToggleButton { Content = text, IsChecked = ultra == _ultra };
             t.Classes.Add("seg");
@@ -222,7 +219,7 @@ public sealed class PremiumPage : UserControl
         act.Click += (_, _) =>
         {
             var err = License.Activate(_key.Text ?? "");
-            _msg.Text = err ?? (License.IsUltra ? "울트라가 켜졌어요. 6배·8배까지 바로 쓸 수 있어요." : "프리미엄이 켜졌어요. 고급 기능을 바로 쓸 수 있어요.");
+            _msg.Text = err ?? (License.IsUltra ? "울트라가 켜졌어요. 모든 기능을 바로 쓸 수 있어요." : "프리미엄이 켜졌어요. 고급 기능을 바로 쓸 수 있어요.");
             Refresh();
         };
         keyRow.Children.Add(act);

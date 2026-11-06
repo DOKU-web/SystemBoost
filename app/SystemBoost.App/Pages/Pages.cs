@@ -86,10 +86,10 @@ public sealed class BoostPage : UserControl
             sw.IsCheckedChanged += async (_, _) =>
             {
                 if (sw.Tag is "loading") return;  // initial state from the backend, not a user change
-                if (f.Premium && sw.IsChecked == true && !License.IsPremium)
+                if (f.Needs is { } need && sw.IsChecked == true && !License.Allowed(need))
                 {
                     sw.Tag = "loading"; sw.IsChecked = false; sw.Tag = null;
-                    status.Text = $"{f.Title}은(는) 프리미엄 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
+                    status.Text = $"{f.Title}은(는) {License.PlanOf(need)} 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
                     return;
                 }
                 sw.IsEnabled = false;
@@ -104,12 +104,12 @@ public sealed class BoostPage : UserControl
             if (f.NeedsReboot) desc += " · 재부팅 후 적용";
             bool ready = backend.Connected;
             var row = Ui.Row(f.Title, desc, ready ? sw : Ui.Pending(), first);
-            if (f.Premium && row.Child is Grid g && g.Children[0] is StackPanel sp && sp.Children[0] is TextBlock tb)
+            if (f.Needs is { } plan && row.Child is Grid g && g.Children[0] is StackPanel sp && sp.Children[0] is TextBlock tb)
             {
                 sp.Children.RemoveAt(0);
                 var line = new StackPanel { Orientation = Orientation.Horizontal };
                 line.Children.Add(tb);
-                line.Children.Add(Ui.Badge("프리미엄"));
+                line.Children.Add(Ui.Badge(License.PlanOf(plan)));
                 sp.Children.Insert(0, line);
             }
             if (!ready && row.Child is Grid pending) pending.Children[0].Opacity = 0.55;

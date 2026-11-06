@@ -81,7 +81,7 @@ internal static class BoostExtras
         {
             if (!License.Allowed(PremiumFeature.PerGameProfiles))
             {
-                status.Text = "게임별 자동 최적화는 프리미엄 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
+                status.Text = $"게임별 자동 최적화는 {License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
                 return;
             }
             run.IsEnabled = false;

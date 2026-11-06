@@ -126,7 +126,7 @@
             <Border Classes="row">
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Spacing="2"><TextBlock Classes="label" TextWrapping="Wrap" Text="프레임 생성 GPU (듀얼 GPU)" />
-                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="내장 그래픽에 맡기면 외장 GPU는 게임만 처리" /></StackPanel>
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="내장 그래픽에 맡기면 외장 GPU는 게임만 처리 · 울트라 전용" /></StackPanel>
                 <ComboBox Grid.Column="1" ItemsSource="{Binding Gpus}" SelectedItem="{Binding SelectedGpu}" VerticalAlignment="Center" />
               </Grid>
             </Border>

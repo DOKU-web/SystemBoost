@@ -328,7 +328,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
             case "gpu.driver": return await ApplyDriverAsync();
             case "net.adapterpower": return await ApplyAdapterPowerAsync();
             case "gpu.oc": return await ApplyGpuTuningAsync();
-            case "boost.profiles" when !License.Allowed(PremiumFeature.PerGameProfiles): return "프리미엄 기능이에요 (바뀐 것 없음)";
+            case "boost.profiles" when !License.Allowed(PremiumFeature.PerGameProfiles): return $"{License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요 (바뀐 것 없음)";
         }
         if (!GameTime.Contains(id)) return "아직 준비 중이에요 (바뀐 것 없음)";
         if (id == "cpu.ecores" && EfficientMask() == 0) return "이 CPU는 E코어가 없어서 쓸 수 없어요 (바뀐 것 없음)";

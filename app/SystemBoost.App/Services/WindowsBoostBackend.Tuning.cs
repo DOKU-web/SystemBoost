@@ -131,7 +131,7 @@ public sealed partial class WindowsBoostBackend
 
     private async Task<string> ApplyGpuTuningAsync()
     {
-        if (!License.Allowed(PremiumFeature.Overclock)) return "프리미엄 기능이에요 (바뀐 것 없음)";
+        if (!License.Allowed(PremiumFeature.Overclock)) return $"{License.PlanOf(PremiumFeature.Overclock)} 기능이에요 (바뀐 것 없음)";
         var gpu = Nvml.Read();
         if (gpu == null) return "NVIDIA 그래픽카드와 최신 드라이버가 필요해요 (바뀐 것 없음)";
         var c = _s.Gpu;
@@ -232,7 +232,7 @@ public sealed partial class WindowsBoostBackend
 
     private async Task<string> ApplyGameProfileAsync()
     {
-        if (!License.Allowed(PremiumFeature.PerGameProfiles)) return "게임별 자동 최적화는 프리미엄 기능이에요";
+        if (!License.Allowed(PremiumFeature.PerGameProfiles)) return $"게임별 자동 최적화는 {License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요";
         if (_gameName == null || !_s.GameProfiles.TryGetValue(_gameName, out var profile)) return $"{_gameName}은(는) 아직 측정하지 않았어요";
         var keep = profile.Results.Where(r => r.Keep).Select(r => r.Feature).ToList();
         if (keep.Count == 0) return $"{_gameName}: 측정에서 효과가 확인된 항목이 없어요";
@@ -260,7 +260,7 @@ public sealed partial class WindowsBoostBackend
     /// Runs for about two and a half minutes. Returns the line to show.
     public async Task<string> MeasureGameAsync(Action<string> progress)
     {
-        if (!License.Allowed(PremiumFeature.PerGameProfiles)) return "게임별 자동 최적화는 프리미엄 기능이에요";
+        if (!License.Allowed(PremiumFeature.PerGameProfiles)) return $"게임별 자동 최적화는 {License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요";
         if (_measuring) return "이미 측정 중이에요";
         var game = RunningGames(ProcessNames());
         if (game == null) return "먼저 '내 게임'에 있는 게임을 실행하세요";

@@ -1,5 +1,5 @@
 // Free / Premium / Ultra.
-// Two ways to own Premium (Ultra = a key whose plan is "ultra": Premium plus x6 and x8):
+// Two ways to own Premium (Ultra = a key whose plan is "ultra": Premium plus what UltraOnly lists):
 //  1) Steam build: the "SystemBoost Premium" DLC (checked through Steamworks;
 //     ISteamOwnership is the hook - wire Steamworks.NET here).
 //  2) Direct downloads (installer / portable / macOS): a license key bought on
@@ -17,7 +17,7 @@ namespace SystemBoost.App.Services;
 public enum PremiumFeature
 {
     AutoAndHighMultiplier,   // auto, x3, x4 (x2 stays free)
-    UltraMultiplier,         // x6, x8: ultra keys only
+    UltraMultiplier,         // x6, x8
     QualityMode,             // "quality" preset
     DualGpu,                 // frame generation on another GPU
     CpuLimit,                // resource sharing: hard CPU cap
@@ -55,7 +55,11 @@ public static class License
     public static bool IsUltra { get { Load(); return KeyActive && _info!.Plan == "ultra"; } }
     private static bool KeyActive => _info != null && (_info.Expires == null || _info.Expires > DateTime.UtcNow);
 
-    public static bool Allowed(PremiumFeature f) => f == PremiumFeature.UltraMultiplier ? IsUltra : IsPremium;
+    // Which plan opens a feature is decided here and the messages follow. Change the table in PremiumPage with it.
+    private static bool UltraOnly(PremiumFeature f) =>
+        f is PremiumFeature.UltraMultiplier or PremiumFeature.DualGpu or PremiumFeature.PerGameProfiles or PremiumFeature.Overclock;
+    public static bool Allowed(PremiumFeature f) => UltraOnly(f) ? IsUltra : IsPremium;
+    public static string PlanOf(PremiumFeature f) => UltraOnly(f) ? "울트라" : "프리미엄";
 
     // Activation can happen on a background thread (order watcher, revocation check): UI handlers run on the UI thread.
     private static void RaiseChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => Changed?.Invoke());
