@@ -15,10 +15,8 @@ public sealed class PremiumPage : UserControl
     // Prices shown in the app. TODO: set real prices (must match the shop / Steam).
     public const string PriceMonthly = "₩2,900 / 월";
     public const string PriceYearly = "₩19,900 / 년";
-    public const string PriceLifetime = "₩49,900 · 한 번 결제";
     public const string PriceUltraMonthly = "₩4,900 / 월";
     public const string PriceUltraYearly = "₩34,900 / 년";
-    public const string PriceUltraLifetime = "₩89,900 · 한 번 결제";
     public const string PriceSteamDlc = "₩14,000";
 
     private readonly TextBlock _state = Ui.Text("", "h2");
@@ -46,6 +44,9 @@ public sealed class PremiumPage : UserControl
     private readonly TextBlock _orderSub = Ui.Text("", "muted", wrap: true);
     private readonly TextBlock _keyNote = Ui.Text("", "muted", wrap: true);
     private readonly Border _buyCard;   // shown only while something is on sale
+    private readonly Border _keyCard;
+    private readonly StackPanel _tierP = new() { Orientation = Orientation.Horizontal };
+    private readonly StackPanel _periodP = new() { Orientation = Orientation.Horizontal };
 
     // Must match License.UltraOnly. windowsOnly: macOS does not allow these, see MacBoostBackend.
     private static readonly (string feature, string free, string premium, string ultra, bool windowsOnly)[] AllRows =
@@ -61,9 +62,9 @@ public sealed class PremiumPage : UserControl
         ("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "—", "●", true),
         ("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "—", "●", true),
     };
-    private static readonly (string feature, string free, string premium, string ultra, bool windowsOnly)[] Rows =
+    internal static readonly (string feature, string free, string premium, string ultra, bool windowsOnly)[] Rows =
         AllRows.Where(r => Platform.IsWindows || !r.windowsOnly).ToArray();
-    private const string BoostRow = "게임 부스트";
+    internal const string BoostRow = "게임 부스트";
     private readonly bool _boostReady;
 
     private Control ReferralCard()
@@ -132,36 +133,34 @@ public sealed class PremiumPage : UserControl
         // buy
         var buy = new StackPanel { Spacing = 12 };
         buy.Children.Add(Ui.Text("구독하기", "h2"));
-        var tierP = new StackPanel { Orientation = Orientation.Horizontal };
-        var tierBox = new Border { Child = tierP, HorizontalAlignment = HorizontalAlignment.Left };
+        var tierBox = new Border { Child = _tierP, HorizontalAlignment = HorizontalAlignment.Left };
         tierBox.Classes.Add("segbox");
         foreach (var (ultra, text) in new[] { (false, "프리미엄"), (true, "울트라 (모든 기능)") })
         {
-            var t = new ToggleButton { Content = text, IsChecked = ultra == _ultra };
+            var t = new ToggleButton { Content = text, IsChecked = ultra == _ultra, Tag = ultra };
             t.Classes.Add("seg");
             t.Click += (_, _) =>
             {
                 _ultra = ultra;
-                foreach (var o in tierP.Children.OfType<ToggleButton>()) o.IsChecked = o == t;
+                foreach (var o in _tierP.Children.OfType<ToggleButton>()) o.IsChecked = o == t;
                 UpdateBuy();
             };
-            tierP.Children.Add(t);
+            _tierP.Children.Add(t);
         }
         buy.Children.Add(tierBox);
-        var periodP = new StackPanel { Orientation = Orientation.Horizontal };
-        var periodBox = new Border { Child = periodP, HorizontalAlignment = HorizontalAlignment.Left };
+        var periodBox = new Border { Child = _periodP, HorizontalAlignment = HorizontalAlignment.Left };
         periodBox.Classes.Add("segbox");
-        foreach (var (plan, text) in new[] { ("monthly", "월간"), ("yearly", "연간"), ("lifetime", "평생") })
+        foreach (var (plan, text) in new[] { ("monthly", "월간"), ("yearly", "연간") })
         {
-            var t = new ToggleButton { Content = text, IsChecked = plan == _plan };
+            var t = new ToggleButton { Content = text, IsChecked = plan == _plan, Tag = plan };
             t.Classes.Add("seg");
             t.Click += (_, _) =>
             {
                 _plan = plan;
-                foreach (var o in periodP.Children.OfType<ToggleButton>()) o.IsChecked = o == t;
+                foreach (var o in _periodP.Children.OfType<ToggleButton>()) o.IsChecked = o == t;
                 UpdateBuy();
             };
-            periodP.Children.Add(t);
+            _periodP.Children.Add(t);
         }
         _price.Text = Price();
         buy.Children.Add(periodBox);
@@ -169,7 +168,7 @@ public sealed class PremiumPage : UserControl
         buy.Children.Add(_price);
         _ticketBox.Click += (_, _) => ShowPrice();
         buy.Children.Add(_ticketBox);
-        buy.Children.Add(Ui.Text("월간·연간은 그 기간 동안, 평생은 한 번 결제로 계속 써요. " +
+        buy.Children.Add(Ui.Text("월간·연간은 그 기간 동안 써요. " +
             $"스팀에서 받았다면 스팀 상점의 'SystemBoost Premium'({PriceSteamDlc}, 한 번 결제)으로 구매하세요.", "muted", wrap: true));
         // payment method: card (saved card, automatic) or bank transfer / direct payment (seller approves)
         _methodBox.Child = _methodP;
@@ -259,7 +258,8 @@ public sealed class PremiumPage : UserControl
         keyRow.Children.Add(off);
         keyP.Children.Add(keyRow);
         keyP.Children.Add(_msg);
-        root.Children.Add(Ui.Card(keyP));
+        _keyCard = Ui.Card(keyP);
+        root.Children.Add(_keyCard);
         root.Children.Add(Ui.Card(ReferralCard()));
 
         Content = new ScrollViewer { Content = root };
@@ -268,6 +268,19 @@ public sealed class PremiumPage : UserControl
         ShowPending();
         AttachedToVisualTree += async (_, _) => await LoadShop();   // links may change in the dashboard
         AttachedToVisualTree += async (_, _) => await LoadTicket();
+    }
+
+    /// From the plan window: that plan selected, and the place to pay in view.
+    public async void Choose(bool ultra, string period)
+    {
+        _ultra = ultra;
+        _plan = period;
+        foreach (var o in _tierP.Children.OfType<ToggleButton>()) o.IsChecked = (bool?)o.Tag == ultra;
+        foreach (var o in _periodP.Children.OfType<ToggleButton>()) o.IsChecked = (string?)o.Tag == period;
+        UpdateBuy();
+        await LoadShop();
+        var target = _buyCard.IsVisible ? _buyCard : _keyCard;
+        Avalonia.Threading.Dispatcher.UIThread.Post(target.BringIntoView, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     private async System.Threading.Tasks.Task LoadShop()
@@ -298,7 +311,7 @@ public sealed class PremiumPage : UserControl
         ShowPrice();
         _methodNote.IsVisible = open;
         _methodNote.Text = _method == "card"
-            ? (_plan == "lifetime" ? "카드로 한 번 결제하면 키가 바로 떠요." : "카드를 등록하면 기간마다 자동으로 결제되고 키도 자동으로 연장돼요. 해지는 결제 메일의 구독 관리 링크에서 언제든 할 수 있어요.")
+            ? ("카드를 등록하면 기간마다 자동으로 결제되고 키도 자동으로 연장돼요. 해지는 결제 메일의 구독 관리 링크에서 언제든 할 수 있어요.")
             : "판매자 결제 페이지에서 결제한 뒤 '결제했어요'를 누르면, 판매자가 확인하고 키를 보내 줘요. 기간이 끝나기 전에 다시 결제하면 이어서 써요.";
     }
 
@@ -354,8 +367,8 @@ public sealed class PremiumPage : UserControl
 
     private string Price() => (_ultra, _plan) switch
     {
-        (false, "monthly") => PriceMonthly, (false, "lifetime") => PriceLifetime, (false, _) => PriceYearly,
-        (true, "monthly") => PriceUltraMonthly, (true, "lifetime") => PriceUltraLifetime, _ => PriceUltraYearly,
+        (false, "monthly") => PriceMonthly, (false, _) => PriceYearly,
+        (true, "monthly") => PriceUltraMonthly, _ => PriceUltraYearly,
     };
 
     /// Gets an order code, shows it, opens the seller's payment page. The key arrives later (License.KeyArrived).

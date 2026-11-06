@@ -38,7 +38,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 | 요약 | 사용 중 · 최근 30일 발급 · 만료 · 차단 · 전체 키 수 |
 | 결제 방식 | 계좌이체 · 직접 결제(결제 링크가 있으면 켜짐) + 카드 결제(꺼짐 / 테스트 / 실판매) |
 | 결제 신청 | 처리할 것(신청 중 · 결제 확인 요청) / 승인 / 거절 / 전체. 입금자명·메모를 보고 승인 또는 거절(사유 입력) |
-| 키 발급 | 월간(34일) · 연간(369일) · 평생 · 직접 입력(일). 주문 코드가 있으면 구매자 앱에 바로 뜨고, 없으면(선물·리뷰용) 키를 복사해 보내면 됨 |
+| 키 발급 | 월간(34일) · 연간(369일) · 직접 입력(일). 주문 코드가 있으면 구매자 앱에 바로 뜨고, 없으면(선물·리뷰용) 키를 복사해 보내면 됨 |
 | 결제 링크 | 플랜별 https 링크(프리미엄 3개, 울트라 3개). 비우면 그 플랜은 앱에서 잠김. 앱은 프리미엄 화면을 열 때 반영. 카드 결제(Lemon Squeezy)는 프리미엄만 |
 | 키 직접 발급 | 기간을 고르고 '프리미엄 키 발급' 또는 '울트라 키 발급'을 누름. 울트라는 프레임 생성 6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭까지 열림. 앱에서 받은 주문을 승인하면 주문한 플랜의 키가 나감 |
 | 발급된 키 | 메일 · 키 번호 · 주문 코드 · 메모로 검색, 상태별 보기, 키 다시 복사, 차단/해제 |
@@ -102,7 +102,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 
 ## (선택) 카드 자동 결제 붙이기 — Lemon Squeezy
 카드 등록 · 매달 자동 청구 · 환불 · 세금 처리를 Lemon Squeezy가 하고, 결제되면 웹훅으로 키가 자동 발급됩니다(판매자 확인 없이).
-1. Lemon Squeezy에서 상품 1개 + variant 3개(월간 · 연간 구독, 평생 1회) 생성 → `wrangler.toml`에 상점 ID · variant ID
+1. Lemon Squeezy에서 상품 1개 + variant 2개(월간 · 연간 구독) 생성 → `wrangler.toml`에 상점 ID · variant ID
 2. `wrangler secret put LS_SIGNING_SECRET`, `wrangler secret put LS_API_KEY`
 3. 웹훅: `https://…/webhook/lemonsqueezy`, 이벤트 `order_created`, `order_refunded`, `subscription_created`,
    `subscription_updated`, `subscription_payment_success`

@@ -41,6 +41,17 @@ public static class License
     public static event Action? Changed;
     private static LicenseInfo? _info;
     private static string KeyFile => Path.Combine(Platform.DataDir, "license.key");
+    private static string HowFile => Path.Combine(Platform.DataDir, "license.how");
+
+    /// How the key got here: key (typed in), paid, referral, invite or reward.
+    public static string How
+    {
+        get
+        {
+            try { return File.Exists(HowFile) ? File.ReadAllText(HowFile).Trim() : "key"; }
+            catch (Exception) { return "key"; }
+        }
+    }
 
     public static LicenseInfo? Info { get { Load(); return _info; } }
     public static bool IsPremium
@@ -74,11 +85,13 @@ public static class License
     }
 
     /// Checks and stores a key. Returns null on success, else a message.
-    public static string? Activate(string key)
+    public static string? Activate(string key, string how = "key")
     {
         var info = Verify(key.Trim(), out var error);
         if (info == null) return error;
         File.WriteAllText(KeyFile, key.Trim());
+        try { File.WriteAllText(HowFile, how); }
+        catch (Exception) { }   // only the wording on the account page depends on it
         _info = info; _loaded = true;
         RaiseChanged();
         return null;
@@ -111,7 +124,7 @@ public static class License
             var body = new System.Net.Http.StringContent(JsonSerializer.Serialize(new { code, device = ReferralDevice() }), Encoding.UTF8, "application/json");
             var r = await Http.PostAsync($"{ServerUrl}/referral", body);
             using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
-            if (r.IsSuccessStatusCode && doc.RootElement.TryGetProperty("key", out var key)) return Activate(key.GetString() ?? "");
+            if (r.IsSuccessStatusCode && doc.RootElement.TryGetProperty("key", out var key)) return Activate(key.GetString() ?? "", "referral");
             return (doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() : null) switch
             {
                 "unknown" => "없는 코드이거나 끝난 코드예요",
@@ -269,7 +282,7 @@ public static class License
                         if (st == "ready" && doc.RootElement.GetProperty("key").GetString() is string key)
                         {
                             ForgetPending();
-                            var err = Activate(key);
+                            var err = Activate(key, "paid");
                             Avalonia.Threading.Dispatcher.UIThread.Post(() => KeyArrived?.Invoke(key, err));
                             break;
                         }
@@ -326,7 +339,7 @@ public static class License
             {
                 var key = doc.RootElement.GetProperty("key").GetString();
                 var next = key == null ? null : Verify(key, out _);
-                if (next?.Expires > e) Activate(key!);
+                if (next?.Expires > e) Activate(key!, How);
             }
         }
         catch (Exception) { }

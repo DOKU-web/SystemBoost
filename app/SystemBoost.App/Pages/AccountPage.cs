@@ -17,12 +17,51 @@ public sealed class AccountPage : UserControl
     private Mode _mode = Mode.LogIn;
     private string? _recovery;   // shown once, until the member says it is kept
     private int _shown;          // a slower reply for an older screen must not land on this one
+    private readonly Action _openPlans;
+    private readonly ContentControl _plan = new();
 
-    public AccountPage()
+    public AccountPage(Action openPlans)
     {
+        _openPlans = openPlans;
         Content = new ScrollViewer { Content = _root };
-        AttachedToVisualTree += (_, _) => { Account.Changed += Show; Show(); };
-        DetachedFromVisualTree += (_, _) => Account.Changed -= Show;
+        AttachedToVisualTree += (_, _) => { Account.Changed += Show; License.Changed += ShowPlan; Show(); };
+        DetachedFromVisualTree += (_, _) => { Account.Changed -= Show; License.Changed -= ShowPlan; };
+    }
+
+    // ------------------------------------------------------------ plan in use (a key belongs to this device, member or not)
+    private void ShowPlan() => _plan.Content = Ui.Card(PlanCard());
+
+    private Control PlanCard()
+    {
+        var p = new StackPanel { Spacing = 10 };
+        p.Children.Add(Ui.Text("지금 플랜", "muted"));
+        var head = new StackPanel { Orientation = Orientation.Horizontal };
+        var name = Ui.Text(PlanStatus.Name, "h2");
+        name.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#FF7A1A"));
+        head.Children.Add(name);
+        head.Children.Add(Ui.Badge("사용 중"));
+        p.Children.Add(head);
+        var facts = new Grid { ColumnDefinitions = new ColumnDefinitions("150,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto") };
+        void Fact(int row, string title, string value)
+        {
+            var left = Ui.Text(title, "muted");
+            var right = Ui.Text(value, "label", wrap: true);
+            right.Margin = new Thickness(0, 0, 0, 6);
+            Grid.SetRow(left, row);
+            Grid.SetRow(right, row);
+            Grid.SetColumn(right, 1);
+            facts.Children.Add(left);
+            facts.Children.Add(right);
+        }
+        Fact(0, "사용 방식", PlanStatus.How);
+        Fact(1, "사용 기간", PlanStatus.Period);
+        Fact(2, "프레임 생성 배수", PlanStatus.Multipliers);
+        p.Children.Add(facts);
+        bool top = PlanStatus.Rank == 2 && !PlanStatus.CanExtend;
+        var open = Ui.Button(top ? "플랜 보기" : "플랜 업그레이드", top ? "ghost" : "primary");
+        open.Click += (_, _) => _openPlans();
+        p.Children.Add(Left(open));
+        return p;
     }
 
     private static TextBox Input(string hint, bool secret = false, int max = 72)
@@ -57,6 +96,8 @@ public sealed class AccountPage : UserControl
         _root.Children.Clear();
         _root.Children.Add(Ui.Header("계정", "회원이 아니어도 앱은 그대로 쓸 수 있어요. 회원은 친구를 초대하고 보상을 받을 수 있어요."));
         if (_recovery != null) { _root.Children.Add(Ui.Card(RecoveryCard())); return; }
+        ShowPlan();
+        _root.Children.Add(_plan);
         if (!Account.SignedIn) { _root.Children.Add(Ui.Card(SignedOut())); return; }
         _mode = Mode.LogIn;   // the next time signed out starts at the login form
         var wait = Ui.Text("불러오는 중…", "muted");

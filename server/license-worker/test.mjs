@@ -72,12 +72,12 @@ console.log("admin page:", page.status, page.headers.get("content-security-polic
 console.log("wrong token:", (await adm("/summary", null, "nope")).status, "| no header:", (await call("/admin/api/summary")).status);
 env.SALES_MODE = "off"; await env.LICENSES.delete("config:sales_mode");
 console.log("status before links:", JSON.stringify(await (await call("/status")).json()));
-console.log("order w/o link:", (await call("/order?plan=lifetime", { method: "POST" })).status);
-console.log("bad link:", (await adm("/pay-links", { lifetime: "http://x" })).status);
-await adm("/pay-links", { lifetime: "https://pay.example/sb-lifetime", monthly: "https://pay.example/sb-month" });
+console.log("order w/o link:", (await call("/order?plan=yearly", { method: "POST" })).status);
+console.log("bad link:", (await adm("/pay-links", { yearly: "http://x" })).status);
+await adm("/pay-links", { yearly: "https://pay.example/sb-yearly", monthly: "https://pay.example/sb-month" });
 console.log("status:", JSON.stringify(await (await call("/status")).json()));
-const od = await (await call("/order?plan=lifetime", { method: "POST" })).json();
-console.log("order:", od.code, od.url, od.method, "| yearly (no link):", (await call("/order?plan=yearly", { method: "POST" })).status);
+const od = await (await call("/order?plan=yearly", { method: "POST" })).json();
+console.log("order:", od.code, od.url, od.method, "| ultra yearly (no link):", (await call("/order?plan=ultra_yearly", { method: "POST" })).status);
 console.log("claim before:", JSON.stringify(await (await call("/claim?session=" + od.code)).json()));
 console.log("buyer says paid:", JSON.stringify(await (await call("/order/paid?code=" + od.code, { method: "POST", body: JSON.stringify({ payer: "홍길동", msg: "토스 송금" }) })).json()));
 let ol = await (await adm("/orders")).json();
@@ -98,17 +98,25 @@ writeFileSync("/tmp/manual.key", iss.key);
 const m30 = await (await adm("/issue", { plan: "monthly", note: "리뷰용" })).json();
 console.log("monthly payload:", Buffer.from(m30.key.split(".")[0], "base64url").toString());
 const planOf = k => JSON.parse(Buffer.from(k.split(".")[0], "base64url").toString()).plan;
-const ul = await (await adm("/issue", { plan: "lifetime", tier: "ultra", note: "울트라 시험" })).json();
-const odd = await (await adm("/issue", { plan: "lifetime", tier: "gold", note: "모르는 등급" })).json();
+const ul = await (await adm("/issue", { plan: "yearly", tier: "ultra", note: "울트라 시험" })).json();
+const odd = await (await adm("/issue", { plan: "yearly", tier: "gold", note: "모르는 등급" })).json();
 console.log("tiers:", planOf(m30.key), planOf(ul.key), planOf(odd.key), "| listed:", (await (await adm("/keys?q=" + encodeURIComponent("울트라 시험"))).json()).keys[0].plan);
-await adm("/pay-links", { lifetime: "https://pay.example/sb-lifetime", monthly: "https://pay.example/sb-month", ultra_monthly: "https://pay.example/sb-ultra-month", ultra_lifetime: "https://pay.example/sb-ultra" });
+await adm("/pay-links", { yearly: "https://pay.example/sb-yearly", monthly: "https://pay.example/sb-month", ultra_monthly: "https://pay.example/sb-ultra-month", ultra_lifetime: "https://pay.example/sb-ultra" });
 console.log("status with ultra:", JSON.stringify((await (await call("/status")).json()).methods.manual));
-const uo = await (await call("/order?plan=ultra_lifetime", { method: "POST" })).json();
+const uo = await (await call("/order?plan=ultra_monthly", { method: "POST" })).json();
 const ua = await (await adm("/orders/approve", { code: uo.code, email: "ultra@example.com" })).json();
 const uom = await (await call("/order?plan=ultra_monthly", { method: "POST" })).json();
 const uam = await (await adm("/orders/approve", { code: uom.code, email: "ultra2@example.com" })).json();
 console.log("ultra orders:", uo.url, uo.method, planOf(ua.key), "|", uom.url, planOf(uam.key), "expires:", !!JSON.parse(Buffer.from(uam.key.split(".")[0], "base64url").toString()).expires,
             "| ultra yearly (no link):", (await call("/order?plan=ultra_yearly", { method: "POST" })).status, "| bad plan:", (await call("/order?plan=ultra_days", { method: "POST" })).status);
+console.log("lifetime gone: order", (await call("/order?plan=lifetime", { method: "POST" })).status,
+            "ultra order", (await call("/order?plan=ultra_lifetime", { method: "POST" })).status,
+            "issue:", (await (await adm("/issue", { plan: "lifetime", note: "no" })).json()).error,
+            "| status:", JSON.stringify((await (await call("/status")).json()).methods.manual));
+const oldCode = (await (await call("/order?plan=monthly", { method: "POST" })).json()).code;
+md.get("ord:" + oldCode).plan = "lifetime";   // an order placed while lifetime was on sale
+const oldOrder = await (await adm("/orders/approve", { code: oldCode })).json();
+console.log("old lifetime order approved:", !!oldOrder.key, "expires:", !!JSON.parse(Buffer.from(oldOrder.key.split(".")[0], "base64url").toString()).expires);
 const sm = await (await adm("/summary")).json(); console.log("summary:", JSON.stringify(sm.counts), sm.sales);
 const ks = await (await adm("/keys?q=buyer2")).json(); console.log("search buyer2:", ks.keys.length, ks.keys[0].state, ks.keys[0].src);
 console.log("check before:", JSON.stringify(await (await call("/check?id=" + iss.id)).json()));
@@ -131,7 +139,7 @@ Object.assign(env, { LS_VARIANT_LIFETIME: "33" });
 await adm("/sales-mode", { mode: "test" });
 globalThis.fetch = async (u, init) => { sent = JSON.parse(init.body); return new Response(JSON.stringify({ data: { attributes: { url: "https://shop.example/checkout/auto" } } }), { status: 201 }); };
 console.log("auto status:", JSON.stringify(await (await call("/status")).json()));
-const ao = await (await call("/order?plan=lifetime", { method: "POST" })).json();
+const ao = await (await call("/order?plan=yearly", { method: "POST" })).json();
 console.log("both open:", JSON.stringify((await (await call("/status")).json()).methods), "| manual still:", (await (await call("/order?plan=lifetime&method=manual", { method: "POST" })).json()).method);
 console.log("auto order:", ao.method, ao.url, "| LS custom session = code:", sent.data.attributes.checkout_data.custom.session === ao.code);
 await hook({ meta: { event_name: "order_created", test_mode: true, custom_data: { session: ao.code, plan: "lifetime" } }, data: { id: "3003", attributes: { status: "paid", user_email: "auto@example.com" } } });

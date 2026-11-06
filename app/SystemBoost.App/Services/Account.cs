@@ -91,10 +91,10 @@ public static class Account
     private static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     /// A key that came with a code. A paid key is never replaced by a short one.
-    private static string? Take(JsonElement r)
+    private static string? Take(JsonElement r, string how)
     {
         var key = Text(r, "key");
-        return key == null || License.IsPremium ? null : License.Activate(key);
+        return key == null || License.IsPremium ? null : License.Activate(key, how);
     }
 
     /// Returns (error, recovery code to show once).
@@ -105,7 +105,7 @@ public static class Account
         var (r, error) = await Send("signup", new { id, password, invite, device = License.ReferralDevice(), agree = true, age14 = true });
         if (r is not { } ok) return (error, null);
         Keep(new Saved(Text(ok, "id")!, Text(ok, "token")!));
-        return (Take(ok), Text(ok, "recovery"));
+        return (Take(ok, "invite"), Text(ok, "recovery"));
     }
 
     public static async Task<string?> LogInAsync(string id, string password)
@@ -163,6 +163,6 @@ public static class Account
     {
         if (License.IsPremium) return "지금 쓰는 키가 끝난 뒤에 받을 수 있어요. 보상은 그대로 남아 있어요";
         var (r, error) = await Send("reward", new { });
-        return r is { } ok ? Take(ok) : error;
+        return r is { } ok ? Take(ok, "reward") : error;
     }
 }

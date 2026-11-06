@@ -43,12 +43,12 @@ public partial class MainWindow : Window
             AddNav("🍷   윈도우 게임", "wine", () => new WindowsGamesPage(Go));
         AddNav("▧   벤치마크 · 기록", "bench", () => new BenchmarkPage());
         AddNav("★   프리미엄", "premium", () => new PremiumPage(_backend.Connected));
-        AddNav("◈   계정", "account", () => new AccountPage());
+        AddNav("◈   계정", "account", () => new AccountPage(OpenPlans));
         AddNav("↺   백업 · 되돌리기", "backup", () => new BackupPage(_backend));
         NavSettings.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
         UpdatePlan();
         License.Changed += UpdatePlan;
-        PlanCard.PointerPressed += (_, _) => Go("premium");
+        PlanCard.PointerPressed += (_, _) => OpenPlans();
         Updater.Changed += UpdateBar;
         UpdateNotes.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
         UpdateLater.Click += (_, _) => { _updateDismissed = true; UpdateBar(); };
@@ -61,6 +61,20 @@ public partial class MainWindow : Window
         };
         Go("fg");
         if (OperatingSystem.IsWindows() && _backend is WindowsBoostBackend win) _ = win.StartAsync();
+    }
+
+    private bool _plansOpen;
+
+    private async void OpenPlans()
+    {
+        if (_plansOpen) return;
+        _plansOpen = true;
+        var plans = new PlanDialog(_backend.Connected);
+        await plans.ShowDialog(this);
+        _plansOpen = false;
+        if (plans.Choice is not { } pick) return;
+        Go("premium");
+        (PageHost.Content as PremiumPage)?.Choose(pick.Ultra, pick.Period);
     }
 
     private readonly Dictionary<string, Button> _navByKey = new();
@@ -92,7 +106,7 @@ public partial class MainWindow : Window
     private void UpdatePlan()
     {
         PlanTitle.Text = License.IsUltra ? "울트라 ★" : License.IsPremium ? "프리미엄 ★" : "무료";
-        PlanText.Text = License.IsUltra ? "모든 기능 사용 중" : License.IsPremium ? "프리미엄 기능 사용 중" : "누르면 프리미엄 안내";
+        PlanText.Text = License.IsUltra ? "모든 기능 사용 중" : License.IsPremium ? "프리미엄 기능 사용 중" : "누르면 플랜 업그레이드";
     }
 
     // What the usage statistics report about this moment.

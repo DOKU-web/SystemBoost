@@ -4,13 +4,13 @@ import { cleanPing } from "./stats.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
-//   POST /checkout?plan=monthly|yearly|lifetime&session=<id>
+//   POST /checkout?plan=monthly|yearly&session=<id>
 //                                creates a Lemon Squeezy checkout carrying the session -> {url}
 //   POST /webhook/lemonsqueezy   Lemon Squeezy webhook (X-Signature HMAC-SHA256 checked)
 //   GET  /claim?session=<id>     app polls this after opening checkout -> {status, key}
 //   GET  /thanks?session=<id>    checkout "return to" page that shows the key
 //   GET  /renew?sub=<id>         latest key of an active subscription (app renews before expiry)
-//   GET  /status                 {sales, pay:{monthly,yearly,lifetime}} - the app enables "결제하기" only for plans
+//   GET  /status                 {sales, pay:{monthly,yearly}} - the app enables "결제하기" only for plans
 //                                that have a payment link (links are set in the dashboard)
 //   POST /order?plan=…           app gets an order code (SB-XXXX-XXXX) to write in the payment memo;
 //                                the owner confirms the payment and issues the key for that code in /admin,
@@ -46,8 +46,8 @@ async function salesMode(env) {
 
 const CODE_RE = /^SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;   // no 0/O/1/I: easy to read aloud
 function validSession(s) { return /^[A-Za-z0-9-]{16,64}$/.test(s) || CODE_RE.test(s); }
-const PLANS = { monthly: "월간", yearly: "연간", lifetime: "평생",
-                ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간", ultra_lifetime: "울트라 평생" };
+// On sale. Lifetime is no longer sold; keys and orders from before keep working.
+const PLANS = { monthly: "월간", yearly: "연간", ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간" };
 const PLAN_DAYS = { monthly: 31, yearly: 366 };            // manual subscription keys (+3 days grace)
 
 // A fixed-price payment link cannot take a discount, so a discount ticket has its own link for each plan.
@@ -82,7 +82,7 @@ async function putOrder(env, o) {
   await env.LICENSES.put("ord:" + code, "", { expirationTtl: ORDER_TTL, metadata: m });
 }
 function lsVariant(env, plan) {
-  const v = { monthly: env.LS_VARIANT_MONTHLY, yearly: env.LS_VARIANT_YEARLY, lifetime: env.LS_VARIANT_LIFETIME }[plan];
+  const v = { monthly: env.LS_VARIANT_MONTHLY, yearly: env.LS_VARIANT_YEARLY }[plan];
   return v && v !== "REPLACE" && env.LS_API_KEY ? v : null;
 }
 async function openPlans(env) {   // plans the app may sell right now, per method
@@ -187,7 +187,7 @@ async function checkout(url, env) {   // kept for direct use; the app goes throu
   return u ? json({ url: u }) : json({ error: "checkout failed" }, 502);
 }
 async function lsCheckout(env, plan, session) {
-  const variant = { monthly: env.LS_VARIANT_MONTHLY, yearly: env.LS_VARIANT_YEARLY, lifetime: env.LS_VARIANT_LIFETIME }[plan];
+  const variant = { monthly: env.LS_VARIANT_MONTHLY, yearly: env.LS_VARIANT_YEARLY }[plan];
   if (!variant) return null;
   const res = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
     method: "POST",
@@ -667,7 +667,7 @@ async function adminIssue(env, b) {
   let days = 0;
   if (period === "days") days = Math.floor(Number(b.days));
   else if (PLAN_DAYS[period]) days = PLAN_DAYS[period] + GRACE_DAYS;
-  else if (period !== "lifetime") return { error: "플랜을 고르세요" };
+  else if (period !== "lifetime" || !code) return { error: "플랜을 고르세요" };   // an order placed while it was on sale can still be approved
   if (period === "days" && !(days >= 1 && days <= 3650)) return { error: "기간은 1~3650일이에요" };
   if (!note && !code) return { error: "주문 코드나 메모(발급 이유) 중 하나는 적어 주세요" };
   const src = code ? "payment" : "manual";

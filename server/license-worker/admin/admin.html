@@ -142,7 +142,7 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
       <h2>키 직접 발급 <small>선물·리뷰용이나 앱 밖에서 받은 결제</small></h2>
       <div class="row" style="margin-bottom:8px"><input id="iCode" placeholder="주문 코드 SB-XXXX-XXXX (있으면 구매자 앱에 바로 떠요)"></div>
       <div class="row" style="margin-bottom:8px">
-        <select id="iPlan"><option value="monthly">월간 (34일)</option><option value="yearly">연간 (369일)</option><option value="lifetime">평생</option><option value="days">직접 입력(일)</option></select>
+        <select id="iPlan"><option value="monthly">월간 (34일)</option><option value="yearly">연간 (369일)</option><option value="days">직접 입력(일)</option></select>
         <input id="iDays" type="number" min="1" max="3650" placeholder="일 수" class="hide">
       </div>
       <div class="row" style="margin-bottom:8px"><input id="iEmail" placeholder="구매자 메일 (선택)"></div>
@@ -156,16 +156,12 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
       <div style="display:grid;gap:8px">
         <label class="mut">월간 ₩2,900<input id="pMonthly" placeholder="https://…"></label>
         <label class="mut">연간 ₩19,900<input id="pYearly" placeholder="https://…"></label>
-        <label class="mut">평생 ₩49,900<input id="pLifetime" placeholder="https://…"></label>
         <label class="mut">울트라 월간 ₩4,900<input id="pUltraMonthly" placeholder="https://…"></label>
         <label class="mut">울트라 연간 ₩34,900<input id="pUltraYearly" placeholder="https://…"></label>
-        <label class="mut">울트라 평생 ₩89,900<input id="pUltraLifetime" placeholder="https://…"></label>
         <label class="mut">할인 티켓 월간 ₩2,610<input id="pMonthlyT" placeholder="https://…"></label>
         <label class="mut">할인 티켓 연간 ₩17,910<input id="pYearlyT" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 평생 ₩44,910<input id="pLifetimeT" placeholder="https://…"></label>
         <label class="mut">할인 티켓 울트라 월간 ₩4,410<input id="pUltraMonthlyT" placeholder="https://…"></label>
         <label class="mut">할인 티켓 울트라 연간 ₩31,410<input id="pUltraYearlyT" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 울트라 평생 ₩80,910<input id="pUltraLifetimeT" placeholder="https://…"></label>
         <div class="row"><button class="p" id="saveLinks">링크 저장</button><span id="pMsg" class="mut"></span></div>
       </div>
     </div>
@@ -206,8 +202,7 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
 const $ = id => document.getElementById(id);
 const PLAN = { monthly: "월간", yearly: "연간", lifetime: "평생", premium: "프리미엄",
                ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간", ultra_lifetime: "울트라 평생" };
-const LINKS = { monthly: "pMonthly", yearly: "pYearly", lifetime: "pLifetime",
-                ultra_monthly: "pUltraMonthly", ultra_yearly: "pUltraYearly", ultra_lifetime: "pUltraLifetime" };
+const LINKS = { monthly: "pMonthly", yearly: "pYearly", ultra_monthly: "pUltraMonthly", ultra_yearly: "pUltraYearly" };
 const TICKET_LINKS = Object.fromEntries(Object.keys(LINKS).map(p => [p + "_ticket", LINKS[p] + "T"]));   // 정가의 90%
 const ST = { active: "사용 중", revoked: "차단", expired: "만료", test: "테스트" };
 const OS = { requested: "신청 중", paid: "결제 확인 요청", approved: "승인", rejected: "거절" };
