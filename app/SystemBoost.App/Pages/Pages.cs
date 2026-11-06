@@ -227,9 +227,35 @@ public sealed class SettingsPage : UserControl
                                  Ui.Text(portable ? "포터블" : "설치판", "label")));
         root.Children.Add(Ui.Card(list));
         root.Children.Add(Ui.Card(UpdateCard()));
+        root.Children.Add(Ui.Card(ShortcutCard()));
         root.Children.Add(Ui.Card(UsageCard()));
         root.Children.Add(Ui.Card(LegalCard()));
         Content = new ScrollViewer { Content = root };
+    }
+
+    private static Control ShortcutCard()
+    {
+        var p = new StackPanel { Spacing = 10 };
+        p.Children.Add(Ui.Text("바탕화면 바로 가기", "h2"));
+        var status = Ui.Text("", "muted", wrap: true);
+        var add = Ui.Button("바탕화면에 바로 가기 추가", "primary");
+        var remove = Ui.Button("바로 가기 지우기", "ghost");
+        add.HorizontalAlignment = remove.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+        void Refresh(string? error = null)
+        {
+            var exists = DesktopShortcut.Exists;
+            add.IsVisible = !exists;
+            remove.IsVisible = exists;
+            status.Text = error ?? (exists ? "바탕화면에 SystemBoost 바로 가기가 있어요." : "바탕화면에 바로 가기가 없어요.");
+        }
+        add.Click += (_, _) => Refresh(DesktopShortcut.Create());
+        remove.Click += (_, _) => Refresh(DesktopShortcut.Remove());
+        Refresh();
+        p.Children.Add(status);
+        p.Children.Add(add);
+        p.Children.Add(remove);
+        if (Platform.Portable) p.Children.Add(Ui.Text("포터블은 폴더를 옮기면 바로 가기를 지우고 다시 만들어야 해요.", "muted", wrap: true));
+        return p;
     }
 
     private static Control UsageCard()
