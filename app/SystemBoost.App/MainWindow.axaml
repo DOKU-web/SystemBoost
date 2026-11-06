@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:pages="using:SystemBoost.App.Pages"
         x:Class="SystemBoost.App.MainWindow"
         Title="SystemBoost"
         Icon="/Assets/SystemBoost.ico"
@@ -39,7 +40,9 @@
           <TextBlock x:Name="UpdateBarText" VerticalAlignment="Center" Foreground="#FFC58A" TextWrapping="Wrap" />
         </DockPanel>
       </Border>
-      <ContentControl x:Name="PageHost" Margin="34,28" />
+      <!-- on every page, so nobody has to find Settings in a language they do not read -->
+      <pages:LanguageBar DockPanel.Dock="Top" Margin="34,14,34,0" />
+      <ContentControl x:Name="PageHost" Margin="34,10,34,28" />
     </DockPanel>
   </Grid>
 </Window>

@@ -271,7 +271,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private static string Friendly(string msg)
     {
         if (msg.StartsWith("screen recording permission"))
-            return "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요.";
+            return "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록(또는 화면 및 시스템 오디오 녹음)에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요. 이미 켜져 있는데 이 문구가 나오면 목록에서 SystemBoost를 골라 − 버튼으로 지우고, 앱을 다시 열어 허용해 주세요. 업데이트 뒤에 생길 수 있어요.";
         if (msg == NoFrames) return "고른 창의 화면이 들어오지 않아요. 게임 화면이 멈춰 있거나 다른 창을 고른 것일 수 있어요. 게임이 보이는 창을 고르세요";
         if (msg.StartsWith(NotInFront) && msg[NotInFront.Length..].Split(" / ") is [var front, var game])
             return $"게임 창을 눌러 맨 앞으로 가져오세요. 지금 맨 앞: {front}, 고른 창: {game}";

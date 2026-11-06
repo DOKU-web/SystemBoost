@@ -632,7 +632,7 @@
 "중지됨": "Stopped",
 "엔진 파일이 없어요: {0}": "Engine file not found: {0}",
 "내장 그래픽 자동 선택": "Choose integrated graphics automatically",
-"화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요.": "Screen Recording permission is needed. Turn on SystemBoost in System Settings → Privacy & Security → Screen Recording, then reopen the app.",
+"화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록(또는 화면 및 시스템 오디오 녹음)에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요. 이미 켜져 있는데 이 문구가 나오면 목록에서 SystemBoost를 골라 − 버튼으로 지우고, 앱을 다시 열어 허용해 주세요. 업데이트 뒤에 생길 수 있어요.": "Screen Recording permission is needed. In System Settings → Privacy & Security → Screen Recording (or Screen & System Audio Recording), turn on SystemBoost, then reopen the app. If it is already on and you still see this, select SystemBoost in the list, remove it with the − button, then reopen the app and allow it again. This can happen after an update.",
 "게임 창을 먼저 고르세요": "Choose a game window first",
 "시작하는 중…": "Starting…",
 "창 목록을 읽지 못했어요. 아래 안내를 확인하세요": "Could not read the window list. See the note below",

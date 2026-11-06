@@ -226,53 +226,11 @@ public sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("설치 형태", portable ? "설정과 기록을 이 폴더에 저장해요" : "설정과 기록을 사용자 폴더에 저장해요",
                                  Ui.Text(portable ? "포터블" : "설치판", "label")));
         root.Children.Add(Ui.Card(list));
-        root.Children.Add(Ui.Card(LanguageCard()));
         root.Children.Add(Ui.Card(UpdateCard()));
         root.Children.Add(Ui.Card(ShortcutCard()));
         root.Children.Add(Ui.Card(UsageCard()));
         root.Children.Add(Ui.Card(LegalCard()));
         Content = new ScrollViewer { Content = root };
-    }
-
-    // Both languages on the card: whoever opens it may not read the one the app is in.
-    private static Control LanguageCard()
-    {
-        var p = new StackPanel { Spacing = 10 };
-        p.Children.Add(Ui.Text("언어 · Language", "h2"));
-        var box = new ComboBox
-        {
-            ItemsSource = Lang.Languages.Select(l => l.Name).ToList(), MinWidth = 200,
-            SelectedIndex = Array.FindIndex(Lang.Languages, l => l.Code == Lang.Code),
-        };
-        var status = Ui.Text("", "muted", wrap: true);
-        var restart = Ui.Button("다시 시작 · Restart", "primary");
-        restart.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
-        restart.IsVisible = false;
-        box.SelectionChanged += (_, _) =>
-        {
-            if (box.SelectedIndex < 0) return;
-            var code = Lang.Languages[box.SelectedIndex].Code;
-            var saved = Lang.Save(code);
-            var waiting = saved && code != Lang.Code;
-            restart.IsVisible = waiting && Platform.IsWindows;
-            status.Text = !saved ? "저장하지 못했어요 · Could not save"
-                : !waiting ? ""
-                : Platform.IsWindows ? "다시 시작하면 바뀌어요 · Applies after a restart"
-                : "앱을 끄고 다시 열면 바뀌어요 · Quit and reopen the app to apply";
-        };
-        restart.Click += (_, _) =>
-        {
-            if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
-                || d.MainWindow is not MainWindow w || Environment.ProcessPath is not { } exe) return;
-            w.Shutdown(applyUpdateOnExit: false);   // what was changed for a game goes back before the new one starts
-            try { System.Diagnostics.Process.Start(exe); }
-            catch (Exception) { }   // the choice is saved: the next start has it
-            d.Shutdown();
-        };
-        p.Children.Add(box);
-        p.Children.Add(status);
-        p.Children.Add(restart);
-        return p;
     }
 
     private static Control ShortcutCard()
