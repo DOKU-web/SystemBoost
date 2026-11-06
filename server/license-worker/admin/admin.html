@@ -117,6 +117,19 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
     <div class="tbl"><table><thead><tr><th>주문 코드</th><th>플랜</th><th>상태</th><th>입금자 / 메모</th><th>시각</th><th></th></tr></thead><tbody id="orders"></tbody></table></div>
   </div>
 
+  <div class="card">
+    <h2>추천 코드 <small>코드를 입력한 사람은 정한 기간의 키를 바로 받아요. 기기 한 대에 한 번만 쓸 수 있어요. 코드를 나눠 준 사람의 보상은 사용 횟수를 보고 직접 챙겨 주세요.</small></h2>
+    <div class="row" style="margin-bottom:10px">
+      <input id="rCode" maxlength="16" placeholder="코드 (비우면 자동으로 만들어요)">
+      <input id="rLabel" maxlength="80" placeholder="누구에게 준 코드인지">
+      <select id="rPlan"><option value="premium">프리미엄</option><option value="ultra">울트라</option></select>
+      <input id="rDays" type="number" min="1" max="30" value="3" title="받는 기간 (일)">
+      <input id="rMax" type="number" min="1" max="10000" value="100" title="사용 횟수 한도">
+      <button class="p" id="rAdd">코드 만들기</button><span id="rMsg"></span>
+    </div>
+    <div class="tbl"><table><thead><tr><th>코드</th><th>메모</th><th>주는 것</th><th>사용</th><th>상태</th><th></th></tr></thead><tbody id="refs"></tbody></table></div>
+  </div>
+
   <div class="grid2">
     <div class="card">
       <h2>키 직접 발급 <small>선물·리뷰용이나 앱 밖에서 받은 결제</small></h2>
@@ -218,7 +231,15 @@ async function api(path, body) {
 }
 
 // ------------------------------------------------------------ views
-async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks()]); }
+async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs()]); }
+async function loadRefs() {
+  const { refs } = await api("/referrals");
+  $("refs").innerHTML = refs.length ? refs.map(r => `<tr>
+    <td><code>${esc(r.code)}</code></td><td>${esc(r.label) || "—"}</td><td>${PLAN_KO[r.plan] || esc(r.plan)} ${Number(r.days)}일</td>
+    <td class="m">${Number(r.used)} / ${Number(r.max)}</td><td>${r.on ? "켜짐" : "꺼짐"}</td>
+    <td style="text-align:right;white-space:nowrap"><button data-ref-set="${esc(r.code)}" data-on="${r.on ? "" : "1"}">${r.on ? "끄기" : "켜기"}</button> <button class="d" data-ref-del="${esc(r.code)}">지우기</button></td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty">아직 추천 코드가 없어요</td></tr>`;
+}
 async function loadSummary() {
   const s = await api("/summary"), c = s.counts;
   $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total]]
@@ -420,8 +441,23 @@ $("saveLinks").onclick = async () => {
         $("pMsg").textContent = "저장했어요. 앱은 다음에 프리미엄 화면을 열 때 반영해요."; $("pMsg").className = "okc"; loadLinks(); }
   catch (e) { $("pMsg").textContent = e.message; $("pMsg").className = "err"; }
 };
+$("rAdd").onclick = async () => {
+  const msg = t => { $("rMsg").textContent = t; $("rMsg").className = "err"; };
+  try {
+    const r = await api("/referrals", { code: $("rCode").value, label: $("rLabel").value, plan: $("rPlan").value, days: $("rDays").value, max: $("rMax").value });
+    if (r.error) return msg(r.error);
+    $("rMsg").textContent = "만들었어요: " + r.code; $("rMsg").className = "okc";
+    $("rCode").value = $("rLabel").value = "";
+    loadRefs(); loadLog();
+  } catch (e) { msg(e.message); }
+};
 document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.refSet) { await api("/referrals/set", { code: t.dataset.refSet, on: !!t.dataset.on }); loadRefs(); loadLog(); return; }
+  if (t.dataset.refDel) {
+    if (await ask("추천 코드를 지울까요?", `<code>${esc(t.dataset.refDel)}</code> — 이미 받은 키는 그대로 쓸 수 있어요.`)) { await api("/referrals/delete", { code: t.dataset.refDel }); loadRefs(); loadLog(); }
+    return;
+  }
   if (t.dataset.approve) {
     const c = t.dataset.approve;
     if (!(await ask("결제를 승인할까요?", `<code>${esc(c)}</code><br>결제가 실제로 들어온 걸 확인했을 때만 승인하세요. 승인하면 키가 무작위로 만들어져 구매자 앱에 바로 떠요.<br><br><input id="apEmail" placeholder="구매자 메일 (선택)"><div style="height:6px"></div><input id="apNote" placeholder="메모 (선택, 비우면 입금자명 사용)">`, "승인하고 키 발급"))) return;
@@ -512,6 +548,11 @@ function demoApi(path, b) {
     demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length; return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c }); }
   if (p === "/orders") { const w = q.get("status"); const count = { requested: 0, paid: 0, approved: 0, rejected: 0 }; demo.orders.forEach(o => count[o.status]++);
     return R({ count, orders: demo.orders.filter(o => w === "all" || (w === "open" ? ["requested", "paid"].includes(o.status) : o.status === w)) }); }
+  if (p === "/referrals") { demo.refs = demo.refs || [{ code: "FRIEND3", label: "방송 시청자용", plan: "premium", days: 3, max: 100, on: true, used: 17, at: new Date().toISOString() }];
+    if (b) { const code = (b.code || "DEMO" + (++demo.n)).toUpperCase(); demo.refs.unshift({ code, label: b.label, plan: b.plan, days: Number(b.days), max: Number(b.max), on: true, used: 0, at: new Date().toISOString() }); L("추천 코드 생성", code); return R({ ok: true, code }); }
+    return R({ refs: demo.refs }); }
+  if (p === "/referrals/set") { const r = demo.refs.find(x => x.code === b.code); r.on = b.on; return R({ ok: true }); }
+  if (p === "/referrals/delete") { demo.refs = demo.refs.filter(x => x.code !== b.code); return R({ ok: true }); }
   if (p === "/orders/approve") { const o = demo.orders.find(o => o.code === b.code);
     return demoApi("/issue", { code: o.code, plan: o.plan, email: b.email, note: b.note || [o.payer, o.msg].filter(Boolean).join(" · ") }).then(x => { Object.assign(o, { status: "approved", keyId: x.id, email: b.email }); return x; }); }
   if (p === "/orders/reject") { const o = demo.orders.find(o => o.code === b.code); Object.assign(o, { status: "rejected", reason: b.reason || "결제를 확인하지 못했어요" }); L("거절", o.code + " · " + o.reason); return R({ ok: true }); }

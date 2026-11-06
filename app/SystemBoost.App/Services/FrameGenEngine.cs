@@ -26,7 +26,7 @@ public sealed record GpuItem(string Value, string Name, bool Integrated)
 }
 
 public sealed record FrameGenOptions(string Mode, int MaxMultiplier, string Quality, bool Upscale,
-                                     double Sharpness, string GenGpu, string Capture);
+                                     double Sharpness, string GenGpu, string Capture, int TargetFps);
 
 public sealed record FrameGenStats(double SrcFps, double OutFps, double Multiplier, double RefreshHz,
                                    double DelayMs, double AddedLatencyMs, double GenMs, double AnalyzeMs,
@@ -73,6 +73,7 @@ public sealed class FrameGenEngine : IDisposable
     public event Action<FrameGenStats>? Stats;
     public event Action<JsonElement>? Ready;
     public event Action<string, string>? Message;   // (warning|error, text)
+    public event Action? FitStopped;                // the engine stopped generating and shows the game as it is
     public event Action? Exited;
     public bool Running => _p is { HasExited: false };
 
@@ -82,7 +83,8 @@ public sealed class FrameGenEngine : IDisposable
         var inv = CultureInfo.InvariantCulture;
         var args = $"--hwnd {windowId} --mode {o.Mode} --max-mul {o.MaxMultiplier} --quality {o.Quality} " +
                    $"--sharpness {o.Sharpness.ToString("0.00", inv)} --gen-gpu {o.GenGpu}" +
-                   (Platform.IsWindows ? $" --capture {o.Capture}" : "") + (o.Upscale ? " --upscale" : "");
+                   (Platform.IsWindows ? $" --capture {o.Capture}" : "") + (o.Upscale ? " --upscale" : "") +
+                   (o.TargetFps > 0 ? $" --target-fps {o.TargetFps}" : "");
         var psi = new ProcessStartInfo(Platform.EnginePath, args)
         {
             UseShellExecute = false, CreateNoWindow = true,
@@ -105,6 +107,7 @@ public sealed class FrameGenEngine : IDisposable
     }
 
     public void SetMode(string mode) => Send($"mode {mode}");
+    public void SetTarget(int fps) => Send($"target {fps}");
     public void SetSharpness(double s) => Send($"sharp {s.ToString("0.00", CultureInfo.InvariantCulture)}");
     public void Enable(bool on) => Send(on ? "enable" : "disable");
 
@@ -149,7 +152,10 @@ public sealed class FrameGenEngine : IDisposable
                 {
                     case "stats": Stats?.Invoke(ParseStats(r)); break;
                     case "ready": Ready?.Invoke(r); break;
-                    case "fit": Message?.Invoke("warning", FitText(r)); break;
+                    case "fit":
+                        Message?.Invoke("warning", FitText(r));
+                        if (r.TryGetProperty("stopped", out _)) FitStopped?.Invoke();
+                        break;
                     case "warning":
                     case "error": Message?.Invoke(type!, r.TryGetProperty("msg", out var m) ? m.GetString() ?? "" : ""); break;
                 }
@@ -161,7 +167,7 @@ public sealed class FrameGenEngine : IDisposable
 
     private static string FitText(JsonElement r)
     {
-        if (r.TryGetProperty("stopped", out _)) return "GPU가 따라오지 못해 프레임 생성을 멈췄어요. 게임 화면을 그대로 보여 줘요.";
+        if (r.TryGetProperty("stopped", out _)) return "GPU 여유가 없어 프레임 생성을 멈췄어요. 게임 화면을 그대로 보여 줘요.";
         if (r.TryGetProperty("maxOut", out _)) return "출력이 계속 밀려서 출력 프레임 수를 낮췄어요.";
         var quality = r.TryGetProperty("quality", out var q) ? q.GetString() : null;
         var name = quality switch { "low" => "저사양", "performance" => "성능", _ => "균형" };

@@ -26,15 +26,27 @@ public:
         return true;
     }
 
+    // Call at every stats line. True = the output stayed under floorFps for kBehindSec. The overlay
+    // covers the game, so that many fewer frames are what gets seen: no step down beats the game alone.
+    bool behind(double now, double outFps, double floorFps) {
+        if (outFps >= floorFps) { behindSince_ = -1; return false; }
+        if (behindSince_ < 0) behindSince_ = now;
+        if (now - behindSince_ < kBehindSec) return false;
+        behindSince_ = -1;
+        return true;
+    }
+
 private:
     static constexpr double kMissPerSec = 2.0;   // at 500 ms stats lines: one miss in every line
     static constexpr double kHoldSec = 3.0;
     static constexpr double kSettleSec = 3.0;    // let the last step show its effect
+    static constexpr double kBehindSec = 2.5;
 
     double lastNow_ = -1;
     uint64_t lastSkipped_ = 0;
     double overSince_ = -1;
     double settleUntil_ = 0;
+    double behindSince_ = -1;
 };
 
 }  // namespace sbfg

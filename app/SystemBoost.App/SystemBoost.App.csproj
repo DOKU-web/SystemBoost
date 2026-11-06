@@ -34,5 +34,7 @@
     <AvaloniaResource Include="Assets\SystemBoost.ico" />
     <AvaloniaResource Include="Assets\icon_128.png" />
     <AvaloniaResource Include="Assets\eula.txt" />
+    <AvaloniaResource Include="Assets\eula.en.txt" />
+    <AvaloniaResource Include="Assets\lang.en.json" />
   </ItemGroup>
 </Project>

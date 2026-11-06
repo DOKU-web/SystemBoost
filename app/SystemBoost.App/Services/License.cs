@@ -84,6 +84,49 @@ public static class License
         return null;
     }
 
+    private static string DeviceFile => Path.Combine(Platform.DataDir, "referral.txt");
+
+    // Random, and not the statistics install number: a code has to work with statistics off.
+    private static string ReferralDevice()
+    {
+        try
+        {
+            if (File.Exists(DeviceFile) && File.ReadAllText(DeviceFile).Trim() is { Length: 32 } saved) return saved;
+        }
+        catch (Exception) { }
+        var id = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        try { File.WriteAllText(DeviceFile, id); }
+        catch (Exception) { }
+        return id;
+    }
+
+    /// Trades a referral code for a short key. Returns null on success, else a message.
+    public static async System.Threading.Tasks.Task<string?> RedeemReferralAsync(string code)
+    {
+        code = code.Trim().ToUpperInvariant();
+        if (code.Length == 0) return "추천 코드를 적어 주세요";
+        if (IsPremium) return "유료 플랜을 쓰는 중이라 추천 코드를 쓸 수 없어요";   // a paid key is never replaced by a short one
+        try
+        {
+            var body = new System.Net.Http.StringContent(JsonSerializer.Serialize(new { code, device = ReferralDevice() }), Encoding.UTF8, "application/json");
+            var r = await Http.PostAsync($"{ServerUrl}/referral", body);
+            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+            if (r.IsSuccessStatusCode && doc.RootElement.TryGetProperty("key", out var key)) return Activate(key.GetString() ?? "");
+            return (doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() : null) switch
+            {
+                "unknown" => "없는 코드이거나 끝난 코드예요",
+                "used up" => "이 코드는 사용 횟수가 다 찼어요",
+                "already" => "이 기기는 이미 추천 코드를 썼어요",
+                "busy" => "오늘은 더 받을 수 없어요. 내일 다시 해 주세요",
+                _ => "코드는 영문과 숫자 4~16자예요",
+            };
+        }
+        catch (Exception e) when (e is System.Net.Http.HttpRequestException or System.Threading.Tasks.TaskCanceledException or JsonException)
+        {
+            return "서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요";
+        }
+    }
+
     public static void Deactivate()
     {
         try { File.Delete(KeyFile); } catch (Exception) { }

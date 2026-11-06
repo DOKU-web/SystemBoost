@@ -39,6 +39,14 @@ public partial class FrameGenPage : UserControl
             vm.Quality = v; return true;
         });
         Segment(CaptureSeg, vm.Capture, v => { vm.Capture = v; return true; });
+        Segment(TargetSeg, vm.TargetFps.ToString(CultureInfo.InvariantCulture), v =>
+        {
+            vm.TargetFps = int.Parse(v, CultureInfo.InvariantCulture);
+            TargetBox.Text = "";
+            return true;
+        });
+        TargetBox.LostFocus += (_, _) => ApplyTarget();
+        TargetBox.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) ApplyTarget(); };
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(vm.SelectedGpu) && vm.SelectedGpu is { Value: not "same" } &&
@@ -54,22 +62,42 @@ public partial class FrameGenPage : UserControl
         ApplyButton.Click += (_, _) => vm.Restart();
         DefaultsButton.Click += (_, _) =>
         {
-            vm.Mode = FrameGenViewModel.DefaultMode; vm.MaxMul = FrameGenViewModel.DefaultMaxMul; vm.Quality = "balanced"; vm.Upscale = false; vm.Sharpness = 0.5; vm.Capture = "wgc";
+            vm.Mode = FrameGenViewModel.DefaultMode; vm.MaxMul = FrameGenViewModel.DefaultMaxMul; vm.Quality = "balanced"; vm.Upscale = false; vm.Sharpness = 0.5; vm.Capture = "wgc"; vm.TargetFps = 0;
+            TargetBox.Text = ""; Select(TargetSeg, "0");
             Select(ModeSeg, vm.Mode); Select(MaxSeg, vm.MaxMul.ToString(CultureInfo.InvariantCulture)); Select(QualitySeg, "balanced"); Select(CaptureSeg, "wgc");
         };
         vm.HistoryChanged += () => Chart.SetData(vm.History);
 
         NoteText.Text =
             "· 보간은 다음 프레임을 기다려서 지연이 늘어나요(원본 1프레임 + 처리 시간). 경쟁 게임에는 권장하지 않아요.\n" +
-            "· 6배·8배와 듀얼 GPU는 울트라 플랜 전용이에요. 출력 FPS는 모니터 주사율을 넘지 않아서 게임 FPS가 낮을 때만 차이가 나요.\n" +
-            "· 게임 FPS를 일정하게 제한하면 결과가 더 고르게 나와요.\n" +
+            "· 6배·8배와 듀얼 GPU는 울트라 플랜 전용이에요.\n" +
+            "· '출력 프레임'을 고르지 않으면 모니터 주사율까지 나와요. 모니터는 주사율만큼만 보여 줘서, 그보다 높게 고른 프레임은 표시되지 않고 GPU만 더 써요.\n" +
+            "· 프레임 생성에는 GPU 여유가 필요해요. 게임이 GPU를 다 쓰면 출력이 원본보다 적어질 수 있어서, 그때는 생성을 멈추고 게임 화면을 그대로 보여 줘요. 게임 프레임을 제한하면 여유가 생기고 결과도 더 고르게 나와요.\n" +
             "· 듀얼 GPU는 켜기 전후로 벤치마크해서 효과가 있을 때만 쓰세요.\n" +
             (Platform.IsMac
                 ? "· macOS: 처음 실행할 때 '화면 기록' 권한이 필요해요. 업스케일 중에는 실제 커서가 게임 창 안에 머물러요."
                 : "· 게임은 테두리 없는 창 또는 창 모드로 실행하세요.");
         if (Platform.IsMac) UpscaleHint.Text = "화면 비율 유지 · 마우스 커서가 있는 게임은 커서 위치가 다르게 보일 수 있어요";
 
-        AttachedToVisualTree += async (_, _) => { if (vm.Windows.Count == 0) await vm.RefreshAsync(); };
+        // a game started after the last look has to reach the list without the user knowing about ↻
+        AttachedToVisualTree += async (_, _) => { if (!vm.Running) await vm.RefreshAsync(); };
+        WindowBox.DropDownOpened += async (_, _) => { if (!vm.Running) await vm.RefreshAsync(); };
+    }
+
+    /// A number typed in the box: Enter or leaving it. Empty leaves the choice as it is.
+    private void ApplyTarget()
+    {
+        var text = TargetBox.Text?.Trim() ?? "";
+        if (text.Length == 0) return;
+        if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out int fps) ||
+            fps < FrameGenViewModel.MinTargetFps || fps > FrameGenViewModel.MaxTargetFps)
+        {
+            _vm.Notice($"출력 프레임은 {FrameGenViewModel.MinTargetFps}에서 {FrameGenViewModel.MaxTargetFps} 사이 숫자로 적어 주세요.");
+            TargetBox.Text = "";
+            return;
+        }
+        _vm.TargetFps = fps;
+        Select(TargetSeg, fps.ToString(CultureInfo.InvariantCulture));
     }
 
     private bool Locked(string what)

@@ -69,7 +69,7 @@ void Overlay::CreateSwapChain(UINT w, UINT h) {
         d.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         d.SampleDesc.Count = 1;
         d.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        d.BufferCount = 2;
+        d.BufferCount = 4;  // a rate above the refresh rate needs some free while one is on screen
         d.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
         d.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
         d.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
@@ -96,9 +96,9 @@ void Overlay::SetRect(const RECT& r) {
     if (resize && w > 0 && h > 0) CreateSwapChain(w, h);
 }
 
-void Overlay::Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear) {
+void Overlay::Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear, bool noVsync) {
     if (!swap_ || !tex) return;
-    if (waitable_) WaitForSingleObjectEx(waitable_, 20, FALSE);  // at most 1 frame queued
+    if (waitable_ && !noVsync) WaitForSingleObjectEx(waitable_, 20, FALSE);  // at most 1 frame queued
     ComPtr<ID3D11Texture2D> bb;
     if (FAILED(swap_->GetBuffer(0, IID_PPV_ARGS(&bb)))) return;
     if (clear) {
@@ -106,7 +106,9 @@ void Overlay::Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear) {
         ctx_->ClearRenderTargetView(rtv_.Get(), black);
     }
     ctx_->CopySubresourceRegion(bb.Get(), 0, x, y, 0, tex, 0, nullptr);
-    HRESULT hr = swap_->Present(1, 0);  // vsync: the pacer already targets vblanks
+    // vsync: the pacer already targets vblanks. Above the refresh rate the monitor shows what it
+    // can and the rest is dropped here, or the output would wait for it and fall back to its rate.
+    HRESULT hr = swap_->Present(noVsync ? 0 : 1, noVsync ? DXGI_PRESENT_DO_NOT_WAIT : 0);
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
         Show(false);
         throw HrError{hr, "GPU device removed/reset"};

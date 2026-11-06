@@ -16,6 +16,7 @@ struct Settings {
     uint64_t hwnd = 0;                 // target game window (required unless listGpus)
     MulMode mode = MulMode::Auto;      // auto | x2 | x3 | x4 | x6 | x8 | off
     int maxMul = 4;                    // auto upper bound (2..8)
+    double targetFps = 0;              // output rate the user chose, 0 = follow the monitor
     Quality quality = Quality::Balanced;
     bool upscale = false;              // scale game window to its monitor (aspect kept)
     float sharpness = 0.5f;            // 0..1, upscaling only
@@ -62,6 +63,9 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
             else if (*v == "x8") s.mode = MulMode::X8;
             else if (*v == "off") s.mode = MulMode::Off;
             else return "bad --mode " + *v;
+        } else if (k == "--target-fps") {
+            s.targetFps = std::atof(v->c_str());
+            if (s.targetFps != 0 && (s.targetFps < 10 || s.targetFps > 1000)) return "--target-fps must be 0 or 10..1000";
         } else if (k == "--max-mul") {
             s.maxMul = std::atoi(v->c_str());
             if (s.maxMul < 2 || s.maxMul > 8) return "--max-mul must be 2..8";

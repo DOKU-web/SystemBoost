@@ -21,7 +21,8 @@ public:
     // Copy `tex` (R8G8B8A8) to (x,y) of the back buffer and present on the next vblank.
     // If `clear` is true the rest of the back buffer is black (letterbox).
     // Throws HrError on device removed/reset (the caller exits and hides the overlay).
-    void Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear);
+    // noVsync: for rates above the refresh rate. The newest frame replaces any not shown yet.
+    void Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear, bool noVsync);
 
     void Show(bool on);
     bool Visible() const { return visible_; }

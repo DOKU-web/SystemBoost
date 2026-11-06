@@ -12,7 +12,7 @@
       <Border Grid.Column="1" Classes="card" Padding="12,10" CornerRadius="12">
         <StackPanel Orientation="Horizontal" Spacing="10">
           <ComboBox x:Name="WindowBox" ItemsSource="{Binding Windows}" SelectedItem="{Binding SelectedWindow}"
-                    PlaceholderText="게임 창 선택" MinWidth="320" MaxWidth="420" VerticalAlignment="Center" />
+                    PlaceholderText="{Binding WindowHint}" MinWidth="320" MaxWidth="420" VerticalAlignment="Center" />
           <Button x:Name="RefreshButton" Classes="ghost" Content="↻" Padding="12,8" VerticalAlignment="Center" />
           <Button x:Name="StartButton" Classes="primary" Content="{Binding StartText}" MinWidth="72" VerticalAlignment="Center" />
         </StackPanel>
@@ -112,6 +112,19 @@
                   <ToggleButton Classes="seg" Content="4" Tag="4" /><ToggleButton Classes="seg" Content="6" Tag="6" />
                   <ToggleButton Classes="seg" Content="8" Tag="8" /></StackPanel></Border>
               </Grid>
+            </Border>
+            <Border Classes="row">
+              <StackPanel Spacing="8">
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="출력 프레임" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="초당 몇 프레임까지 만들지 직접 정해요. 모니터 주사율보다 높게도 고를 수 있어요" /></StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <Border Classes="segbox"><StackPanel x:Name="TargetSeg" Orientation="Horizontal">
+                    <ToggleButton Classes="seg" Content="모니터" Tag="0" /><ToggleButton Classes="seg" Content="60" Tag="60" />
+                    <ToggleButton Classes="seg" Content="120" Tag="120" /><ToggleButton Classes="seg" Content="144" Tag="144" />
+                    <ToggleButton Classes="seg" Content="240" Tag="240" /></StackPanel></Border>
+                  <TextBox x:Name="TargetBox" Width="78" MaxLength="4" Watermark="직접" VerticalAlignment="Center" />
+                </StackPanel>
+              </StackPanel>
             </Border>
             <Border Classes="row">
               <Grid ColumnDefinitions="*,Auto">

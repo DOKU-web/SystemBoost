@@ -53,6 +53,7 @@ struct Commands {
     std::mutex m;
     bool hasMode = false; MulMode mode = MulMode::Auto;
     bool hasSharp = false; float sharp = 0.5f;
+    bool hasTarget = false; double target = 0;
     std::atomic<bool> enabled{true};
     std::atomic<bool> quit{false};
 } g_cmd;
@@ -74,6 +75,13 @@ void StdinThread() {
             std::lock_guard<std::mutex> l(g_cmd.m);
             g_cmd.hasSharp = true;
             g_cmd.sharp = std::clamp(float(std::atof(line.c_str() + 6)), 0.f, 1.f);
+        } else if (line.rfind("target ", 0) == 0) {
+            std::vector<std::string> a{"--hwnd", "1", "--target-fps", line.substr(7)};
+            Settings tmp;
+            if (parseArgs(a, tmp).empty()) {
+                std::lock_guard<std::mutex> l(g_cmd.m);
+                g_cmd.hasTarget = true; g_cmd.target = tmp.targetFps;
+            } else EmitMsg("warning", "bad command: " + line);
         } else if (!line.empty()) EmitMsg("warning", "unknown command: " + line);
     }
     g_cmd.quit = true;  // stdin closed (parent exited) -> stop
@@ -288,6 +296,7 @@ int Run(const Settings& s) {
     PacerConfig pc;
     pc.mode = s.mode;
     pc.maxMul = s.maxMul;
+    pc.targetFps = s.targetFps;
     pc.refreshHz = disp.hz;
     pc.vblankPhase = disp.phase;
     Pacer pacer(pc);
@@ -298,6 +307,7 @@ int Run(const Settings& s) {
         pc.refreshHz = disp.hz;
         pc.vblankPhase = disp.phase;
         pacer.setConfig(pc);
+        fg.ResetHistory();  // with the game shown as it is, the last pair has gone stale
     };
 
     Layout layout = ComputeLayout(game, s.upscale);
@@ -346,6 +356,11 @@ int Run(const Settings& s) {
                 g_cmd.hasSharp = false;
                 cur.sharpness = g_cmd.sharp;  // survives Resize()
                 fg.SetSharpness(g_cmd.sharp);
+            }
+            if (g_cmd.hasTarget) {
+                g_cmd.hasTarget = false;
+                pc.targetFps = g_cmd.target;  // survives setMode
+                pacer.setTarget(g_cmd.target);
             }
         }
 
@@ -402,7 +417,12 @@ int Run(const Settings& s) {
             pacer.onArrival(f.time > 0 ? f.time : now, f.frames);
         }
         holding = holding && f.texture;
-        if (holding && (mode == MulMode::Off || pacer.wantsSource())) {
+        const bool bypass = mode == MulMode::Off && !s.upscale;
+        if (holding && bypass) {  // nothing to add: show the game itself and leave it the GPU
+            holding = false;
+            cap->Release();
+            overlay.Show(false);
+        } else if (holding && (mode == MulMode::Off || pacer.wantsSource())) {
             holding = false;
             const UINT w = f.box.right - f.box.left, h = f.box.bottom - f.box.top;
             if (w == layout.capW && h == layout.capH) {
@@ -416,12 +436,10 @@ int Run(const Settings& s) {
                 pacer.onSource(f.time > 0 ? f.time : now, (fg.GenMs() + (xcopy ? xcopy->LastMs() : 0)) / 1000.0);
             }
             cap->Release();
-            if (mode == MulMode::Off && !s.upscale) {
-                overlay.Show(false);  // nothing to add: show the game itself
-            } else if (mode == MulMode::Off && fg.HasPair()) {   // pass-through (upscaling only)
+            if (mode == MulMode::Off && fg.HasPair()) {   // pass-through (upscaling only)
                 ID3D11Texture2D* out = fg.Generate(1.f);
                 overlay.Show(true);
-                overlay.Present(out, layout.offX, layout.offY, s.upscale);
+                overlay.Present(out, layout.offX, layout.offY, s.upscale, false);
                 meter.onOutput(false);
             }
         }
@@ -447,7 +465,7 @@ int Run(const Settings& s) {
                 if (!repeat) {
                     ID3D11Texture2D* out = fg.Generate(t);
                     overlay.Show(true);
-                    overlay.Present(out, layout.offX, layout.offY, s.upscale);
+                    overlay.Present(out, layout.offX, layout.offY, s.upscale, pacer.passesRefresh());
                 }
                 meter.onOutput(repeat);
                 pacer.advance(QpcNow());
@@ -474,7 +492,8 @@ int Run(const Settings& s) {
                           "\"clockSec\":%.4f,\"measuredSec\":%.3f,\"activeSec\":%.3f,\"divider\":%d,"
                           "\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f}",
                           m.srcFps(), m.outFps(), m.multiplier(), int(mode), disp.hz,
-                          pacer.delayMs(), pacer.addedLatencyMs(), fg.GenMs(), fg.AnalyzeMs(),
+                          bypass ? 0.0 : pacer.delayMs(), bypass ? 0.0 : pacer.addedLatencyMs(),
+                          bypass ? 0.0 : fg.GenMs(), bypass ? 0.0 : fg.AnalyzeMs(),
                           xcopy ? xcopy->LastMs() : 0.0, (unsigned long long)pacer.stats.late,
                           (unsigned long long)pacer.stats.skipped, (unsigned long long)meter.totalSrc(),
                           (unsigned long long)meter.totalOut(), (unsigned long long)meter.totalRepeat(),
@@ -484,7 +503,12 @@ int Run(const Settings& s) {
                           pacer.percentile(0.9) * 1000.0);
             Emit(buf);
 
-            if (mode != MulMode::Off && fit.update(t2, pacer.stats.skipped)) {
+            // Fewer frames than the game, and fewer than asked for (a rate under the game's is the user's choice).
+            const double outFloor = std::min(m.srcFps() * 1.05, pacer.outputFps() * 0.9);
+            if (mode != MulMode::Off && !s.upscale && fit.behind(t2, m.outFps(), outFloor)) {
+                setMode(MulMode::Off);
+                Emit("{\"type\":\"fit\",\"stopped\":true}");
+            } else if (mode != MulMode::Off && fit.update(t2, pacer.stats.skipped)) {
                 if (cur.quality != Quality::Low) {
                     cur.quality = Quality(int(cur.quality) - 1);
                     fg.Resize(layout.capW, layout.capH, layout.outW, layout.outH, cur);

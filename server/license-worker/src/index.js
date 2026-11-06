@@ -140,6 +140,7 @@ export default {
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env);
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
+      if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -354,6 +355,23 @@ async function admin(req, url, env) {
     case "GET /stats": return json(await stats(env, "/read"), 200, false);
     case "POST /downloads": return json(await stats(env, "/downloads", body.releases), 200, false);
     case "POST /issue": return json(await adminIssue(env, body), 200, false);
+    case "GET /referrals": return json(await listRefs(env), 200, false);
+    case "POST /referrals": return json(await addRef(env, body), 200, false);
+    case "POST /referrals/set": {
+      const r = await getRef(env, String(body.code || ""));
+      if (!r) return json({ error: "없는 코드예요" }, 404, false);
+      r.on = !!body.on;
+      await putRef(env, r);
+      await audit(env, "admin", r.on ? "추천 코드 켜기" : "추천 코드 끄기", r.code);
+      return json({ ok: true }, 200, false);
+    }
+    case "POST /referrals/delete": {
+      const code = String(body.code || "");
+      if (!REF_RE.test(code)) return json({ error: "bad code" }, 400, false);
+      await env.LICENSES.delete("ref:" + code);
+      await audit(env, "admin", "추천 코드 삭제", code);
+      return json({ ok: true }, 200, false);
+    }
     case "POST /revoke": {
       if (!/^[0-9a-f]{16}$/.test(body.id || "")) return json({ error: "bad id" }, 400, false);
       await revoke(env, body.id, String(body.reason || "관리자 차단"), "admin");
@@ -482,6 +500,70 @@ async function listLog(env) {
   for (const k of r.keys) { const v = await env.LICENSES.get(k.name); if (v) out.push(JSON.parse(v)); }
   return { log: out };
 }
+// ---------------------------------------------------------------- referral codes
+// Whoever enters a code gets a short key, once per device. The person who shared the code is
+// rewarded by hand, from the use count on the dashboard.
+const REF_RE = /^[A-Z0-9]{4,16}$/;
+const REF_DEVICE_TTL = 60 * 60 * 24 * 90;
+const REF_DAILY = 300;   // keys a day, whatever the codes say
+
+async function getRef(env, code) {
+  const v = REF_RE.test(code) ? await env.LICENSES.get("ref:" + code) : null;
+  return v ? JSON.parse(v) : null;
+}
+async function putRef(env, r) { await env.LICENSES.put("ref:" + r.code, JSON.stringify(r), { metadata: r }); }
+
+async function referral(req, env) {
+  const b = await req.json().catch(() => ({}));
+  const code = String(b.code || "").trim().toUpperCase(), device = String(b.device || "");
+  if (!REF_RE.test(code) || !/^[0-9a-f]{32}$/.test(device)) return json({ error: "bad request" }, 400);
+  const day = "count:ref:" + now().slice(0, 10);
+  const n = Number((await env.LICENSES.get(day)) || 0);
+  if (n >= REF_DAILY) return json({ error: "busy" }, 429);
+  const r = await getRef(env, code);
+  if (!r || !r.on) return json({ error: "unknown" }, 404);
+  if (r.used >= r.max) return json({ error: "used up" }, 409);
+  if (await env.LICENSES.get("refdev:" + device)) return json({ error: "already" }, 409);
+  await env.LICENSES.put("refdev:" + device, code, { expirationTtl: REF_DEVICE_TTL });
+  await env.LICENSES.put(day, String(n + 1), { expirationTtl: 60 * 60 * 48 });
+  r.used += 1;
+  await putRef(env, r);
+  const key = await makeKey(env, { plan: r.plan, email: "", expires: addDays(now(), r.days), src: "referral", note: "추천 코드 " + code });
+  await audit(env, "app", "추천 코드 사용", code + " · " + (r.plan === "ultra" ? "울트라" : "프리미엄") + " " + r.days + "일");
+  return json({ key, plan: r.plan, days: r.days });
+}
+
+async function listRefs(env) {
+  const refs = [];
+  let cursor;
+  for (let i = 0; i < 10; i++) {
+    const l = await env.LICENSES.list({ prefix: "ref:", cursor, limit: 1000 });
+    for (const k of l.keys) if (k.metadata) refs.push(k.metadata);
+    if (l.list_complete) break;
+    cursor = l.cursor;
+  }
+  refs.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { refs };
+}
+
+async function addRef(env, b) {
+  let code = String(b.code || "").trim().toUpperCase();
+  if (!code) {
+    const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", r = crypto.getRandomValues(new Uint8Array(8));
+    code = [...r].map(x => A[x % A.length]).join("");
+  }
+  if (!REF_RE.test(code)) return { error: "코드는 영문 대문자와 숫자 4~16자예요" };
+  if (await getRef(env, code)) return { error: "이미 있는 코드예요" };
+  const days = Math.floor(Number(b.days)), max = Math.floor(Number(b.max));
+  if (!(days >= 1 && days <= 30)) return { error: "기간은 1~30일이에요" };
+  if (!(max >= 1 && max <= 10000)) return { error: "사용 횟수는 1~10000이에요" };
+  const r = { code, label: String(b.label || "").trim().slice(0, 80), plan: b.plan === "ultra" ? "ultra" : "premium",
+              days, max, on: true, used: 0, at: now() };
+  await putRef(env, r);
+  await audit(env, "admin", "추천 코드 생성", code + " · " + r.days + "일 · " + r.max + "회" + (r.label ? " · " + r.label : ""));
+  return { ok: true, code };
+}
+
 async function adminIssue(env, b) {
   const email = String(b.email || "").trim().slice(0, 120);
   const note = String(b.note || "").trim().slice(0, 200);

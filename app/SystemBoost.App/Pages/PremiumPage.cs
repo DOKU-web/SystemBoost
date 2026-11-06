@@ -64,6 +64,33 @@ public sealed class PremiumPage : UserControl
     private const string BoostRow = "게임 부스트";
     private readonly bool _boostReady;
 
+    private Control ReferralCard()
+    {
+        var p = new StackPanel { Spacing = 10 };
+        p.Children.Add(Ui.Text("추천 코드", "h2"));
+        p.Children.Add(Ui.Text("추천 코드가 있으면 적어 주세요. 코드에 정해진 플랜을 그 기간 동안 쓸 수 있어요. 기기 한 대에 한 번만 쓸 수 있고, 코드와 무작위 기기 번호를 판매자 서버로 보내요.", "muted", wrap: true));
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var box = new TextBox { Watermark = "추천 코드", MaxLength = 16 };
+        var apply = Ui.Button("적용", "primary");
+        apply.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(apply, 1);
+        var msg = Ui.Text("", "muted", wrap: true);
+        apply.Click += async (_, _) =>
+        {
+            apply.IsEnabled = false;
+            var err = await License.RedeemReferralAsync(box.Text ?? "");
+            apply.IsEnabled = true;
+            msg.Text = err ?? (License.IsUltra ? "울트라가 켜졌어요. 남은 기간은 위에 표시돼요." : "프리미엄이 켜졌어요. 남은 기간은 위에 표시돼요.");
+            if (err == null) box.Text = "";
+            Refresh();
+        };
+        row.Children.Add(box);
+        row.Children.Add(apply);
+        p.Children.Add(row);
+        p.Children.Add(msg);
+        return p;
+    }
+
     public PremiumPage(bool boostReady)
     {
         _boostReady = boostReady;
@@ -231,6 +258,7 @@ public sealed class PremiumPage : UserControl
         keyP.Children.Add(keyRow);
         keyP.Children.Add(_msg);
         root.Children.Add(Ui.Card(keyP));
+        root.Children.Add(Ui.Card(ReferralCard()));
 
         Content = new ScrollViewer { Content = root };
         License.Changed += Refresh;

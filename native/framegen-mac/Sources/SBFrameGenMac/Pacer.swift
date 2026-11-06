@@ -11,6 +11,7 @@ struct PacerConfig {
     var vblankPhase: Double = 0
     var switchHoldSec: Double = 1.0
     var marginSec: Double = 0.0005
+    var targetFps: Double = 0   // the user's output rate, may pass refreshHz; 0 = none
 }
 
 struct OutputSlot { var presentAt: Double; var displayAt: Double }
@@ -36,11 +37,14 @@ final class Pacer {
     // flip between 120 and 60 fps. It stays until the source is clearly below the limit.
     private static let dividerSlack = 1.25
     private static let minGain = 1.25  // less output over the source than this adds little
+    private static let onRate = 1.02   // within 2% counts as the same rate
 
     init(_ c: PacerConfig) { cfg = c }
 
     func setConfig(_ c: PacerConfig) { cfg = c; outputCap = 0; reset() }
     func setDisplay(hz: Double, phase: Double) { cfg.refreshHz = hz; cfg.vblankPhase = phase }
+    /// The output rate changes while running; the frame pair stays.
+    func setTarget(_ fps: Double) { cfg.targetFps = fps; outputCap = 0; divider = 1; candidate = 0 }
 
     func reset() {
         pos = 0; count = 0; lastArrival = -1; tA = -1; tB = -1; nextDisplay = -1; divider = 1; candidate = 0; D = -1
@@ -101,10 +105,13 @@ final class Pacer {
         nextDisplay += outputStep
         if nextDisplay < now + proc {
             skipped += 1
-            nextDisplay = snapUp(now + proc + 0.0005)
+            let t = now + proc + 0.0005
+            nextDisplay = freeRate ? t : snapUp(t)
         }
-        if cfg.mode == .auto { nextDisplay = snapNear(nextDisplay) }
+        if cfg.mode == .auto && !freeRate { nextDisplay = snapNear(nextDisplay) }
     }
+    /// Faster than the monitor: waiting for its vblanks would hold the output to the refresh rate.
+    var passesRefresh: Bool { outputFps > cfg.refreshHz * Pacer.onRate }
 
     var interval: Double {
         if count == 0 { return 1.0 / 30.0 }
@@ -123,11 +130,23 @@ final class Pacer {
     var delayMs: Double { D * 1000 }
     var addedLatencyMs: Double { (D - proc) * 1000 }
 
+    /// Whole vblanks per output frame for the chosen rate, 0 when it falls between them or above refresh.
+    private var targetDivider: Int {
+        if cfg.targetFps <= 0 || cfg.targetFps > cfg.refreshHz * Pacer.onRate { return 0 }
+        let k = max(1, Int((cfg.refreshHz / cfg.targetFps).rounded()))
+        return abs(cfg.refreshHz / Double(k) - cfg.targetFps) <= cfg.targetFps * (Pacer.onRate - 1) ? k : 0
+    }
+    private var freeRate: Bool { cfg.targetFps > 0 && targetDivider == 0 }  // not tied to vblanks
+
     private var outputStep: Double {
+        let cap = outputCap > 0 ? 1 / outputCap : 0
         switch cfg.mode {
-        case .auto: return Double(divider) * vsync
+        case .auto:
+            if freeRate { return max(1 / cfg.targetFps, interval / Double(max(1, cfg.maxMul)), cap) }
+            return Double(divider) * vsync
         case .off: return interval
-        default: return max(interval / Double(cfg.mode.rawValue), vsync, outputCap > 0 ? 1 / outputCap : 0)
+        // without a chosen rate: the display cannot show more than one image per vblank
+        default: return max(interval / Double(cfg.mode.rawValue), cfg.targetFps > 0 ? 1 / cfg.targetFps : vsync, cap)
         }
     }
 
@@ -146,9 +165,11 @@ final class Pacer {
     }
 
     private func updateDivider(_ now: Double) {
-        guard cfg.mode == .auto else { return }
+        guard cfg.mode == .auto, !freeRate else { return }
+        let least = max(1, targetDivider)
+        divider = max(divider, least)  // a rate the user chose holds at once
         let maxOut = sourceFps * Double(max(1, cfg.maxMul))
-        var want = max(1, Int((cfg.refreshHz / maxOut - 0.05).rounded(.up)))
+        var want = max(least, Int((cfg.refreshHz / maxOut - 0.05).rounded(.up)))
         if want > divider && cfg.refreshHz / Double(divider) <= maxOut * Pacer.dividerSlack { want = divider }
         if outputCap > 0 { want = max(want, Int((cfg.refreshHz / outputCap - 0.05).rounded(.up))) }
         if want == divider { candidate = 0; return }

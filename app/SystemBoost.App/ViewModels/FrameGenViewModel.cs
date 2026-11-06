@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -77,7 +78,20 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public string Mode
     {
         get => _mode;
-        set { if (Set(ref _mode, value) && Running) _engine.SetMode(value); }
+        set
+        {
+            bool changed = Set(ref _mode, value);
+            if (Running && (changed || _fitStopped)) { _fitStopped = false; _engine.SetMode(value); }   // the same button starts it again
+        }
+    }
+    private bool _fitStopped;
+    public const int MinTargetFps = 10, MaxTargetFps = 1000;
+    private int _targetFps;
+    /// The output rate the user chose, 0 = follow the monitor. May pass the refresh rate.
+    public int TargetFps
+    {
+        get => _targetFps;
+        set { if (Set(ref _targetFps, value) && Running) _engine.SetTarget(value); }
     }
     private int _maxMul = DefaultMaxMul;
     public int MaxMul { get => _maxMul; set => Set(ref _maxMul, value); }
@@ -104,6 +118,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public string StartText => Running ? "중지" : "시작";
     private string _status = "";
     public string Status { get => _status; private set => Set(ref _status, value); }
+    private string _windowHint = "게임 창을 고르세요";
+    public string WindowHint { get => _windowHint; private set => Set(ref _windowHint, value); }
     private string _gameInfo = "게임 창을 고르세요";
     public string GameInfo { get => _gameInfo; private set => Set(ref _gameInfo, value); }
 
@@ -139,6 +155,34 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         return $"모니터가 {hz.ToString("0", Inv)}Hz라 출력은 {hz.ToString("0", Inv)}fps까지 나와요. {mode}배를 골라도 {(hz / srcFps).ToString("0.0", Inv)}배로 보여요";
     }
 
+    /// Auto at every refresh: nothing else holds the output back, so say that the monitor does.
+    public static string MonitorReasonText(double refreshHz, double srcFps, int maxMul)
+    {
+        if (refreshHz <= 0 || srcFps * maxMul <= refreshHz * 1.05) return "";
+        double hz = Math.Round(refreshHz);
+        return $"모니터가 {hz.ToString("0", Inv)}Hz라 출력은 {hz.ToString("0", Inv)}fps까지 나와요. 더 뽑으려면 '출력 프레임'에서 고르세요";
+    }
+
+    /// What a chosen rate becomes: the source times the multiplier limits it, and a monitor shows
+    /// only its refresh rate however many frames are made.
+    public static string TargetReasonText(int target, double refreshHz, double srcFps, int mode, int maxMul)
+    {
+        if (target <= 0 || refreshHz <= 0 || srcFps <= 0) return "";
+        int mul = mode == 0 ? maxMul : mode;
+        double reach = srcFps * mul, hz = Math.Round(refreshHz);
+        var parts = new List<string>();
+        if (reach < target * 0.98)
+            parts.Add($"원본 {srcFps.ToString("0", Inv)}fps의 {mul}배까지라 출력은 {reach.ToString("0", Inv)}fps까지 나와요");
+        else if (srcFps > target * 1.02)
+            parts.Add($"게임이 이미 {target}fps를 넘어서 출력을 {target}fps로 제한하고 있어요");
+        if (Math.Min(target, reach) > refreshHz * 1.02)
+            parts.Add($"모니터가 {hz.ToString("0", Inv)}Hz라 화면에는 초당 {hz.ToString("0", Inv)}장까지만 보여요. 나머지는 만들어도 표시되지 않고 GPU만 더 써요");
+        return string.Join(" · ", parts);
+    }
+
+    private const string StoppedReason =
+        "GPU 여유가 없어 프레임 생성을 멈추고 게임 화면을 그대로 보여 주고 있어요. 게임에서 프레임 제한을 걸거나 그래픽 설정을 낮춘 뒤 배수 버튼을 다시 누르세요";
+
     /// Last ~60 samples for the chart (src, out).
     public List<(double src, double outp)> History { get; } = new();
     public event Action? HistoryChanged;
@@ -148,6 +192,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private DateTime _sessionStart;
     private FrameGenStats? _first, _last;
     private double _latencyMsSec;   // added latency x active seconds
+    private double _genSec, _genSrc, _genOut;   // only the time spent generating: after a stop the output counts nothing
+    private bool _stoppedInSession;
 
     // The engine goes quiet while the game is behind another window. Without this the last numbers
     // would stay up, and a multiplier picked here would look like it did nothing.
@@ -165,15 +211,20 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public FrameGenViewModel()
     {
         _engine.Stats += OnStats;
+        _engine.FitStopped += () => _fitStopped = _stoppedInSession = true;
         _statsWatch.Tick += (_, _) => ClearStaleStats();
         _engine.Ready += r =>
         {
             string cap = r.TryGetProperty("capture", out var c) ? c.GetString() ?? "" : "";
             string gpu = r.TryGetProperty("genGpu", out var g) ? g.GetString() ?? "" : "";
             double hz = r.TryGetProperty("refreshHz", out var h) ? h.GetDouble() : 0;
-            Status = $"실행 중 · 캡처 {cap} · 생성 GPU {gpu} · {hz:0}Hz";
+            Status = _runLine = $"실행 중 · 캡처 {cap} · 생성 GPU {gpu} · {hz:0}Hz";
         };
-        _engine.Message += (type, msg) => Status = type == "error" ? "오류: " + Friendly(msg) : "알림: " + msg;
+        _engine.Message += (type, msg) =>
+        {
+            _waitNotice = msg.StartsWith(NotInFront) || msg == NoFrames;
+            Status = (type == "error" ? "오류: " : "알림: ") + Friendly(msg);
+        };
         _engine.Exited += () =>
         {
             EndSession();
@@ -189,11 +240,18 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public async Task RefreshAsync()
     {
         if (!Platform.EngineAvailable) { Status = $"엔진 파일이 없어요: {Platform.EnginePath}"; return; }
+        if (_listing) return;
+        _listing = true;
+        var keep = SelectedWindow?.Id;
         var (list, err) = await FrameGenEngine.ListWindowsAsync();
+        _listing = false;
         Windows.Clear();
         foreach (var w in list) Windows.Add(w);
         if (err != null) Status = "오류: " + Friendly(err);
-        if (SelectedWindow == null && Windows.Count > 0) SelectedWindow = Windows[0];
+        WindowHint = Windows.Count > 0 ? "게임 창을 고르세요"
+            : err != null ? "창 목록을 읽지 못했어요. 아래 안내를 확인하세요"
+            : "창을 찾지 못했어요. 게임을 켠 뒤 ↻를 누르세요";
+        SelectedWindow = Windows.FirstOrDefault(w => w.Id == keep) ?? Windows.FirstOrDefault();
         if (Gpus.Count == 0)
         {
             foreach (var g in await FrameGenEngine.ListGpusAsync()) Gpus.Add(g);
@@ -204,10 +262,21 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
 
     public void Notice(string text) => Status = text;
 
-    // The engine reports in English; every Mac user meets this one on the first run.
-    private static string Friendly(string msg) => msg.StartsWith("screen recording permission")
-        ? "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요."
-        : msg;
+    // The Mac engine says why nothing happens; the first frames take the line back.
+    private const string NotInFront = "not in front: ", NoFrames = "no frames from the game window";
+    private bool _waitNotice, _listing;
+    private string _runLine = "";
+
+    // The engine reports in English; every Mac user meets the first one on the first run.
+    private static string Friendly(string msg)
+    {
+        if (msg.StartsWith("screen recording permission"))
+            return "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요.";
+        if (msg == NoFrames) return "고른 창의 화면이 들어오지 않아요. 게임 화면이 멈춰 있거나 다른 창을 고른 것일 수 있어요. 게임이 보이는 창을 고르세요";
+        if (msg.StartsWith(NotInFront) && msg[NotInFront.Length..].Split(" / ") is [var front, var game])
+            return $"게임 창을 눌러 맨 앞으로 가져오세요. 지금 맨 앞: {front}, 고른 창: {game}";
+        return msg;
+    }
 
     /// For settings that only count at start. Running stays true until Exited is handled, so the
     /// new start has to wait for that.
@@ -223,7 +292,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     {
         if (Running) { _engine.Stop(); return; }
         if (SelectedWindow == null) { Status = "게임 창을 먼저 고르세요"; return; }
-        var o = new FrameGenOptions(Mode, MaxMul, Quality, Upscale, Sharpness, SelectedGpu?.Value ?? "same", Capture);
+        var o = new FrameGenOptions(Mode, MaxMul, Quality, Upscale, Sharpness, SelectedGpu?.Value ?? "same", Capture, TargetFps);
         try
         {
             _engine.Start(SelectedWindow.Id, o);
@@ -234,6 +303,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             Status = "시작하는 중…";
             GameInfo = SelectedWindow.ToString();
             _sessionStart = DateTime.Now; _first = _last = null; _latencyMsSec = 0;
+            _genSec = _genSrc = _genOut = 0; _stoppedInSession = _fitStopped = false;
         }
         catch (Exception e) { Status = "오류: " + e.Message; }
     }
@@ -241,6 +311,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private void OnStats(FrameGenStats s)
     {
         _lastStats = Environment.TickCount64;
+        if (_waitNotice && s.SrcFps > 0) { _waitNotice = false; Status = _runLine; }
         SrcFps = s.SrcFps.ToString("0", Inv);
         OutFps = s.OutFps.ToString("0", Inv);
         Multiplier = s.Multiplier.ToString("0.00", Inv);
@@ -252,9 +323,22 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         History.Add((s.SrcFps, s.OutFps));
         if (History.Count > 60) History.RemoveAt(0);
         HistoryChanged?.Invoke();
-        AutoReason = s.Mode == 0 ? AutoReasonText(s.RefreshHz, s.Divider) : CapReasonText(s.RefreshHz, s.SrcFps, s.Mode);
+        AutoReason = s.Mode == 1 ? (_fitStopped ? StoppedReason : "")
+            : TargetFps > 0 ? TargetReasonText(TargetFps, s.RefreshHz, s.SrcFps, s.Mode, MaxMul)
+            : s.Mode != 0 ? CapReasonText(s.RefreshHz, s.SrcFps, s.Mode)
+            : s.Divider > 1 ? AutoReasonText(s.RefreshHz, s.Divider) : MonitorReasonText(s.RefreshHz, s.SrcFps, MaxMul);
         _first ??= s;
-        if (_last != null) _latencyMsSec += s.AddedLatencyMs * Math.Max(0, s.ActiveSec - _last.ActiveSec);
+        if (_last != null)
+        {
+            double sec = Math.Max(0, s.ActiveSec - _last.ActiveSec);
+            _latencyMsSec += s.AddedLatencyMs * sec;
+            if (s.Mode != 1 || Upscale)
+            {
+                _genSec += sec;
+                _genSrc += s.SrcFrames - _last.SrcFrames;
+                _genOut += s.OutFrames - _last.OutFrames;
+            }
+        }
         _last = s;
     }
 
@@ -264,8 +348,10 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         _first = _last = null;
         double sec = b.ActiveSec - a.ActiveSec;
         if (sec <= 0) return;
-        Sessions.Insert(0, new SessionRecord(_sessionStart, SelectedWindow.Title, Mode, (b.SrcFrames - a.SrcFrames) / sec,
-                                             (b.OutFrames - a.OutFrames) / sec, _latencyMsSec / sec, b.Late));
+        double src = (b.SrcFrames - a.SrcFrames) / sec, outp = (b.OutFrames - a.OutFrames) / sec;
+        if (_genSec > 0) { src = _genSrc / _genSec; outp = _genOut / _genSec; sec = _genSec; }
+        Sessions.Insert(0, new SessionRecord(_sessionStart, SelectedWindow.Title, _stoppedInSession ? Mode + " (자동 중지)" : Mode,
+                                             src, outp, _latencyMsSec / sec, b.Late));
         SaveSessions();
     }
 

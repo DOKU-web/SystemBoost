@@ -25,7 +25,7 @@ public sealed class FpsChart : Control
     {
         var b = Bounds;
         var face = new Typeface(FontFamily.Default);
-        ctx.DrawText(new FormattedText("— 출력 FPS   — 원본 FPS", System.Globalization.CultureInfo.CurrentCulture,
+        ctx.DrawText(new FormattedText(Services.Lang.T("— 출력 FPS   — 원본 FPS"), System.Globalization.CultureInfo.CurrentCulture,
                                        FlowDirection.LeftToRight, face, 12, Legend), new Point(12, 8));
         if (_data.Length < 2) return;
         double max = Math.Max(30, _data.Max(x => Math.Max(x.src, x.outp)) * 1.15);

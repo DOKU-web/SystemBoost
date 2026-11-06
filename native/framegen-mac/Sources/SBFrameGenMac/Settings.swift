@@ -6,6 +6,7 @@ struct Settings {
     var windowID: UInt32 = 0          // CGWindowID (the app passes it as --hwnd too)
     var mode: MulMode = .auto
     var maxMul = 4
+    var targetFps = 0.0               // output rate the user chose, 0 = follow the monitor
     var quality: Quality = .balanced
     var upscale = false
     var sharpness: Float = 0.5
@@ -33,6 +34,11 @@ struct Settings {
         }
     }
 
+    static func parseTarget(_ v: String) -> Double? {
+        guard let f = Double(v), f == 0 || (10...1000).contains(f) else { return nil }
+        return f
+    }
+
     /// Same options as the Windows sb_framegen.exe (unknown Windows-only ones are ignored).
     static func parse(_ args: [String]) -> (Settings, String?) {
         var s = Settings()
@@ -55,6 +61,9 @@ struct Settings {
             case "--mode":
                 guard let v = value(), let m = parseMode(v) else { return (s, "bad --mode") }
                 s.mode = m
+            case "--target-fps":
+                guard let v = value(), let f = parseTarget(v) else { return (s, "--target-fps must be 0 or 10..1000") }
+                s.targetFps = f
             case "--max-mul":
                 guard let v = value(), let n = Int(v), (2...8).contains(n) else { return (s, "--max-mul must be 2..8") }
                 s.maxMul = n

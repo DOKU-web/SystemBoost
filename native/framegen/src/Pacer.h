@@ -4,7 +4,9 @@
 // Display-clock model
 // -------------------
 // Output frames are produced on an even output clock (every vblank divider in
-// Auto mode, or every I/N in fixed xN mode). For an output frame that will be
+// Auto mode, or every I/N in fixed xN mode). A rate the user chose (targetFps)
+// replaces the monitor as the limit: it may fall between vblanks or pass the
+// refresh rate, and the clock then runs free of them. For an output frame that will be
 // on screen at time V, the content shown is the game state at c = V - D, where
 // D is one constant delay for every frame. t = (c - tA) / (tB - tA) is computed
 // from real timestamps, so jitter in when source frames arrive does not turn
@@ -35,6 +37,7 @@ struct PacerConfig {
     double vblankPhase = 0.0;    // time of any known vblank (seconds)
     double switchHoldSec = 1.0;  // Auto: hysteresis for divider changes
     double marginSec = 0.0005;   // extra safety added to D
+    double targetFps = 0;        // the user's output rate, may pass refreshHz; 0 = none
 };
 
 struct OutputSlot {
@@ -53,6 +56,13 @@ public:
         cfg_.vblankPhase = vblankPhase;
     }
     const PacerConfig& config() const { return cfg_; }
+    // The output rate changes while running; the frame pair stays.
+    void setTarget(double fps) {
+        cfg_.targetFps = fps;
+        outputCap_ = 0;
+        divider_ = 1;
+        candidate_ = 0;
+    }
 
     void reset() {
         count_ = pos_ = 0;
@@ -141,10 +151,13 @@ public:
         // if we fell behind (hitch, alt-tab), resync instead of bursting frames
         if (nextDisplay_ < now + proc_) {
             ++stats.skipped;
-            nextDisplay_ = snapUp(now + proc_ + 0.0005);
+            const double t = now + proc_ + 0.0005;
+            nextDisplay_ = freeRate() ? t : snapUp(t);
         }
-        if (cfg_.mode == MulMode::Auto) nextDisplay_ = snapNear(nextDisplay_);
+        if (cfg_.mode == MulMode::Auto && !freeRate()) nextDisplay_ = snapNear(nextDisplay_);
     }
+    // Faster than the monitor: waiting for its vblanks would hold the output to the refresh rate.
+    bool passesRefresh() const { return outputFps() > cfg_.refreshHz * kOnRate; }
 
     // Mean of recent intervals. A hitch is left out so that one stall does not
     // cut the output rate for the next second.
@@ -186,13 +199,26 @@ private:
     // flip between 120 and 60 fps. It stays until the source is clearly below the limit.
     static constexpr double kDividerSlack = 1.25;
     static constexpr double kMinGain = 1.25;    // less output over the source than this adds little
+    static constexpr double kOnRate = 1.02;     // within 2% counts as the same rate
+
+    // Whole vblanks per output frame for the chosen rate, 0 when it falls between them or above refresh.
+    int targetDivider() const {
+        if (cfg_.targetFps <= 0 || cfg_.targetFps > cfg_.refreshHz * kOnRate) return 0;
+        const int k = std::max(1, int(std::lround(cfg_.refreshHz / cfg_.targetFps)));
+        return std::abs(cfg_.refreshHz / k - cfg_.targetFps) <= cfg_.targetFps * (kOnRate - 1) ? k : 0;
+    }
+    bool freeRate() const { return cfg_.targetFps > 0 && targetDivider() == 0; }  // not tied to vblanks
 
     double outputStep() const {
+        const double cap = outputCap_ > 0 ? 1.0 / outputCap_ : 0.0;
         switch (cfg_.mode) {
-        case MulMode::Auto: return divider_ * vsync();
+        case MulMode::Auto:
+            if (freeRate()) return std::max({1.0 / cfg_.targetFps, interval() / std::max(1, cfg_.maxMul), cap});
+            return divider_ * vsync();
         case MulMode::Off: return interval();
-        // the display cannot show more than one image per vblank
-        default: return std::max({interval() / double(int(cfg_.mode)), vsync(), outputCap_ > 0 ? 1.0 / outputCap_ : 0.0});
+        // without a chosen rate: the display cannot show more than one image per vblank
+        default:
+            return std::max({interval() / double(int(cfg_.mode)), cfg_.targetFps > 0 ? 1.0 / cfg_.targetFps : vsync(), cap});
         }
     }
 
@@ -214,9 +240,11 @@ private:
 
     // Auto: output every `divider` vblanks so that output <= source * maxMul.
     void updateDivider(double now) {
-        if (cfg_.mode != MulMode::Auto) return;
+        if (cfg_.mode != MulMode::Auto || freeRate()) return;
+        const int least = std::max(1, targetDivider());
+        divider_ = std::max(divider_, least);  // a rate the user chose holds at once
         const double maxOut = sourceFps() * std::max(1, cfg_.maxMul);
-        int want = std::max(1, int(std::ceil(cfg_.refreshHz / maxOut - 0.05)));
+        int want = std::max(least, int(std::ceil(cfg_.refreshHz / maxOut - 0.05)));
         if (want > divider_ && cfg_.refreshHz / divider_ <= maxOut * kDividerSlack) want = divider_;
         if (outputCap_ > 0) want = std::max(want, int(std::ceil(cfg_.refreshHz / outputCap_ - 0.05)));
         if (want == divider_) { candidate_ = 0; return; }

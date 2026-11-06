@@ -23,6 +23,7 @@ public sealed class EulaDialog : Window
         "오버클럭은 게임 강제 종료, 시스템 멈춤, 드라이버 오류를 일으킬 수 있고 보증에 영향을 줄 수 있어요.",
         "키를 등록해 유료 기능을 쓰기 시작하면 청약철회가 제한될 수 있어요.",
         "앱이 켜져 있는 동안 무작위 설치 번호로 사용 통계를 판매자 서버에 보내요. 키, 메일, 게임 이름은 보내지 않고, 설정에서 끌 수 있어요.",
+        "추천 코드를 입력하면 코드와 무작위 기기 번호를 판매자 서버로 보내요. 기기 번호는 90일 뒤 지워요.",
     };
 
     public EulaDialog(bool consent)
@@ -64,7 +65,8 @@ public sealed class EulaDialog : Window
     }
 
     private static string AcceptedLine() =>
-        Eula.AcceptedAt is { } at ? $"{at.LocalDateTime:yyyy년 M월 d일 HH:mm}에 이 계약에 동의했어요." : "이 PC에 동의 기록이 없어요.";
+        Eula.AcceptedAt is { } at ? $"{at.LocalDateTime.ToString(Lang.Translating ? "yyyy-MM-dd HH:mm" : "yyyy년 M월 d일 HH:mm")}에 이 계약에 동의했어요."
+                                  : "이 PC에 동의 기록이 없어요.";
 
     private static Control Summary()
     {

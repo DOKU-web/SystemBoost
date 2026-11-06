@@ -1,0 +1,79 @@
+Reference translation. The Korean text is the agreement; if the two differ, the Korean text governs.
+Effective date: November 6, 2026
+Seller: DOKKU (business name, representative, address and contact details are shown on the sales page)
+
+## Article 1 (Subject of this agreement)
+This agreement applies between the Seller and the person who installs or uses SystemBoost (the app, engine, updates and documents, the "Program"; that person, the "User"). The User agrees to this agreement on the app's consent screen before using the Program.
+
+## Article 2 (License)
+1. The Seller gives the User a non-exclusive license to use the Program on the User's own computer.
+2. The Program is licensed, not sold. This agreement transfers no rights in the Program or its components to the User.
+3. The User may not transfer the license to anyone else.
+
+## Article 3 (Plans and license keys)
+1. The Free plan can be used without a key.
+2. The Premium and Ultra plans are opened with a license key issued by the Seller. The features of each plan are as shown on the sales page.
+3. With a monthly or yearly key, paid features lock when the stated period ends and the app returns to the Free plan. There is no automatic payment.
+4. A lifetime key has no limit on its period of use. This does not mean it will work on every future operating system and game.
+! 5. A key is for the buyer's own use only. It may not be given to others or made public.
+6. If a key is made public or misused, the Seller may block it. A blocked key returns to the Free plan when the app starts online.
+7. A key received with a referral code can be used only for the period shown for that code. The Seller may end a code at any time. A key already received stays usable for its period.
+
+## Article 4 (Prohibited acts)
+The User may not:
+! 1. Bypass or remove the license check or plan locks, or distribute a means of doing so
+! 2. Copy, sell, rent or redistribute the Program or keys
+3. Modify or reverse engineer the Program, except where the law or the license of an open source component allows it
+4. Use the published code without permission
+5. Remove copyright notices from the Program
+
+## Article 5 (Games and anti-cheat)
+1. The Program captures the game's picture and shows it in a separate overlay. It does not inject code into game processes and does not change game memory or game files.
+! 2. The Seller has not tested the Program in games that use anti-cheat. The Seller does not guarantee that the Program complies with the terms of use or anti-cheat policy of every game.
+! 3. The User must check a game's policy before using the Program with it.
+
+## Article 6 (Features that change system settings)
+1. Game boost, overclocking and power limits run only when the User turns them on. The Program backs up the previous values and provides a way to restore them.
+! 2. Overclocking can cause game crashes, system freezes and driver errors. It may also affect the graphics card manufacturer's warranty.
+Use small values first, after understanding the risks.
+! 3. The Seller does not guarantee that automatic recovery always works when a driver or hardware error has occurred.
+
+## Article 7 (Performance)
+1. Frame generation does not increase the frames the game actually draws. It inserts images between frames.
+! 2. Turning on frame generation increases input delay. It is not recommended for competitive games.
+3. Output FPS follows the monitor's refresh rate unless the User chooses an output rate. A chosen rate can exceed the refresh rate, but a monitor displays only up to its own refresh rate.
+4. Measurements on the sales page are results in the stated environment. Actual results differ by PC, game and settings.
+
+## Article 8 (Network use and personal information)
+1. The Program sends the key's identifying number to the Seller's license server to check the key, and connects to GitHub to check for updates. Setting up the Windows game environment on macOS downloads the files it needs.
+2. While it is on, the Program sends the Seller's server a randomly created install number, the app version, operating system, plan, frame generation multiplier, and whether one-click game boost is in use, for usage statistics. The server also records the country of the connection. Keys, email addresses, game names and hardware information are not sent, and the Seller does not store IP addresses. The install number is deleted 90 days after the last connection.
+3. The User can turn off usage statistics in the app's settings.
+4. When the User enters a referral code, the Program sends the code and a randomly created device number to the Seller's server. The device number is used only to stop the same device from using a code again, and is deleted after 90 days.
+5. How personal information is handled is shown on the sales page.
+
+## Article 9 (Purchase and withdrawal)
+1. The User may withdraw from the purchase within 7 days of receiving the key.
+! 2. Once the User registers a key and starts using paid features, the digital content is treated as provided and withdrawal may be limited.
+The Seller offers a 3-day trial key that can be used before purchase.
+3. If the Program differs from what was displayed or advertised, or is provided differently from the contract, the User may withdraw within 3 months of receiving it, or within 30 days of the day the User learned or could have learned of this.
+4. When a refund is complete, the Seller blocks the key.
+5. Questions about withdrawal and refunds go to the contact shown on the sales page.
+
+## Article 10 (Warranty and liability)
+1. The Seller does not warrant that the Program works without error on every PC and game.
+2. The Seller compensates for damage caused by the Seller's intent or gross negligence.
+! 3. For damage caused by the Seller's minor negligence, compensation covers ordinary damage, up to the amount the User paid for the Program.
+4. The Seller is not liable for compatibility problems caused by changes outside the Seller's control, such as operating system, driver and game updates, except where the Seller acted with intent or gross negligence.
+
+## Article 11 (Ending this agreement)
+1. The User may end this agreement at any time by deleting the Program. If game boost was used, run the app's full restore before deleting it.
+! 2. If the User breaches Article 3, Paragraph 5 or Article 4, the Seller may block the key and end the license.
+
+## Article 12 (Third-party components)
+The Program contains third-party components. These components follow their own licenses. This agreement does not limit the rights those licenses give the User.
+
+## Article 13 (Changes to this agreement)
+To change this agreement, the Seller announces it on the sales page and in the app 30 days before it takes effect, and asks for agreement again in the app.
+
+## Article 14 (Governing law and disputes)
+This agreement is governed by the laws of the Republic of Korea. The competent court for disputes is determined under the Civil Procedure Act.

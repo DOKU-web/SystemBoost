@@ -11,6 +11,7 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        Services.Lang.Start();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var main = new MainWindow();

@@ -110,19 +110,57 @@ if use:
 else:
     print(f"{len(rows)} stats")
 EOF
-run_engine() {    # name, window, mode, quality, max-mul, stdin line sent after 5 s
+# What is on screen, front first: the overlay of a full-screen window does not reach a screenshot.
+cat > "$OUT/onscreen.swift" <<'EOF'
+import CoreGraphics
+let all = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+for w in all {
+    let b = w[kCGWindowBounds as String] as? [String: Any] ?? [:]
+    print(w[kCGWindowOwnerName as String] ?? "?", "layer", w[kCGWindowLayer as String] ?? "?", b["Width"] ?? 0, b["Height"] ?? 0)
+}
+EOF
+swiftc -o "$OUT/onscreen" "$OUT/onscreen.swift" > "$OUT/onscreen-build.txt" 2>&1
+run_engine() {    # name, window, mode, quality, max-mul, stdin line sent after 5 s, output rate
   osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 1
-  (sleep 5; [ -z "$6" ] || echo "$6"; sleep 10) | limit 30 "$BIN/sb-framegen-mac" --hwnd "$2" --mode "$3" --max-mul "$5" --quality "$4" > "$OUT/engine-$1.txt" 2>&1 &
+  [ -z "${BEFORE:-}" ] || { osascript -e "$BEFORE" > /dev/null 2>&1; sleep 2; }
+  (sleep 5; [ -z "$6" ] || echo "$6"; sleep 10) | limit 30 "$BIN/sb-framegen-mac" --hwnd "$2" --mode "$3" --max-mul "$5" --quality "$4" --target-fps "${7:-0}" > "$OUT/engine-$1.txt" 2>&1 &
   sleep 9
   screencapture -x "$OUT/screen-engine-$1.png" 2>> "$OUT/screen-error.txt"
+  "$OUT/onscreen" > "$OUT/onscreen-$1.txt" 2>&1
   wait $!; CODE=$?
-  say "engine $1: exit $CODE $(python3 "$OUT/stats.py" "$OUT/engine-$1.txt"), fit lines $(grep -c '"type":"fit"' "$OUT/engine-$1.txt")"
+  say "engine $1: exit $CODE $(python3 "$OUT/stats.py" "$OUT/engine-$1.txt"), fit lines $(grep -c '"type":"fit"' "$OUT/engine-$1.txt"), not in front $(grep -c 'not in front' "$OUT/engine-$1.txt"), overlay on screen $(grep -c '^sb-framegen-mac' "$OUT/onscreen-$1.txt")"
 }
 if [ -n "$ID" ]; then
   run_engine off "$ID" off balanced 4 ""
   run_engine x2 "$ID" x2 balanced 4 ""
   run_engine auto "$ID" auto balanced 4 ""
   run_engine x2-low "$ID" x2 low 4 ""
+  run_engine target90 "$ID" auto balanced 4 "" 90
+  run_engine target-live "$ID" auto balanced 4 "target 100"
+  # Another process in front while the window stays on top: a launcher and its stream.
+  BEFORE='tell application "Finder" to activate' run_engine other-front "$ID" x2 balanced 4 ""
+  # A window of another app over it: nothing runs, and the engine says why.
+  BEFORE='tell application "Finder"
+    activate
+    make new Finder window
+  end tell' run_engine covered "$ID" x2 balanced 4 ""
+  osascript -e 'tell application "Finder" to close every window' > /dev/null 2>&1
+  # A full-screen window has a Space of its own, the way a stream usually does.
+  full() { osascript -e "tell application \"System Events\" to tell process \"Safari\" to set value of attribute \"AXFullScreen\" of window 1 to $1"; }
+  osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 1
+  if full true > "$OUT/fullscreen.txt" 2>&1; then
+    sleep 5
+    "$OUT/onscreen" > "$OUT/onscreen-before-full.txt" 2>&1
+    osascript -e 'tell application "Finder" to activate' > /dev/null 2>&1; sleep 3    # back on the desktop's Space
+    limit 30 "$BIN/sb-framegen-mac" --list-windows > "$OUT/windows-full.json" 2>&1
+    FULL=$(python3 "$OUT/pick.py" "$OUT/windows-full.json" "")
+    say "full screen list from another Space: id ${FULL:-none} $(head -c 200 "$OUT/windows-full.json")"
+    [ -z "$FULL" ] || run_engine full "$FULL" x2 balanced 4 ""
+    osascript -e 'tell application "Safari" to activate' > /dev/null 2>&1; sleep 1
+    full false >> "$OUT/fullscreen.txt" 2>&1; sleep 4
+  else
+    say "full screen: skipped, $(head -c 160 "$OUT/fullscreen.txt")"
+  fi
 else
   say "engine run: skipped, no window id"
 fi

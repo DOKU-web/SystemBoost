@@ -3,6 +3,7 @@
 #include "GpuFit.h"
 #include "Pacer.h"
 #include "Settings.h"
+#include <cmath>
 #include <cstdio>
 
 using namespace sbfg;
@@ -40,7 +41,66 @@ static Pacer fed(MulMode mode, double hz, double fps, int maxMul = 4) {
     return p;
 }
 
+static Pacer aimed(MulMode mode, double hz, double fps, double target, int maxMul = 4) {
+    PacerConfig c;
+    c.mode = mode;
+    c.refreshHz = hz;
+    c.maxMul = maxMul;
+    c.targetFps = target;
+    Pacer p(c);
+    double t = 1;
+    for (int i = 0; i < 400; ++i, t += 1.0 / fps) feed(p, t);
+    return p;
+}
+
+static bool near(double a, double b) { return std::abs(a - b) < b * 0.01; }
+
+// Stats lines every 0.5 s with the output under the floor for the first `under` seconds.
+static double firstBehind(double under, double seconds) {
+    GpuFit fit;
+    for (double t = 0; t < seconds; t += 0.5)
+        if (fit.behind(t, t < under ? 30 : 60, 40)) return t;
+    return -1;
+}
+
 int main() {
+    check(near(aimed(MulMode::Auto, 144, 50, 0).outputFps(), 144), "auto, no rate chosen: the monitor");
+    check(near(aimed(MulMode::Auto, 144, 50, 72).outputFps(), 72), "auto 72 on 144 Hz: on the vblank grid");
+    check(near(aimed(MulMode::Auto, 144, 50, 100).outputFps(), 100), "auto 100 on 144 Hz: between vblanks");
+    check(near(aimed(MulMode::Auto, 144, 100, 60).outputFps(), 60), "auto 60 on 144 Hz: lower than the game");
+    check(near(aimed(MulMode::Auto, 60, 54, 120).outputFps(), 120), "auto 120 on 60 Hz: passes the monitor");
+    check(near(aimed(MulMode::Auto, 60, 54, 300).outputFps(), 216), "auto 300 on 60 Hz: stops at source x4");
+    check(near(aimed(MulMode::X2, 60, 54, 0).outputFps(), 60), "x2 on 60 Hz, no rate chosen: the monitor");
+    check(near(aimed(MulMode::X2, 60, 54, 120).outputFps(), 108), "x2 with 120: stops at source x2");
+    check(near(aimed(MulMode::X4, 60, 54, 120).outputFps(), 120), "x4 with 120: stops at the chosen rate");
+    check(near(aimed(MulMode::X8, 144, 30, 90).outputFps(), 90), "x8 with 90 on 144 Hz");
+    check(aimed(MulMode::Auto, 60, 54, 120).passesRefresh(), "120 on 60 Hz goes around vsync");
+    check(!aimed(MulMode::Auto, 144, 54, 120).passesRefresh(), "120 on 144 Hz keeps vsync");
+    check(!aimed(MulMode::Auto, 60, 54, 60).passesRefresh(), "60 on 60 Hz keeps vsync");
+    {   // the clock runs at the chosen rate, not on vblanks
+        Pacer p = aimed(MulMode::Auto, 60, 80, 240);
+        const double a = p.next().displayAt;
+        p.advance(a - 0.01);
+        check(near(p.next().displayAt - a, 1.0 / 240), "240 on 60 Hz: slots 1/240 s apart");
+    }
+    {   // chosen while running
+        Pacer p = fed(MulMode::Auto, 60, 54);
+        p.setTarget(120);
+        check(near(p.outputFps(), 120), "rate set while running");
+        p.setTarget(0);
+        double t = 100;
+        for (int i = 0; i < 100; ++i, t += 1.0 / 54) feed(p, t);
+        check(near(p.outputFps(), 60), "rate cleared while running");
+    }
+    {   // the GPU cannot hold it
+        Pacer p = aimed(MulMode::Auto, 60, 80, 240);
+        check(p.slowDown() && near(p.outputFps(), 180), "a chosen rate steps down too");
+    }
+    check(firstBehind(0, 30) < 0, "output above the floor stays");
+    check(firstBehind(2, 30) < 0, "2 s under the floor stays");
+    const double b = firstBehind(30, 30);
+    check(b >= 2.5 && b <= 3.5, "under the floor stops after about 3 s");
+
     check(firstStep(0, 60) < 0, "no misses stays");
     check(firstStep(1, 60) < 0, "one miss a second stays");
     const double t = firstStep(4, 60);

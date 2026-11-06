@@ -88,12 +88,13 @@ final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 }
 
 enum Shareable {
-    /// On-screen windows (blocking wrapper around the async API).
+    /// Windows on every Space (blocking wrapper around the async API). A full-screen game has a Space
+    /// of its own, so asking for on-screen windows only misses it while this app is on another one.
     static func windows() throws -> [SCWindow] {
         let sem = DispatchSemaphore(value: 0)
         var result: [SCWindow] = []
         var failure: Error?
-        SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: true) { content, error in
+        SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: false) { content, error in
             result = content?.windows ?? []
             failure = error
             sem.signal()

@@ -22,6 +22,22 @@ func windowBounds(_ id: CGWindowID) -> CGRect? {
     return r
 }
 
+/// No other app's window above this one, at its layer, on this Space. The process in front may not own
+/// the game's window: GeForce NOW keeps a streamer app inside its own.
+func isTopWindow(_ id: CGWindowID) -> Bool {
+    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]],
+          let me = list.firstIndex(where: { ($0[kCGWindowNumber as String] as? Int) == Int(id) }) else { return false }
+    let layer = list[me][kCGWindowLayer as String] as? Int ?? 0
+    return !list[..<me].contains { w in
+        guard (w[kCGWindowOwnerPID as String] as? Int) != Int(getpid()), (w[kCGWindowLayer as String] as? Int ?? 0) == layer,
+              (w[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+              let b = w[kCGWindowBounds as String] as? [String: Any],
+              let r = CGRect(dictionaryRepresentation: b as CFDictionary) else { return false }
+        return r.width >= 100 && r.height >= 100
+    }
+}
+
 /// Screen containing most of `cg` (CG coordinates) and its frame in CG coordinates.
 func screenFor(_ cg: CGRect) -> (NSScreen, CGRect)? {
     let primaryH = NSScreen.screens.first?.frame.height ?? 0
@@ -64,14 +80,17 @@ final class Commands {
     private let lock = NSLock()
     private var _mode: MulMode?
     private var _sharp: Float?
+    private var _target: Double?
     private var _enabled = true
     private var _quit = false
     func setMode(_ m: MulMode) { lock.lock(); _mode = m; lock.unlock() }
     func setSharp(_ s: Float) { lock.lock(); _sharp = s; lock.unlock() }
+    func setTarget(_ f: Double) { lock.lock(); _target = f; lock.unlock() }
     func setEnabled(_ e: Bool) { lock.lock(); _enabled = e; lock.unlock() }
     func setQuit() { lock.lock(); _quit = true; lock.unlock() }
     func takeMode() -> MulMode? { lock.lock(); defer { _mode = nil; lock.unlock() }; return _mode }
     func takeSharp() -> Float? { lock.lock(); defer { _sharp = nil; lock.unlock() }; return _sharp }
+    func takeTarget() -> Double? { lock.lock(); defer { _target = nil; lock.unlock() }; return _target }
     var enabled: Bool { lock.lock(); defer { lock.unlock() }; return _enabled }
     var quit: Bool { lock.lock(); defer { lock.unlock() }; return _quit }
 }
@@ -86,6 +105,7 @@ func startStdinThread() {
             else if line == "disable" { commands.setEnabled(false) }
             else if line.hasPrefix("mode "), let m = Settings.parseMode(String(line.dropFirst(5))) { commands.setMode(m) }
             else if line.hasPrefix("sharp "), let f = Float(line.dropFirst(6)) { commands.setSharp(min(max(f, 0), 1)) }
+            else if line.hasPrefix("target "), let f = Settings.parseTarget(String(line.dropFirst(7))) { commands.setTarget(f) }
             else if !line.isEmpty { Out.msg("warning", "unknown command: \(line)") }
         }
         commands.setQuit()  // stdin closed (app exited) -> stop
@@ -109,8 +129,21 @@ func listGpus() {
     Out.emit(["type": "gpus", "list": list])
 }
 
+/// Full-screen games often sit above the normal layer; at those levels the rest is macOS itself.
+/// Off screen, helper windows are small or have no title; that is what keeps a window from another Space.
+func isGameCandidate(_ w: SCWindow) -> Bool {
+    guard let app = w.owningApplication, app.bundleIdentifier != "com.dokku.systemboost",
+          w.frame.width >= 200, w.frame.height >= 150 else { return false }
+    let system = app.bundleIdentifier.hasPrefix("com.apple.")
+    if w.windowLayer != 0 && (!(0...25).contains(w.windowLayer) || system) { return false }
+    if w.isOnScreen || !(w.title ?? "").isEmpty { return true }
+    return !system && w.frame.width >= 640 && w.frame.height >= 360   // a stream's window can have no title
+}
+
 func listWindows() throws {
-    let wins = try Shareable.windows().filter { $0.windowLayer == 0 && $0.frame.width >= 200 && $0.frame.height >= 150 }
+    let wins = try Shareable.windows().filter(isGameCandidate).sorted {
+        ($0.isOnScreen ? 1 : 0, $0.frame.width * $0.frame.height) > ($1.isOnScreen ? 1 : 0, $1.frame.width * $1.frame.height)
+    }
     let list: [[String: Any]] = wins.map {
         ["id": Int($0.windowID), "app": $0.owningApplication?.applicationName ?? "",
          "title": $0.title ?? "", "w": Int($0.frame.width), "h": Int($0.frame.height)]
@@ -172,7 +205,7 @@ final class Engine {
                                     showsCursor: settings.captureCursor && !settings.upscale)
         gamePid = window.owningApplication?.processID ?? 0
         var pc = PacerConfig()
-        pc.mode = settings.mode; pc.maxMul = settings.maxMul
+        pc.mode = settings.mode; pc.maxMul = settings.maxMul; pc.targetFps = settings.targetFps
         pacer = Pacer(pc)
         updateDisplay()
     }
@@ -240,6 +273,7 @@ final class Engine {
         mode = m
         var pc = pacer.cfg; pc.mode = m; pc.refreshHz = refreshHz; pc.vblankPhase = vblank?.phase ?? 0
         pacer.setConfig(pc)
+        fg.resetHistory()  // with the game shown as it is, the last pair has gone stale
     }
 
     func resizeEngine(_ l: Layout) {
@@ -257,6 +291,9 @@ final class Engine {
         let fit = GpuFit()
         var wasActive = false
         var held: WindowCapture.Frame?  // waits for the output clock (Pacer.wantsSource)
+        var top = false, topAt = 0.0
+        var awaySince = now(), saidAway = false
+        var lastFrame = now(), saidNoFrames = false
         Out.emit(["type": "ready", "capture": "screencapturekit", "genGpu": fg.device.name,
                   "refreshHz": refreshHz, "capture_px": [layout.capW, layout.capH],
                   "output_px": [layout.outW, layout.outH], "crossAdapterCopy": false])
@@ -265,11 +302,21 @@ final class Engine {
             guard windowBounds(capture.window.windowID) != nil, !capture.stopped else { break }
             if let m = commands.takeMode() { setMode(m) }
             if let sh = commands.takeSharp() { fg.sharpness = sh }
+            if let f = commands.takeTarget() { pacer.setTarget(f) }
 
-            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
-            let active = commands.enabled && (front == gamePid || front == getpid())
+            let front = NSWorkspace.shared.frontmostApplication
+            var inFront = front?.processIdentifier == gamePid || front?.processIdentifier == getpid()
+            if !inFront {
+                if t0 - topAt > 0.15 { topAt = t0; top = isTopWindow(capture.window.windowID) }
+                inFront = top
+            }
+            let active = commands.enabled && inFront
             if !active {
-                if wasActive { meter.pause(t0); setOverlay(false); wasActive = false }
+                if wasActive { meter.pause(t0); setOverlay(false); wasActive = false; awaySince = t0 }
+                if commands.enabled && !saidAway && t0 - awaySince > 2 {   // otherwise nothing tells the user why nothing happens
+                    saidAway = true
+                    Out.msg("warning", "not in front: \(front?.localizedName ?? "?") / \(capture.window.owningApplication?.applicationName ?? "?")")
+                }
                 _ = capture.take()
                 held = nil
                 Thread.sleep(forTimeInterval: 0.02)
@@ -290,29 +337,42 @@ final class Engine {
                 meter.reset(t0)
                 if mode != .off || s.upscale { setOverlay(true) }
                 wasActive = true
+                saidAway = false
+                lastFrame = t0
             }
             confineCursor()
 
             // looked for while one waits too, so that every frame of the game counts
             if let f = capture.take() {
                 held = f
+                lastFrame = t0
+                saidNoFrames = false
                 meter.onSource(f.frames)
                 pacer.onArrival(f.time > 0 ? f.time : t0, frames: f.frames)
             }
-            if let f = held, mode == .off || pacer.wantsSource {
+            if !saidNoFrames && t0 - lastFrame > 3 {
+                saidNoFrames = true
+                Out.msg("warning", "no frames from the game window")
+            }
+            let bypass = mode == .off && !s.upscale
+            if held != nil && bypass {  // nothing to add: show the game itself and leave it the GPU
+                held = nil
+                setOverlay(false)
+            } else if let f = held, mode == .off || pacer.wantsSource {
                 held = nil
                 fg.pushFrame(f.texture)
                 pacer.onSource(f.time > 0 ? f.time : t0, procSec: fg.genMs / 1000)
-                if mode == .off {
-                    if s.upscale && fg.hasPair { present(1); meter.onOutput(repeated: false) } else if !s.upscale { setOverlay(false) }
-                }
+                if mode == .off && fg.hasPair { present(1); meter.onOutput(repeated: false) }
             }
             if mode != .off && fg.hasPair && pacer.active {
                 let slot = pacer.next()
                 if now() >= slot.presentAt {
                     let t = pacer.t(for: slot.displayAt)
                     let repeated = pacer.repeats(t)
-                    if !repeated { present(t) }
+                    if !repeated {
+                        overlay.layer.displaySyncEnabled = !pacer.passesRefresh
+                        present(t)
+                    }
                     meter.onOutput(repeated: repeated)
                     pacer.advance(now())
                 } else {
@@ -325,14 +385,20 @@ final class Engine {
             let t2 = now()
             if meter.elapsed(t2) * 1000 >= Double(s.statsMs), let m = meter.take(t2) {
                 Out.emit(["type": "stats", "srcFps": m.srcFps, "outFps": m.outFps, "multiplier": m.multiplier,
-                          "mode": mode.rawValue, "refreshHz": refreshHz, "delayMs": pacer.delayMs,
-                          "addedLatencyMs": pacer.addedLatencyMs, "genMs": fg.genMs, "analyzeMs": fg.analyzeMs,
+                          "mode": mode.rawValue, "refreshHz": refreshHz, "delayMs": bypass ? 0 : pacer.delayMs,
+                          "addedLatencyMs": bypass ? 0 : pacer.addedLatencyMs, "genMs": bypass ? 0 : fg.genMs,
+                          "analyzeMs": bypass ? 0 : fg.analyzeMs,
                           "transferMs": 0, "late": pacer.late, "skipped": pacer.skipped,
                           "srcFrames": meter.totalSrc, "outFrames": meter.totalOut, "repeatFrames": meter.totalRepeat,
                           "measuredSec": m.seconds, "activeSec": meter.activeSec,
                           "divider": mode == .auto ? pacer.divider : 1, "intervalMs": pacer.interval * 1000])
 
-                if mode != .off && fit.update(t2, skipped: pacer.skipped) {
+                // Fewer frames than the game, and fewer than asked for (a rate under the game's is the user's choice).
+                let outFloor = min(m.srcFps * 1.05, pacer.outputFps * 0.9)
+                if mode != .off && !s.upscale && fit.behind(t2, outFps: m.outFps, floorFps: outFloor) {
+                    setMode(.off)
+                    Out.emit(["type": "fit", "stopped": true])
+                } else if mode != .off && fit.update(t2, skipped: pacer.skipped) {
                     if let lower = Quality(rawValue: cur.quality.rawValue - 1) {
                         cur.quality = lower
                         resizeEngine(layout)
