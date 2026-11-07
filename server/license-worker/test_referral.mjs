@@ -68,8 +68,9 @@ assert.equal((await use("FRIEND3", 3)).error, "used up");
 assert.equal(payload((await use(auto, 4)).key).plan, "ultra");
 
 // off, on, deleted, unknown, junk
-await adm("/referrals", { code: "ONOFF", days: 1, max: 5 });
-await adm("/referrals/set", { code: "ONOFF", on: false });
+// the dashboard shows these replies at once: the list can lag a change by a minute or so
+assert.equal((await adm("/referrals", { code: "ONOFF", days: 1, max: 5 })).ref.on, true);
+assert.equal((await adm("/referrals/set", { code: "ONOFF", on: false })).ref.on, false);
 assert.equal((await use("ONOFF", 5)).error, "unknown");
 assert.equal((await adm("/referrals")).refs.find(x => x.code === "ONOFF").on, false);
 await adm("/referrals/set", { code: "ONOFF", on: true });

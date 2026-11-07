@@ -219,10 +219,9 @@ function day(iso) { return iso ? new Date(iso).toLocaleDateString("ko-KR", { yea
 function when(iso) { return iso ? new Date(iso).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""; }
 function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("on"); setTimeout(() => e.classList.remove("on"), 1800); }
 function copy(t) { navigator.clipboard.writeText(t).then(() => toast("복사했어요"), () => toast("복사하지 못했어요")); }
-function ask(title, html, yes) {
+function ask(title, html, yes = "확인") {
   return new Promise(res => {
-    $("dT").textContent = title; $("dB").innerHTML = html; $("dYes").textContent = yes || "확인";
-    $("dYes").classList.toggle("hide", !yes);
+    $("dT").textContent = title; $("dB").innerHTML = html; $("dYes").textContent = yes;
     const d = $("dlg"); d.showModal();
     $("dYes").onclick = () => { d.close(); res(true); }; $("dNo").onclick = () => { d.close(); res(false); };
   });
@@ -254,8 +253,22 @@ async function loadMembers() {
     <td style="text-align:right;white-space:nowrap"><button data-mem-block="${esc(m.id)}" data-on="${m.blocked ? "" : "1"}">${m.blocked ? "차단 해제" : "차단"}</button> <button data-mem-rec="${esc(m.id)}">복구 코드</button> <button class="d" data-mem-del="${esc(m.id)}">삭제</button></td></tr>`).join("")
     : `<tr><td colspan="8" class="empty">회원이 없어요</td></tr>`;
 }
+// Cloudflare's list can lag a change by a minute or so, and this page reads the list. What was just done here
+// therefore stays on screen, also across a reload, until the list has had time to catch up.
+const REF_LAG = 120e3;
+let refDone = {};   // code -> { row, at }; row is null for a deleted code
+try { refDone = JSON.parse(sessionStorage.getItem("sbRefDone") || "{}"); } catch (e) {}
+function refMark(code, row) {
+  refDone[code] = { row, at: Date.now() };
+  try { sessionStorage.setItem("sbRefDone", JSON.stringify(refDone)); } catch (e) {}
+}
 async function loadRefs() {
-  const { refs } = await api("/referrals");
+  let { refs } = await api("/referrals");
+  for (const [code, d] of Object.entries(refDone)) {
+    if (Date.now() - d.at > REF_LAG) { delete refDone[code]; continue; }
+    refs = refs.filter(r => r.code !== code).concat(d.row ? [d.row] : []);
+  }
+  refs.sort((a, b) => String(b.at).localeCompare(String(a.at)));
   $("refs").innerHTML = refs.length ? refs.map(r => `<tr>
     <td><code>${esc(r.code)}</code></td><td>${esc(r.label) || "—"}</td><td>${PLAN_KO[r.plan] || esc(r.plan)} ${Number(r.days)}일</td>
     <td class="m">${Number(r.used)} / ${Number(r.max)}</td><td>${r.on ? "켜짐" : "꺼짐"}</td>
@@ -467,31 +480,38 @@ $("mFind").onclick = () => loadMembers();
 $("mQ").onkeydown = e => { if (e.key === "Enter") loadMembers(); };
 $("rAdd").onclick = async () => {
   const msg = t => { $("rMsg").textContent = t; $("rMsg").className = "err"; };
+  $("rAdd").disabled = true;   // a double click made two codes
   try {
     const r = await api("/referrals", { code: $("rCode").value, label: $("rLabel").value, plan: $("rPlan").value, days: $("rDays").value, max: $("rMax").value });
     if (r.error) return msg(r.error);
     $("rMsg").textContent = "만들었어요: " + r.code; $("rMsg").className = "okc";
     $("rCode").value = $("rLabel").value = "";
-    loadRefs(); loadLog();
+    refMark(r.code, r.ref); loadRefs(); loadLog();
   } catch (e) { msg(e.message); }
+  finally { $("rAdd").disabled = false; }
 };
-document.addEventListener("click", async e => {
+document.addEventListener("click", e => onClick(e).catch(err => { if (err.message !== "401") toast("실패했어요: " + err.message); }));
+async function onClick(e) {
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.memBlock) { await api("/members/block", { id: t.dataset.memBlock, on: !!t.dataset.on }); loadMembers(); loadLog(); return; }
   if (t.dataset.memRec) {
-    if (await ask("복구 코드를 새로 만들까요?", `<code>${esc(t.dataset.memRec)}</code> — 본인인지 확인했을 때만 만드세요. 지금 코드는 쓸 수 없게 돼요.`)) {
+    if (await ask("복구 코드를 새로 만들까요?", `<code>${esc(t.dataset.memRec)}</code> — 본인인지 확인했을 때만 만드세요. 지금 코드는 쓸 수 없게 돼요.`, "새로 만들기")) {
       const r = await api("/members/recovery", { id: t.dataset.memRec });
       $("mMsg").textContent = t.dataset.memRec + "의 새 복구 코드: " + r.recovery + " (다시 볼 수 없어요)"; $("mMsg").className = "okc"; loadLog();
     }
     return;
   }
   if (t.dataset.memDel) {
-    if (await ask("회원을 삭제할까요?", `<code>${esc(t.dataset.memDel)}</code> — 되돌릴 수 없어요. 이미 받은 키는 그대로 쓸 수 있어요.`)) { await api("/members/delete", { id: t.dataset.memDel }); loadMembers(); loadLog(); }
+    if (await ask("회원을 삭제할까요?", `<code>${esc(t.dataset.memDel)}</code> — 되돌릴 수 없어요. 이미 받은 키는 그대로 쓸 수 있어요.`, "삭제")) { await api("/members/delete", { id: t.dataset.memDel }); loadMembers(); loadLog(); }
     return;
   }
-  if (t.dataset.refSet) { await api("/referrals/set", { code: t.dataset.refSet, on: !!t.dataset.on }); loadRefs(); loadLog(); return; }
+  if (t.dataset.refSet) {
+    const r = await api("/referrals/set", { code: t.dataset.refSet, on: !!t.dataset.on });
+    refMark(t.dataset.refSet, r.ref); toast(r.ref.on ? "켰어요" : "껐어요"); loadRefs(); loadLog();
+    return;
+  }
   if (t.dataset.refDel) {
-    if (await ask("추천 코드를 지울까요?", `<code>${esc(t.dataset.refDel)}</code> — 이미 받은 키는 그대로 쓸 수 있어요.`)) { await api("/referrals/delete", { code: t.dataset.refDel }); loadRefs(); loadLog(); }
+    if (await ask("추천 코드를 지울까요?", `<code>${esc(t.dataset.refDel)}</code> — 이미 받은 키는 그대로 쓸 수 있어요.`, "지우기")) { await api("/referrals/delete", { code: t.dataset.refDel }); refMark(t.dataset.refDel, null); toast("지웠어요"); loadRefs(); loadLog(); }
     return;
   }
   if (t.dataset.approve) {
@@ -522,7 +542,7 @@ document.addEventListener("click", async e => {
     if (m !== "off" && !(await ask("카드 결제를 켤까요?", m === "live" ? "실제 카드 결제가 확인되면 키가 자동으로 나가요. 테스트 결제로 확인한 뒤에만 켜세요." : "Lemon Squeezy 테스트 카드 결제에만 24시간짜리 키가 자동으로 나가요. 앱에 '카드 결제' 선택지가 생겨요.", "켜기"))) return;
     await api("/sales-mode", { mode: m }); loadSummary(); loadLog();
   }
-});
+}
 let qt; $("q").oninput = () => { clearTimeout(qt); qt = setTimeout(loadKeys, 250); };
 $("look").onclick = async () => {
   const r = await api("/lookup", { key: $("lKey").value });
@@ -593,9 +613,9 @@ function demoApi(path, b) {
     return R({ members: ms, summary: { total: demo.members.length, week: 2, active: 2, invited: 1, blocked: demo.members.filter(m => m.blocked).length } });
   }
   if (p === "/referrals") { demo.refs = demo.refs || [{ code: "FRIEND3", label: "방송 시청자용", plan: "premium", days: 3, max: 100, on: true, used: 17, at: new Date().toISOString() }];
-    if (b) { const code = (b.code || "DEMO" + (++demo.n)).toUpperCase(); demo.refs.unshift({ code, label: b.label, plan: b.plan, days: Number(b.days), max: Number(b.max), on: true, used: 0, at: new Date().toISOString() }); L("추천 코드 생성", code); return R({ ok: true, code }); }
+    if (b) { const code = (b.code || "DEMO" + (++demo.n)).toUpperCase(); demo.refs.unshift({ code, label: b.label, plan: b.plan, days: Number(b.days), max: Number(b.max), on: true, used: 0, at: new Date().toISOString() }); L("추천 코드 생성", code); return R({ ok: true, code, ref: demo.refs[0] }); }
     return R({ refs: demo.refs }); }
-  if (p === "/referrals/set") { const r = demo.refs.find(x => x.code === b.code); r.on = b.on; return R({ ok: true }); }
+  if (p === "/referrals/set") { const r = demo.refs.find(x => x.code === b.code); r.on = b.on; return R({ ok: true, ref: r }); }
   if (p === "/referrals/delete") { demo.refs = demo.refs.filter(x => x.code !== b.code); return R({ ok: true }); }
   if (p === "/orders/approve") { const o = demo.orders.find(o => o.code === b.code);
     return demoApi("/issue", { code: o.code, plan: o.plan, email: b.email, note: b.note || [o.payer, o.msg].filter(Boolean).join(" · ") }).then(x => { Object.assign(o, { status: "approved", keyId: x.id, email: b.email }); return x; }); }

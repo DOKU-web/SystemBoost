@@ -399,7 +399,7 @@ async function admin(req, url, env) {
       r.on = !!body.on;
       await putRef(env, r);
       await audit(env, "admin", r.on ? "추천 코드 켜기" : "추천 코드 끄기", r.code);
-      return json({ ok: true }, 200, false);
+      return json({ ok: true, ref: r }, 200, false);
     }
     case "POST /referrals/delete": {
       const code = String(body.code || "");
@@ -655,7 +655,7 @@ async function addRef(env, b) {
               days, max, on: true, used: 0, at: now() };
   await putRef(env, r);
   await audit(env, "admin", "추천 코드 생성", code + " · " + r.days + "일 · " + r.max + "회" + (r.label ? " · " + r.label : ""));
-  return { ok: true, code };
+  return { ok: true, code, ref: r };
 }
 
 async function adminIssue(env, b) {
