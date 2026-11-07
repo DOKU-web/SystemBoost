@@ -6,7 +6,7 @@
 //                            net.adapterpower, sys.gamemode, sys.dvr
 //   Only while a game runs   ram.standby, ram.workingset, cpu.ecores, cpu.power,
 //                            net.monitor, sys.focus, boost.profiles
-//   Only while the app runs  gpu.oc
+//   Only while the app runs  gpu.oc, the frame limit for frame generation (fg.limit)
 // Admin-only work goes through sb_helper (BoostHelper.cs).
 using Microsoft.Win32;
 using System;
@@ -29,7 +29,7 @@ namespace SystemBoost.App.Services;
 public sealed class BoostBackup
 {
     public string Feature { get; set; } = "";
-    public string Kind { get; set; } = "";     // hkcu, hags, ifeo, netpm, nv, power, wu, ecores, oc
+    public string Kind { get; set; } = "";     // hkcu, hags, ifeo, netpm, nv, nvlimit, power, wu, ecores, oc
     public string Target { get; set; } = "";   // game path, exe name or adapter
     public string Key { get; set; } = "";
     public string Name { get; set; } = "";
@@ -53,7 +53,7 @@ public sealed class BoostState
 }
 
 [SupportedOSPlatform("windows")]
-public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
+public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, IDisposable
 {
     private const string GameBar = @"Software\Microsoft\GameBar";
     private const string GameConfig = @"System\GameConfigStore";
@@ -89,6 +89,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
     };
 
     private readonly BoostHelper _helper = new();
+    private readonly BoostHelper _plainHelper = new(elevated: false);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
     private readonly List<string> _activity = new();
@@ -179,6 +180,8 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
     private async Task RecoverAsync()
     {
         await PutGpuBackAsync();
+        // the helper undoes it as it exits; a power cut leaves it
+        if (Has(GameLimit)) await RestoreAsync(_s.Backups.Where(b => b.Feature == GameLimit).ToList());
         if (RunningGames(ProcessNames()) != null) return;
         if (_s.OneClick) await OneClickOffAsync();
         await EndGameTimeAsync();
@@ -196,13 +199,14 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
                 await EndGameTimeAsync();
                 if (_s.OneClick) await OneClickOffAsync();
                 // the helper does this too as it exits; here the backup is cleared as well
-                var gpu = _s.Backups.Where(b => b.Kind == "oc").ToList();
-                if (gpu.Count > 0 && _helper.Running) await RestoreAsync(gpu);
+                var gpu = _s.Backups.Where(b => b.Kind is "oc" or "nvlimit").ToList();
+                if (gpu.Count > 0 && (_helper.Running || _plainHelper.Running)) await RestoreAsync(gpu);
                 Save();
             }).Wait(ExitWaitMs);
         }
         catch (Exception) { }
         _helper.Dispose();
+        _plainHelper.Dispose();
     }
 
     /// Velopack uninstall hook: no window and no elevation here, so this covers
@@ -254,7 +258,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
         await _gate.WaitAsync();
         try
         {
-            int count = ChangedItems().Count;
+            int count = ChangedItems().Count + (Has(GameLimit) ? 1 : 0);
             if (count == 0) return "변경된 것이 없어요";
             _s.OneClick = false;
             _s.OneClickOwned.Clear();
@@ -412,6 +416,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
             case "ifeo": return await HelperError(b.Existed ? new[] { "ifeo.set", b.Target, b.Value } : new[] { "ifeo.del", b.Target });
             case "netpm": return await HelperError("net.pm.set", b.Target, "1");
             case "nv": return await HelperError("nv.restore", b.Target, b.Name, b.Value);
+            case "nvlimit": return await EndLimitCallAsync(b);
             case "oc": return await RestoreGpuAsync(b);
             case "wu": return await HelperError(b.Existed ? new[] { "wu.set", b.Name, b.Value } : new[] { "wu.del", b.Name });
             default: return null;
@@ -523,6 +528,70 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IDisposable
             report.Add($"{exe} {cur?.ToString() ?? "없음"} → {MachineText(key, "CpuPriorityClass")}");
         }
         return string.Join(", ", report) + ". 다음 실행부터 적용돼요";
+    }
+
+    // ------------------------------------------------------------ room for frame generation
+    private const string GameLimit = "fg.limit";
+
+    public async Task<string?> LimitGameAsync(string exe, int fps)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            if (!File.Exists(Path.Combine(Environment.SystemDirectory, "nvapi64.dll"))) return NoLimiter;
+            var text = fps.ToString(CultureInfo.InvariantCulture);
+            // Current drivers take this from an ordinary user, so nothing has to come up over the game.
+            bool ok = false;
+            string data = "";
+            if (await _plainHelper.EnsureAsync() == null) (ok, data) = await _plainHelper.CallAsync("nv.limit.set", exe, text);
+            if (!ok && data != "no_nvidia")
+            {
+                var e = await _helper.EnsureAsync();
+                if (e != null) return e;
+                (ok, data) = await _helper.CallAsync("nv.limit.set", exe, text);
+            }
+            if (!ok) return data == "no_nvidia" ? NoLimiter : "게임 프레임을 제한하지 못했어요: " + data;
+            var parts = data.Split(';');
+            if (parts[0] == "keep") return $"이 게임에는 이미 {parts[1]}fps 제한이 걸려 있어요. 게임 그래픽 설정을 낮춘 뒤 다시 눌러 보세요";
+            if (!HasEntry(GameLimit, "nvlimit", exe))
+            {
+                await RestoreAsync(_s.Backups.Where(b => b.Feature == GameLimit).ToList());
+                _s.Backups.Add(new BoostBackup { Feature = GameLimit, Kind = "nvlimit", Target = exe, Value = parts[1] });
+            }
+            Save();
+            return null;
+        }
+        catch (Exception e) { return "게임 프레임을 제한하지 못했어요: " + e.Message; }
+        finally { _gate.Release(); }
+    }
+    private const string NoLimiter = "이 그래픽 카드는 앱에서 제한할 수 없어요. 게임 안 설정에서 프레임을 지금의 4분의 3쯤으로 제한한 뒤 다시 눌러 보세요";
+
+    public async Task EndGameLimitAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var mine = _s.Backups.Where(b => b.Feature == GameLimit).ToList();
+            if (mine.Count == 0) return;
+            var failed = await RestoreAsync(mine);
+            Save();
+            if (failed != null) Log("게임 프레임 제한을 되돌리지 못했어요: " + failed);
+        }
+        catch (Exception e) { Log("게임 프레임 제한을 되돌리지 못했어요: " + e.Message); }
+        finally { _gate.Release(); }
+    }
+
+    private async Task<string?> EndLimitCallAsync(BoostBackup b)
+    {
+        if (_helper.Running)
+        {
+            var (done, _) = await _helper.CallAsync("nv.limit.restore", b.Target, b.Value);
+            if (done) { if (_plainHelper.Running) await _plainHelper.CallAsync("nv.limit.restore", b.Target, b.Value); return null; }
+        }
+        var e = await _plainHelper.EnsureAsync();
+        if (e != null) return e;
+        var (ok, data) = await _plainHelper.CallAsync("nv.limit.restore", b.Target, b.Value);
+        return ok ? null : data;
     }
 
     private async Task<string> ApplyDriverAsync()

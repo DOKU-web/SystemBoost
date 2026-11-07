@@ -70,6 +70,9 @@ public sealed class FrameGenEngine : IDisposable
 {
     private Process? _p;
     private bool _upscale;
+    private StreamWriter? _log;     // what the engine reported in the last run: frame rates and timings only
+    private long _logged;
+    private const long MaxLogBytes = 2_000_000;
     public event Action<FrameGenStats>? Stats;
     public event Action<JsonElement>? Ready;
     public event Action<string, string>? Message;   // (warning|error, text)
@@ -93,7 +96,8 @@ public sealed class FrameGenEngine : IDisposable
         };
         _upscale = o.Upscale;
         var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        p.OutputDataReceived += (_, e) => { if (e.Data != null) OnLine(e.Data); };
+        OpenLog();
+        p.OutputDataReceived += (_, e) => { if (e.Data != null) { WriteLog(e.Data); OnLine(e.Data); } };
         p.ErrorDataReceived += (_, _) => { };
         p.Exited += (_, _) =>
         {
@@ -104,6 +108,30 @@ public sealed class FrameGenEngine : IDisposable
         p.BeginOutputReadLine();
         p.BeginErrorReadLine();
         _p = p;
+    }
+
+    private void OpenLog()
+    {
+        try
+        {
+            lock (this)
+            {
+                _log?.Dispose();
+                _logged = 0;
+                _log = new StreamWriter(Path.Combine(Platform.DataDir, "framegen-last.log"), false, new UTF8Encoding(false)) { AutoFlush = true };
+            }
+        }
+        catch (Exception) { _log = null; }
+    }
+
+    private void WriteLog(string line)
+    {
+        lock (this)
+        {
+            if (_log == null || _logged > MaxLogBytes) return;
+            try { _log.WriteLine(line); _logged += line.Length; }
+            catch (Exception) { _log = null; }
+        }
     }
 
     public void SetMode(string mode) => Send($"mode {mode}");

@@ -30,4 +30,6 @@ target_include_directories(sb_helper PRIVATE ${NVAPI_DIR})
 target_compile_definitions(sb_helper PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(sb_helper PRIVATE /W3 /utf-8)
 target_link_libraries(sb_helper PRIVATE ${NVAPI_DIR}/amd64/nvapi64.lib advapi32 ole32 oleaut32 wbemuuid iphlpapi ws2_32 wevtapi)
-target_link_options(sb_helper PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'" /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup)
+# asInvoker: the app starts it elevated with the runas verb for the admin-only features, and plain for
+# what the driver lets an ordinary user do, so a frame limit asks for nothing over a running game.
+target_link_options(sb_helper PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'" /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup)

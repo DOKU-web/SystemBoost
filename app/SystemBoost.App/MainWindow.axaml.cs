@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         var b = new WindowsBoostBackend();
+        FrameGenViewModel.Limiter = b;
         b.Notice += text => Avalonia.Threading.Dispatcher.UIThread.Post(() => new NoticeWindow(text).Show());
         return b;
     }

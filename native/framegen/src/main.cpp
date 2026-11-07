@@ -492,14 +492,16 @@ int Run(const Settings& s) {
         if (meter.elapsed(t2) * 1000.0 >= s.statsMs && meter.take(t2, m)) {
             UINT shown = 0;
             if (overlay.ShownCount(shown)) { totalShown += shown - lastShown; lastShown = shown; }
-            char buf[900];
+            const Overlay::Timing pt = overlay.TakeTiming();
+            char buf[1024];
             std::snprintf(buf, sizeof buf,
                           "{\"type\":\"stats\",\"srcFps\":%.1f,\"outFps\":%.1f,\"multiplier\":%.2f,"
                           "\"mode\":%d,\"refreshHz\":%.2f,\"delayMs\":%.1f,\"addedLatencyMs\":%.1f,"
                           "\"genMs\":%.2f,\"analyzeMs\":%.2f,\"transferMs\":%.2f,\"late\":%llu,\"skipped\":%llu,"
                           "\"srcFrames\":%llu,\"outFrames\":%llu,\"repeatFrames\":%llu,\"shownFrames\":%llu,"
                           "\"clockSec\":%.4f,\"measuredSec\":%.3f,\"activeSec\":%.3f,\"divider\":%d,"
-                          "\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f}",
+                          "\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f,"
+                          "\"presents\":%d,\"waitMs\":%.2f,\"presentMs\":%.2f,\"maxPresentMs\":%.2f,\"aloneFps\":%.1f}",
                           m.srcFps(), m.outFps(), m.multiplier(), int(mode), disp.hz,
                           bypass ? 0.0 : pacer.delayMs(), bypass ? 0.0 : pacer.addedLatencyMs(),
                           bypass ? 0.0 : fg.GenMs(), bypass ? 0.0 : fg.AnalyzeMs(),
@@ -509,7 +511,8 @@ int Run(const Settings& s) {
                           (unsigned long long)totalShown, t2, m.seconds, meter.activeSec(),
                           mode == MulMode::Auto ? pacer.divider() : 1, pacer.interval() * 1000.0,
                           pacer.percentile(0.1) * 1000.0, pacer.percentile(0.5) * 1000.0,
-                          pacer.percentile(0.9) * 1000.0);
+                          pacer.percentile(0.9) * 1000.0, pt.count, pt.waitMs, pt.presentMs, pt.maxMs,
+                          alone.fps(t2));
             Emit(buf);
 
             // Fewer frames than the game, and fewer than asked for (a rate under the game's is the user's choice).

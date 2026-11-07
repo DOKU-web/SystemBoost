@@ -170,7 +170,11 @@ std::string dispatch(const std::vector<std::string>& f) {
     if (c == "nv.get" && n == 2 && sb::isExeName(f[1])) return nvGet(f[1]);
     if (c == "nv.set" && n == 2 && sb::isExeName(f[1])) return nvSet(f[1]);
     if (c == "nv.restore" && n == 4 && sb::isExeName(f[1]) && sb::isBit(f[2]) && sb::isOldValue(f[3]))
-        return nvRestore(f[1], f[2] == "1", f[3]);
+        return nvRestore(f[1], f[3]);
+    if (c == "nv.limit.set" && n == 3 && sb::isExeName(f[1]) && sb::isFrameLimit(f[2]))
+        return nvLimitSet(f[1], (unsigned)std::stoul(f[2]));
+    if (c == "nv.limit.restore" && n == 3 && sb::isExeName(f[1]) && sb::isOldValue(f[2]))
+        return nvLimitRestore(f[1], f[2]);
 
     // GPU tuning: goes back by itself, see gpuoc.cpp
     if (c == "oc.set" && n == 5 && sb::isPowerWatts(f[1]) && sb::isCoreOffset(f[2]) && sb::isMemOffset(f[3]) && sb::isTempLimit(f[4]))

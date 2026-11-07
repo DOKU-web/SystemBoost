@@ -1,7 +1,8 @@
 // Talks to sb_helper.exe, the small elevated program behind the admin-only
 // features (native/helper). It starts with one UAC prompt the first time it is
 // needed and exits together with the app. See native/helper/src/main.cpp for
-// how it checks its caller and what it accepts.
+// how it checks its caller and what it accepts. Plain (elevated: false), it starts
+// without a prompt and can only do what this user may do.
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -18,6 +19,9 @@ internal sealed class BoostHelper : IDisposable
 {
     private const int ConnectTimeoutMs = 15000;
     private static string HelperPath => Path.Combine(AppContext.BaseDirectory, "sb_helper.exe");
+
+    private readonly bool _elevated;
+    public BoostHelper(bool elevated = true) { _elevated = elevated; }
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private NamedPipeClientStream? _pipe;
@@ -36,7 +40,7 @@ internal sealed class BoostHelper : IDisposable
             if (!File.Exists(HelperPath)) return "관리자 도우미 파일이 없어요. 앱을 다시 설치해 주세요 (바뀐 것 없음)";
             var name = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
             var psi = new ProcessStartInfo(HelperPath, $"--pipe {name} --parent {Environment.ProcessId}")
-            { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden };
+            { UseShellExecute = true, Verb = _elevated ? "runas" : "", WindowStyle = ProcessWindowStyle.Hidden };
             try { await Task.Run(() => { using var p = Process.Start(psi); }); }
             catch (Win32Exception e) when (e.NativeErrorCode == 1223) { return "관리자 권한을 허용하지 않아서 취소했어요 (바뀐 것 없음)"; }
             catch (Win32Exception) { return "관리자 도우미를 실행하지 못했어요 (바뀐 것 없음)"; }

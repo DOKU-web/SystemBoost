@@ -50,6 +50,8 @@ int main() {
     CHECK(!isIsoTime("2026-11-05T14:00:00Z;"));
     CHECK(!isIsoTime("abcd-11-05T14:00:00Z"));
 
+    CHECK(isFrameLimit("10") && isFrameLimit("30") && isFrameLimit("300"));
+    CHECK(!isFrameLimit("9") && !isFrameLimit("0") && !isFrameLimit("-30") && !isFrameLimit("301") && !isFrameLimit("30.5") && !isFrameLimit(""));
     CHECK(isOldValue("none") && isOldValue("1"));
     CHECK(!isOldValue("") && !isOldValue("-1") && !isOldValue("12345678901"));
 

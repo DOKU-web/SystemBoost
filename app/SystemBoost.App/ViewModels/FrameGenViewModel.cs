@@ -110,6 +110,16 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public string Capture { get => _capture; set => Set(ref _capture, value); }
     public bool ShowCaptureOption => Platform.IsWindows;
 
+    /// Null where the app cannot limit a game (Mac). Set by the main window.
+    public static IGameLimiter? Limiter { get; set; }
+    public bool ShowLimitOption => Limiter != null;
+    private bool _autoLimit = true;
+    public bool AutoLimit
+    {
+        get => _autoLimit;
+        set { if (Set(ref _autoLimit, value) && !value) _ = EndLimitAsync(); }
+    }
+
     /// For the usage statistics: the multiplier in use, 0 while stopped.
     public int UsageMultiplier => !Running ? 0 : Mode == "auto" ? MaxMul : int.TryParse(Mode.TrimStart('x'), out var m) ? m : 0;
 
@@ -180,6 +190,71 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         return string.Join(" · ", parts);
     }
 
+    // A game that fills the GPU leaves generation no room. The engine stops rather than slow the game
+    // down; the game's rate, read with nothing generated, then sets a driver limit that leaves room,
+    // and generation starts again. 30 of 40 fps left room for 2x (tests/results/lowend.txt).
+    private const double LimitShare = 0.75;
+    private const double LowestShare = 0.9;    // a limit this close to the game's rate frees next to nothing
+    private const int MinLimitFps = 20, MaxLimitSteps = 2;
+    private const double LimitReached = 1.15;  // the driver holds a rate a little over its number
+    private const int RecoverMs = 1000, ReadMs = 2000, ApplyMs = 1500;
+    private readonly List<double> _aloneFps = new();
+    private bool _makingRoom, _limitWaitsRestart;
+    private int _limitFps, _limitSteps;
+    private string _limitExe = "", _limitNote = "";
+
+    private async Task MakeRoomAsync()
+    {
+        if (Limiter is not { } limiter || !AutoLimit || Upscale || _makingRoom) return;
+        _makingRoom = true;
+        try
+        {
+            _limitNote = "게임 프레임을 재서 GPU 여유를 만들고 있어요";
+            await Task.Delay(RecoverMs);    // the game takes its frames back
+            _aloneFps.Clear();
+            await Task.Delay(ReadMs);
+            if (!Running || !_fitStopped) return;
+            if (_aloneFps.Count == 0) { _limitNote = ""; return; }  // the game is behind another window
+            double alone = _aloneFps.Average();
+            int fps = Math.Max(MinLimitFps, (int)(alone * LimitShare));
+            if (_limitSteps >= MaxLimitSteps || fps > alone * LowestShare)
+            {
+                await EndLimitAsync();
+                _limitNote = $"게임이 {alone.ToString("0", Inv)}fps라 더 제한할 수 없어요. 게임 그래픽 설정을 낮춘 뒤 다시 눌러 보세요";
+                return;
+            }
+            var exe = ResourceManagers.GameProcess + ".exe";
+            var error = await limiter.LimitGameAsync(exe, fps);
+            if (error != null) { _limitNote = error; return; }
+            _limitFps = fps;
+            _limitExe = exe;
+            _limitSteps++;
+            await Task.Delay(ApplyMs);
+            _aloneFps.Clear();
+            await Task.Delay(ReadMs);
+            if (!Running) { await EndLimitAsync(); return; }
+            if (!_fitStopped) return;
+            if (_aloneFps.Count > 0 && _aloneFps.Average() > fps * LimitReached)
+            {   // measured: the driver reads a limit when a program starts, so this holds for the next start
+                _limitWaitsRestart = true;
+                _limitNote = $"{fps}fps 제한은 게임을 다시 켜야 적용돼요. 게임을 껐다 켠 뒤 이 화면에서 시작을 누르세요";
+                return;
+            }
+            _fitStopped = false;
+            _engine.SetMode(Mode);
+        }
+        finally { _makingRoom = false; }
+    }
+
+    private async Task EndLimitAsync()
+    {
+        if (_limitFps == 0 || Limiter is not { } limiter) return;
+        _limitFps = _limitSteps = 0;
+        _limitExe = "";
+        _limitWaitsRestart = false;
+        await limiter.EndGameLimitAsync();
+    }
+
     private const string StoppedReason =
         "GPU 여유가 없어 프레임 생성을 멈추고 게임 화면을 그대로 보여 주고 있어요. 게임 프레임을 지금의 4분의 3쯤으로 제한하거나 그래픽 설정을 낮춘 뒤, 2배부터 다시 눌러 보세요";
 
@@ -211,7 +286,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     public FrameGenViewModel()
     {
         _engine.Stats += OnStats;
-        _engine.FitStopped += () => _fitStopped = _stoppedInSession = true;
+        _engine.FitStopped += () => { _fitStopped = _stoppedInSession = true; _ = MakeRoomAsync(); };
         _statsWatch.Tick += (_, _) => ClearStaleStats();
         _engine.Ready += r =>
         {
@@ -233,6 +308,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             AutoReason = "";
             ResourceManagers.GameProcess = null;
             if (!Status.StartsWith("오류")) Status = "중지됨";
+            if (_limitWaitsRestart) Status = $"게임을 다시 켜면 {_limitFps}fps 제한이 적용돼요. 앱을 닫으면 원래대로 돌아가요";
+            else _ = EndLimitAsync();
             if (_restart) { _restart = false; Toggle(); }
         };
     }
@@ -297,6 +374,11 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         {
             _engine.Start(SelectedWindow.Id, o);
             ResourceManagers.GameProcess = ResourceManagers.ProcessOfWindow(SelectedWindow);
+            if (_limitFps > 0 && !string.Equals(_limitExe, ResourceManagers.GameProcess + ".exe", StringComparison.OrdinalIgnoreCase))
+                _ = EndLimitAsync();
+            _limitWaitsRestart = false;
+            _limitSteps = _limitFps > 0 ? 1 : 0;
+            _limitNote = "";
             Running = true;
             _lastStats = Environment.TickCount64;
             _statsWatch.Start();
@@ -323,10 +405,13 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         History.Add((s.SrcFps, s.OutFps));
         if (History.Count > 60) History.RemoveAt(0);
         HistoryChanged?.Invoke();
-        AutoReason = s.Mode == 1 ? (_fitStopped ? StoppedReason : "")
+        if (_fitStopped) _aloneFps.Add(s.SrcFps);
+        var reason = s.Mode == 1 ? (_fitStopped ? (_limitNote != "" ? _limitNote : StoppedReason) : "")
             : TargetFps > 0 ? TargetReasonText(TargetFps, s.RefreshHz, s.SrcFps, s.Mode, MaxMul)
             : s.Mode != 0 ? CapReasonText(s.RefreshHz, s.SrcFps, s.Mode)
             : s.Divider > 1 ? AutoReasonText(s.RefreshHz, s.Divider) : MonitorReasonText(s.RefreshHz, s.SrcFps, MaxMul);
+        var limited = s.Mode != 1 && _limitFps > 0 ? $"GPU 여유를 만들려고 게임을 {_limitFps}fps로 제한했어요. 프레임 생성을 끄면 원래대로 돌아가요" : "";
+        AutoReason = limited != "" && reason != "" ? limited + " · " + reason : limited + reason;
         _first ??= s;
         if (_last != null)
         {

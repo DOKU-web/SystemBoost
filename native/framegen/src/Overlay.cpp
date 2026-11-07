@@ -98,7 +98,9 @@ void Overlay::SetRect(const RECT& r) {
 
 void Overlay::Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear, bool noVsync) {
     if (!swap_ || !tex) return;
+    const double t0 = QpcNow();
     if (waitable_ && !noVsync) WaitForSingleObjectEx(waitable_, 20, FALSE);  // at most 1 frame queued
+    const double t1 = QpcNow();
     ComPtr<ID3D11Texture2D> bb;
     if (FAILED(swap_->GetBuffer(0, IID_PPV_ARGS(&bb)))) return;
     if (clear) {
@@ -109,10 +111,22 @@ void Overlay::Present(ID3D11Texture2D* tex, UINT x, UINT y, bool clear, bool noV
     // vsync: the pacer already targets vblanks. Above the refresh rate the monitor shows what it
     // can and the rest is dropped here, or the output would wait for it and fall back to its rate.
     HRESULT hr = swap_->Present(noVsync ? 0 : 1, noVsync ? DXGI_PRESENT_DO_NOT_WAIT : 0);
+    const double t2 = QpcNow();
+    timing_.waitMs += (t1 - t0) * 1000.0;
+    timing_.presentMs += (t2 - t1) * 1000.0;
+    timing_.maxMs = (t2 - t0) * 1000.0 > timing_.maxMs ? (t2 - t0) * 1000.0 : timing_.maxMs;
+    ++timing_.count;
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
         Show(false);
         throw HrError{hr, "GPU device removed/reset"};
     }
+}
+
+Overlay::Timing Overlay::TakeTiming() {
+    Timing t = timing_;
+    timing_ = {};
+    if (t.count > 0) { t.waitMs /= t.count; t.presentMs /= t.count; }
+    return t;
 }
 
 bool Overlay::ShownCount(UINT& count) {

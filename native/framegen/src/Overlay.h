@@ -31,6 +31,10 @@ public:
     HWND Hwnd() const { return hwnd_; }
     HANDLE FrameLatencyWaitable() const { return waitable_; }
 
+    // Time inside Present() since the last call, for the stats: where an output frame waits.
+    struct Timing { double waitMs = 0, presentMs = 0, maxMs = 0; int count = 0; };
+    Timing TakeTiming();
+
 private:
     void CreateSwapChain(UINT w, UINT h);
 
@@ -42,6 +46,7 @@ private:
     ComPtr<IDXGISwapChain1> swap_;
     ComPtr<ID3D11RenderTargetView> rtv_;
     HANDLE waitable_ = nullptr;
+    Timing timing_;
     IDCompositionDevice* dcomp_ = nullptr;
     IDCompositionTarget* target_ = nullptr;
     IDCompositionVisual* visual_ = nullptr;

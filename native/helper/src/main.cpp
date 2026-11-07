@@ -1,5 +1,6 @@
 // sb_helper: runs elevated for the admin-only boost features. The app starts it
-// with one UAC prompt and it exits together with the app.
+// with one UAC prompt and it exits together with the app. A second copy runs plain
+// for what needs no elevation, with the same checks.
 //
 // Security design:
 //  - Pipe name is random per run and is created with FILE_FLAG_FIRST_PIPE_INSTANCE,
@@ -8,8 +9,9 @@
 //    must be SystemBoost.exe in this helper's own folder. Anything else is dropped.
 //  - Requests are matched against the fixed list in commands.cpp with checked
 //    arguments. Nothing here runs a program or writes a path chosen by the caller.
-//  - Backups live in the app. The one thing kept here is the GPU tuning to undo if
-//    the app goes away. It never touches a game process, game memory or game files.
+//  - Backups live in the app. What is kept here is the GPU tuning and the game's frame
+//    limit, to undo if the app goes away. It never touches a game process, game memory
+//    or game files.
 #include "commands.h"
 #include "validate.h"
 #include <windows.h>
@@ -60,6 +62,7 @@ bool callerAllowed(HANDLE pipe, DWORD parent) {
 
 [[noreturn]] void leave(UINT code) {
     ocShutdown();
+    nvLimitShutdown();
     fpsShutdown();
     ExitProcess(code);
 }

@@ -96,6 +96,7 @@ inline bool isCoreOffset(const std::string& s) { return isInt(s, -200, 100); }
 inline bool isMemOffset(const std::string& s) { return isInt(s, -500, 300); }
 inline bool isTempLimit(const std::string& s) { return isInt(s, 40, 87); }
 inline bool isPowerWatts(const std::string& s) { return isInt(s, 10, 1000); }
+inline bool isFrameLimit(const std::string& s) { return isInt(s, 10, 300); }
 
 /// Value that was in the driver profile before: "none" or a decimal number.
 inline bool isOldValue(const std::string& s) {

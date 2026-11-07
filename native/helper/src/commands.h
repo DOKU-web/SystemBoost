@@ -15,10 +15,13 @@ std::string netPowerSet(const std::string& instance, bool enable);
 // nettop.cpp: TCP bytes per process
 std::string netTop();
 
-// nvidia.cpp: per-game power management mode through NVAPI driver settings
+// nvidia.cpp: per-game power management mode and frame limit through NVAPI driver settings
 std::string nvGet(const std::string& exe);
 std::string nvSet(const std::string& exe);
-std::string nvRestore(const std::string& exe, bool created, const std::string& old);
+std::string nvRestore(const std::string& exe, const std::string& old);
+std::string nvLimitSet(const std::string& exe, unsigned fps);
+std::string nvLimitRestore(const std::string& exe, const std::string& old);
+void nvLimitShutdown();
 
 // gpuoc.cpp: power limit and clock offsets through NVML, with automatic undo
 std::string ocSet(int powerW, int coreMHz, int memMHz, int tempLimit);
