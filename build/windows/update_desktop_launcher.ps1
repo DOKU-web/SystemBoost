@@ -1,6 +1,8 @@
 # Puts the current source on this PC's Desktop SystemBoost shortcut, with no public release.
 # Each build goes to a new folder, so a running copy is left alone; the next start from the
 # shortcut gets the new build. The copy uses the same settings and license as the installed app.
+# Each folder is laid out like an install (Update.exe beside current\, a manifest inside), which is
+# what the app checks for: its update card and update check work here too.
 #   powershell -ExecutionPolicy Bypass -File build\windows\update_desktop_launcher.ps1
 #   ... -Restore   points the shortcut back at the installed app
 # Run this after every change to the app or the engines.
@@ -9,6 +11,7 @@ $ErrorActionPreference = "Continue"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
 $base = Join-Path $env:LOCALAPPDATA "SystemBoost-Launcher"
 $installed = Join-Path $env:LOCALAPPDATA "SystemBoost\current\SystemBoost.exe"
+$updater = Join-Path $env:LOCALAPPDATA "SystemBoost\Update.exe"
 $link = Join-Path ([Environment]::GetFolderPath("Desktop")) "SystemBoost.lnk"
 $cmake = "C:\Program\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $log = Join-Path $base "update.log"
@@ -47,21 +50,51 @@ try {
 
     Run $cmake @("--build", "$root\native\framegen\build", "--config", "Release")
     Run $cmake @("--build", "$root\native\helper\build", "--config", "Release")
+    $app = Join-Path $staging "current"
     Run "dotnet" @("publish", "$root\app\SystemBoost.App\SystemBoost.App.csproj", "-c", "Release", "-r", "win-x64",
                    "--self-contained", "true", "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true",
-                   "-v", "q", "-nologo", "-o", $staging)
+                   "-v", "q", "-nologo", "-o", $app)
 
-    New-Item -ItemType Directory -Force "$staging\native\framegen\shaders" | Out-Null
-    Copy-Item "$root\native\framegen\build\Release\sb_framegen.exe" "$staging\native\framegen\"
-    Copy-Item "$root\native\framegen\build\Release\shaders\*" "$staging\native\framegen\shaders\"
-    Copy-Item "$root\native\helper\build\Release\sb_helper.exe" $staging
-    Get-ChildItem $staging -Filter *.pdb -File | Remove-Item -Force
+    New-Item -ItemType Directory -Force "$app\native\framegen\shaders" | Out-Null
+    Copy-Item "$root\native\framegen\build\Release\sb_framegen.exe" "$app\native\framegen\"
+    Copy-Item "$root\native\framegen\build\Release\shaders\*" "$app\native\framegen\shaders\"
+    Copy-Item "$root\native\helper\build\Release\sb_helper.exe" $app
+    Get-ChildItem $app -Filter *.pdb -File | Remove-Item -Force
+
+    # Same shortcut fields as the real package: an update then has no new shortcut to create.
+    if (Test-Path $updater) {
+        $csproj = "$root\app\SystemBoost.App\SystemBoost.App.csproj"
+        $version = (Select-String -Path $csproj -Pattern '<Version>([^<]+)</Version>').Matches[0].Groups[1].Value
+        Copy-Item $updater $staging
+        New-Item -ItemType Directory -Force "$staging\packages" | Out-Null
+        $manifest = @"
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+<metadata>
+<id>SystemBoost</id>
+<title>SystemBoost</title>
+<description>SystemBoost</description>
+<authors>SystemBoost</authors>
+<version>$version</version>
+<channel>win</channel>
+<mainExe>SystemBoost.exe</mainExe>
+<os>win</os>
+<rid>win</rid>
+<shortcutLocations>Desktop,StartMenuRoot</shortcutLocations>
+<shortcutAmuid>velopack.SystemBoost</shortcutAmuid>
+</metadata>
+</package>
+"@
+        [IO.File]::WriteAllText("$app\sq.version", $manifest, (New-Object Text.UTF8Encoding($false)))
+    } else {
+        Say "no installed app: this build has no update card"
+    }
 
     $dir = Join-Path $base $name
     Rename-Item $staging $dir
     $staging = $null
-    $exe = Join-Path $dir "SystemBoost.exe"
-    foreach ($need in @($exe, "$dir\sb_helper.exe", "$dir\native\framegen\sb_framegen.exe", "$dir\native\framegen\shaders\interpolate.cso")) {
+    $exe = Join-Path $dir "current\SystemBoost.exe"
+    foreach ($need in @($exe, "$dir\current\sb_helper.exe", "$dir\current\native\framegen\sb_framegen.exe", "$dir\current\native\framegen\shaders\interpolate.cso")) {
         if (-not (Test-Path $need)) { throw "missing $need" }
     }
     Point-Link $exe
