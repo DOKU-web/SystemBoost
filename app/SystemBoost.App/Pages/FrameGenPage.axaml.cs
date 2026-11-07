@@ -49,6 +49,9 @@ public partial class FrameGenPage : UserControl
         TargetBox.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) ApplyTarget(); };
         vm.PropertyChanged += (_, e) =>
         {
+            if (e.PropertyName == nameof(vm.Mode)) Select(ModeSeg, vm.Mode);
+            if (e.PropertyName == nameof(vm.MaxMul)) Select(MaxSeg, vm.MaxMul.ToString(CultureInfo.InvariantCulture));
+            if (e.PropertyName == nameof(vm.Quality)) Select(QualitySeg, vm.Quality);
             if (e.PropertyName == nameof(vm.SelectedGpu) && vm.SelectedGpu is { Value: not "same" } &&
                 !License.Allowed(PremiumFeature.DualGpu))
             {
@@ -62,6 +65,7 @@ public partial class FrameGenPage : UserControl
         ApplyButton.Click += (_, _) => vm.Restart();
         DefaultsButton.Click += (_, _) =>
         {
+            vm.DlssMode = false;
             vm.Mode = FrameGenViewModel.DefaultMode; vm.MaxMul = FrameGenViewModel.DefaultMaxMul; vm.Quality = "balanced"; vm.Upscale = false; vm.Sharpness = 0.5; vm.Capture = "wgc"; vm.TargetFps = 0;
             TargetBox.Text = ""; Select(TargetSeg, "0");
             Select(ModeSeg, vm.Mode); Select(MaxSeg, vm.MaxMul.ToString(CultureInfo.InvariantCulture)); Select(QualitySeg, "balanced"); Select(CaptureSeg, "wgc");
@@ -115,21 +119,22 @@ public partial class FrameGenPage : UserControl
     /// onPick returns false to refuse the choice (selection snaps back).
     private static void Segment(StackPanel group, string current, Func<string, bool> onPick)
     {
-        string selected = current;
+        group.Tag = current;
         foreach (var t in group.Children.OfType<ToggleButton>())
         {
             t.IsChecked = (string?)t.Tag == current;
             t.Click += (s, _) =>
             {
                 var picked = (ToggleButton)s!;
-                if (onPick((string)picked.Tag!)) selected = (string)picked.Tag!;
-                foreach (var o in group.Children.OfType<ToggleButton>()) o.IsChecked = (string?)o.Tag == selected;
+                if (onPick((string)picked.Tag!)) group.Tag = picked.Tag;
+                Select(group, (string)group.Tag!);
             };
         }
     }
 
     private static void Select(StackPanel group, string value)
     {
+        group.Tag = value;   // a refused pick snaps back to this
         foreach (var t in group.Children.OfType<ToggleButton>()) t.IsChecked = (string?)t.Tag == value;
     }
 }

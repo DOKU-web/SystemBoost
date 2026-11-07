@@ -93,7 +93,15 @@
             <Button x:Name="DefaultsButton" Classes="ghost" Content="기본값" />
           </StackPanel>
           <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"><StackPanel>
-            <Border Classes="row" BorderThickness="0">
+            <Border Classes="row" BorderThickness="0" IsVisible="{Binding ShowDlssOption}">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2"><TextBlock Classes="label" Text="게임에서 DLSS 사용 중" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="켜면 배수를 2배, 품질을 저사양으로 맞춰 프레임 생성이 쓰는 GPU를 줄여요" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="게임이 20fps 아래로 떨어지면 프레임 생성을 쉬고 27fps를 넘으면 다시 켜요. 끄면 이전 설정으로 돌아가요" /></StackPanel>
+                <ToggleSwitch x:Name="DlssSwitch" Grid.Column="1" IsChecked="{Binding DlssMode}" OnContent="" OffContent="" />
+              </Grid>
+            </Border>
+            <Border Classes="row">
               <StackPanel Spacing="8">
                 <StackPanel Spacing="2"><TextBlock Classes="label" Text="배수" />
                   <TextBlock Classes="muted" Text="자동 = 모니터 주사율에 맞춰 채움" /></StackPanel>

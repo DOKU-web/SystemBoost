@@ -81,7 +81,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         set
         {
             bool changed = Set(ref _mode, value);
-            if (Running && (changed || _fitStopped)) { _fitStopped = false; _engine.SetMode(value); }   // the same button starts it again
+            if (Running && (changed || _fitStopped)) { _fitStopped = _dlssResting = false; _engine.SetMode(value); }   // the same button starts it again
         }
     }
     private bool _fitStopped;
@@ -118,6 +118,42 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     {
         get => _autoLimit;
         set { if (Set(ref _autoLimit, value) && !value) _ = EndLimitAsync(); }
+    }
+
+    // For a game with DLSS on, chosen from the recorded runs: out/src stayed about 0.75 at auto, 4x and 8x, so
+    // more than 2x bought nothing; low quality takes the analysis from 3.11 to 1.22 ms at 1080p on an RTX 3060;
+    // and below 20 fps the added delay averaged 113 ms against 28 ms at 40 fps and up. The app cannot see DLSS
+    // from outside the game, so the user says so.
+    public const int DlssRestBelowFps = 20, DlssResumeAboveFps = 27;   // generation costs a full GPU about a quarter of its frames
+    private const long DlssHoldMs = 3000;
+    private bool _dlssMode, _dlssResting;
+    private long _dlssSince;
+    private (string Mode, int MaxMul, string Quality) _beforeDlss;
+    public bool ShowDlssOption => Platform.IsWindows;
+    public bool DlssMode
+    {
+        get => _dlssMode;
+        set
+        {
+            if (!Set(ref _dlssMode, value)) return;
+            if (value) _beforeDlss = (Mode, MaxMul, Quality);
+            var (mode, max, quality) = value ? ("x2", 2, "low") : _beforeDlss;
+            _dlssResting = false;
+            Mode = mode; MaxMul = max; Quality = quality;
+            if (Running) Restart();   // the quality only counts at start
+        }
+    }
+
+    private void UpdateDlssRest(double src)
+    {
+        bool crossed = _dlssResting ? src >= DlssResumeAboveFps : src < DlssRestBelowFps;
+        if (!DlssMode || Upscale || _fitStopped || src <= 0 || !crossed) { _dlssSince = 0; return; }
+        long now = Environment.TickCount64;
+        if (_dlssSince == 0) _dlssSince = now;
+        if (now - _dlssSince < DlssHoldMs) return;
+        _dlssSince = 0;
+        _dlssResting = !_dlssResting;
+        _engine.SetMode(_dlssResting ? "off" : Mode);
     }
 
     /// For the usage statistics: the multiplier in use, 0 while stopped.
@@ -259,6 +295,9 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private const string StoppedReason =
         "GPU 여유가 없어 프레임 생성을 멈추고 게임 화면을 그대로 보여 주고 있어요. 게임 프레임을 지금의 4분의 3쯤으로 제한하거나 그래픽 설정을 낮춘 뒤, 2배부터 다시 눌러 보세요";
 
+    private static readonly string DlssRestReason =
+        $"게임이 {DlssRestBelowFps}fps 아래라 프레임 생성을 쉬고 게임 화면을 그대로 보여 주고 있어요. {DlssResumeAboveFps}fps를 넘으면 다시 켜져요";
+
     /// Last ~60 samples for the chart (src, out).
     public List<(double src, double outp)> History { get; } = new();
     public event Action? HistoryChanged;
@@ -269,7 +308,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private FrameGenStats? _first, _last;
     private double _latencyMsSec;   // added latency x active seconds
     private double _genSec, _genSrc, _genOut;   // only the time spent generating: after a stop the output counts nothing
-    private bool _stoppedInSession;
+    private bool _stoppedInSession, _sessionDlss;
 
     // The engine goes quiet while the game is behind another window. Without this the last numbers
     // would stay up, and a multiplier picked here would look like it did nothing.
@@ -377,7 +416,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             ResourceManagers.GameProcess = ResourceManagers.ProcessOfWindow(SelectedWindow);
             if (_limitFps > 0 && !string.Equals(_limitExe, ResourceManagers.GameProcess + ".exe", StringComparison.OrdinalIgnoreCase))
                 _ = EndLimitAsync();
-            _limitWaitsRestart = false;
+            _limitWaitsRestart = _dlssResting = false;
+            _dlssSince = 0;
             _limitSteps = _limitFps > 0 ? 1 : 0;
             _limitNote = "";
             Running = true;
@@ -386,6 +426,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             Status = "시작하는 중…";
             GameInfo = SelectedWindow.ToString();
             _sessionStart = DateTime.Now; _first = _last = null; _latencyMsSec = 0;
+            _sessionDlss = DlssMode;    // flipping the switch ends this run, and the new value belongs to the next one
             _genSec = _genSrc = _genOut = 0; _stoppedInSession = _fitStopped = false;
         }
         catch (Exception e) { Status = "오류: " + e.Message; }
@@ -407,7 +448,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         if (History.Count > 60) History.RemoveAt(0);
         HistoryChanged?.Invoke();
         if (_fitStopped) _aloneFps.Add(s.SrcFps);
-        var reason = s.Mode == 1 ? (_fitStopped ? (_limitNote != "" ? _limitNote : StoppedReason) : "")
+        UpdateDlssRest(s.SrcFps);
+        var reason = s.Mode == 1 ? (_fitStopped ? (_limitNote != "" ? _limitNote : StoppedReason) : _dlssResting ? DlssRestReason : "")
             : TargetFps > 0 ? TargetReasonText(TargetFps, s.RefreshHz, s.SrcFps, s.Mode, MaxMul)
             : s.Mode != 0 ? CapReasonText(s.RefreshHz, s.SrcFps, s.Mode)
             : s.Divider > 1 ? AutoReasonText(s.RefreshHz, s.Divider) : MonitorReasonText(s.RefreshHz, s.SrcFps, MaxMul);
@@ -436,8 +478,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         if (sec <= 0) return;
         double src = (b.SrcFrames - a.SrcFrames) / sec, outp = (b.OutFrames - a.OutFrames) / sec;
         if (_genSec > 0) { src = _genSrc / _genSec; outp = _genOut / _genSec; sec = _genSec; }
-        Sessions.Insert(0, new SessionRecord(_sessionStart, SelectedWindow.Title, _stoppedInSession ? Mode + " (자동 중지)" : Mode,
-                                             src, outp, _latencyMsSec / sec, b.Late));
+        var mode = (_sessionDlss ? "DLSS · " : "") + Mode + (_stoppedInSession ? " (자동 중지)" : "");
+        Sessions.Insert(0, new SessionRecord(_sessionStart, SelectedWindow.Title, mode, src, outp, _latencyMsSec / sec, b.Late));
         SaveSessions();
     }
 
