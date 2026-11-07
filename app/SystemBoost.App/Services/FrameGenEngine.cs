@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -70,9 +71,10 @@ public sealed class FrameGenEngine : IDisposable
 {
     private Process? _p;
     private bool _upscale;
-    private StreamWriter? _log;     // what the engine reported in the last run: frame rates and timings only
+    private StreamWriter? _log;     // what the engine reported in a run: frame rates and timings only
     private long _logged;
     private const long MaxLogBytes = 2_000_000;
+    private const int KeepLogs = 8;         // runs are compared with each other, say with a game setting on and off
     public event Action<FrameGenStats>? Stats;
     public event Action<JsonElement>? Ready;
     public event Action<string, string>? Message;   // (warning|error, text)
@@ -96,7 +98,7 @@ public sealed class FrameGenEngine : IDisposable
         };
         _upscale = o.Upscale;
         var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        OpenLog();
+        OpenLog(args);
         p.OutputDataReceived += (_, e) => { if (e.Data != null) { WriteLog(e.Data); OnLine(e.Data); } };
         p.ErrorDataReceived += (_, _) => { };
         p.Exited += (_, _) =>
@@ -110,7 +112,7 @@ public sealed class FrameGenEngine : IDisposable
         _p = p;
     }
 
-    private void OpenLog()
+    private void OpenLog(string args)
     {
         try
         {
@@ -118,7 +120,11 @@ public sealed class FrameGenEngine : IDisposable
             {
                 _log?.Dispose();
                 _logged = 0;
-                _log = new StreamWriter(Path.Combine(Platform.DataDir, "framegen-last.log"), false, new UTF8Encoding(false)) { AutoFlush = true };
+                var dir = Directory.CreateDirectory(Path.Combine(Platform.DataDir, "framegen-logs"));
+                foreach (var old in dir.GetFiles("*.log").OrderByDescending(f => f.Name).Skip(KeepLogs - 1)) old.Delete();
+                var name = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + ".log";
+                _log = new StreamWriter(Path.Combine(dir.FullName, name), false, new UTF8Encoding(false)) { AutoFlush = true };
+                _log.WriteLine(args);
             }
         }
         catch (Exception) { _log = null; }

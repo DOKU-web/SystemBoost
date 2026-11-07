@@ -223,6 +223,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
                 _limitNote = $"게임이 {alone.ToString("0", Inv)}fps라 더 제한할 수 없어요. 게임 그래픽 설정을 낮춘 뒤 다시 눌러 보세요";
                 return;
             }
+            if (string.IsNullOrEmpty(ResourceManagers.GameProcess)) { _limitNote = ""; return; }   // the game's window is gone
             var exe = ResourceManagers.GameProcess + ".exe";
             var error = await limiter.LimitGameAsync(exe, fps);
             if (error != null) { _limitNote = error; return; }
