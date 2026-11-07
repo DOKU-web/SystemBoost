@@ -1,5 +1,6 @@
 import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
+import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
@@ -343,7 +344,7 @@ async function admin(req, url, env) {
   if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 6) return json({ error: "not found" }, 404);   // off unless configured
   if (url.pathname === "/admin" && req.method === "GET")
     return new Response(ADMIN_HTML.replace("/*SB_SERVED*/false", "true"), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
-      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://api.github.com; img-src data:; frame-ancestors 'none'",
+      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://api.github.com; img-src data: https:; frame-ancestors 'none'",
       "x-frame-options": "DENY", "referrer-policy": "no-referrer" } });
   // Wrong-password lockout: 5 misses per IP per 15 min, 20 misses in total per hour.
   // A short PIN is only safe because of this (20 guesses an hour vs 1,000,000 six-digit PINs).
@@ -361,6 +362,10 @@ async function admin(req, url, env) {
   }
   const route = req.method + " " + url.pathname.slice("/admin/api".length);
   const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+  if (route === "GET /announce" || route.startsWith("POST /announce/")) {
+    const r = await announce(env, route, body, (action, detail) => audit(env, "admin", action, detail));
+    return json(r, r.status || 200, false);
+  }
   switch (route) {
     case "GET /summary": return json(await summary(env), 200, false);
     case "GET /keys": return json(await listKeys(env, url.searchParams.get("q") || "", url.searchParams.get("status") || "all"), 200, false);

@@ -56,6 +56,45 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
 #vizTip{position:fixed;display:none;background:#222;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;pointer-events:none;z-index:9;white-space:nowrap}
 #vizTip b{display:block}#vizTip span{color:var(--mut);font-size:12px}
 #usage.stale{opacity:.6}
+#annTop{scroll-margin-top:72px}
+.anGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.anPrev{position:sticky;top:72px}
+.anForm label,.anHooks label{display:block;color:var(--mut);font-size:13px;margin-top:12px}
+.anForm label input,.anForm label select,.anForm label textarea,.anHooks label input{margin-top:4px;color:var(--txt);font-size:15px}
+.anForm label textarea{font-size:13px}
+.anForm .cnt{float:right;font-variant-numeric:tabular-nums}.anForm .cnt.over{color:var(--bad)}
+#anDesc{min-height:170px;resize:vertical}
+.anSub{font-size:13px;color:var(--mut);font-weight:500;margin:18px 0 0}
+.anChips{display:flex;flex-wrap:wrap;gap:8px}
+.anEdit{display:flex;align-items:center;gap:10px;background:#2a1a0a;border:1px solid #5a3a14;color:#ffc58a;padding:8px 12px;border-radius:10px;margin-bottom:12px;font-size:13px}.anEdit span{flex:1;min-width:0;overflow-wrap:anywhere}
+.anField{display:grid;grid-template-columns:1fr 1.6fr auto auto;gap:8px;margin-top:8px;align-items:start}
+.anField textarea{min-height:44px;font-family:inherit;font-size:14px}.anField>button{padding:8px 10px}
+.anForm label.anCheck{display:flex;align-items:center;gap:6px;margin-top:10px}.anCheck input{width:16px;height:16px;margin:0;accent-color:var(--or)}
+.anActions{display:flex;gap:10px;margin-top:18px;align-items:center;flex-wrap:wrap}.anActions .sp{flex:1}
+.anHist{list-style:none;padding:0;margin:0;max-height:300px;overflow:auto}
+.anHist li{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}.anHist li:last-child{border-bottom:0}
+.anHist .t{flex:1;min-width:0}.anHist b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.anHist .t span{color:var(--mut);font-size:12px}
+details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600}
+.dc{--dcb:#313338;--dce:#2b2d31;--dct:#dbdee1;--dcm:#949ba4;--dcl:#00a8fc;background:var(--dcb);border-radius:12px;padding:16px 16px 20px;color:var(--dct);font:15px/1.4 "gg sans","Noto Sans","Malgun Gothic",sans-serif}
+.dc a{color:var(--dcl)}.dc .chan{color:var(--dcm);font-size:13px;margin-bottom:12px;border-bottom:1px solid #3f4147;padding-bottom:10px}
+.dc .msg{display:flex;gap:14px}.dc .av{width:40px;height:40px;border-radius:50%;flex:none}.dc .name{font-weight:600;color:#fff}
+.dc .bot{background:#5865f2;color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:2px}
+.dc .time{color:var(--dcm);font-size:12px;margin-left:6px}.dc .content{margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere}
+.embed{margin-top:6px;background:var(--dce);border-left:4px solid var(--or);border-radius:4px;padding:10px 16px 14px 12px;max-width:520px;display:grid;grid-template-columns:1fr auto;gap:0 16px}
+.embed .e-title{font-weight:700;color:#fff;margin-top:6px;font-size:16px}.embed .e-title a{text-decoration:none}
+.embed .e-desc{margin-top:6px;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.embed .e-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;grid-column:1/-1}
+.embed .e-field{grid-column:1/-1;font-size:14px}.embed .e-field.inline{grid-column:auto}.embed .fn{font-weight:700;color:#fff;margin-bottom:2px}.embed .fv{white-space:pre-wrap;overflow-wrap:anywhere}
+.embed .e-img{grid-column:1/-1;margin-top:12px;max-width:100%;border-radius:4px}
+.embed .e-thumb{width:80px;height:80px;object-fit:cover;border-radius:4px;margin-top:8px;grid-row:1/span 2;grid-column:2}
+.embed .e-foot{grid-column:1/-1;margin-top:8px;font-size:12px;color:var(--dcm)}
+.md-h1,.md-h2,.md-h3{font-weight:700;color:#fff;display:block;margin:4px 0}.md-h1{font-size:1.5em}.md-h2{font-size:1.25em}.md-h3{font-size:1.05em}
+.md-sub{font-size:12px;color:var(--dcm);display:block}.md-quote{border-left:4px solid #4e5058;padding-left:10px;display:block}
+.md-code{background:#1e1f22;padding:1px 4px;border-radius:3px;font-family:Consolas,monospace;font-size:85%}
+.md-pre{background:#1e1f22;border:1px solid #1a1b1e;padding:8px;border-radius:4px;display:block;font-family:Consolas,monospace;font-size:13px;white-space:pre-wrap}
+.md-mention{background:rgba(88,101,242,.3);color:#c9cdfb;padding:0 2px;border-radius:3px;font-weight:500}
+@media(max-width:900px){.anGrid{grid-template-columns:minmax(0,1fr)}.anPrev{position:static}}
+@media(max-width:600px){.anField{grid-template-columns:1fr}header{flex-wrap:wrap}#annTop{scroll-margin-top:124px}}
 </style>
 </head>
 <body>
@@ -67,7 +106,7 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
 </div>
 
 <div id="app" class="hide">
-<header><b>SystemBoost 관리자</b><span class="mut" id="modeTxt"></span><span class="sp"></span><button id="reload">새로고침</button><button id="out">나가기</button></header>
+<header><b>SystemBoost 관리자</b><span class="mut" id="modeTxt"></span><span class="sp"></span><button id="goAnn">디스코드 공지</button><button id="reload">새로고침</button><button id="out">나가기</button></header>
 <main>
   <div id="demoNote" class="demo hide">시연 모드예요. 가짜 데이터로 동작하고 서버에 아무것도 저장하지 않아요.</div>
   <div id="usage">
@@ -190,6 +229,57 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
     </div>
   </div>
 
+  <h2 id="annTop" style="margin:22px 0 10px">디스코드 공지</h2>
+  <div class="anGrid">
+    <div>
+      <div class="card anForm">
+        <div class="anEdit hide" id="anEdit"><span id="anEditL"></span><button id="anCancel">새 글로 돌아가기</button></div>
+        <h2>템플릿</h2>
+        <div class="anChips" id="anTpl"></div>
+        <label>보낼 채널<select id="anChannel"></select></label>
+        <div class="row">
+          <label>알림(핑)<select id="anPing">
+            <option value="">핑 없음</option><option value="ann">@🔔 Announcements</option><option value="log">@🔔 Changelog</option>
+            <option value="beta">@🧪 Beta Tester</option><option value="premium">@⭐ Premium</option><option value="everyone">@everyone (전체)</option>
+          </select></label>
+          <label>색상<input id="anColor" value="#FF7A1A" maxlength="7"></label>
+        </div>
+        <label>메시지 위 문구 (선택) <span class="cnt" id="anCContent"></span><input id="anContent" placeholder="임베드 위에 표시되는 일반 텍스트"></label>
+        <label>제목 <span class="cnt" id="anCTitle"></span><input id="anTitle" placeholder="예: 🚀 SystemBoost v0.8.7 업데이트"></label>
+        <label>제목 링크 (선택)<input id="anUrl" type="url" placeholder="https://…"></label>
+        <label>본문 <span class="cnt" id="anCDesc"></span><textarea id="anDesc" placeholder="**굵게**, *기울임*, - 목록, ## 제목, [링크](https://…) 사용 가능"></textarea></label>
+        <p class="mut" style="margin:6px 0 0">채널 링크: <code>&lt;#채널ID&gt;</code> · 굵게 <code>**텍스트**</code> · 작은 글씨 <code>-# 텍스트</code></p>
+        <p class="anSub">항목 (선택)</p>
+        <div id="anFields"></div>
+        <button id="anAddField" style="margin-top:10px">+ 항목 추가</button>
+        <div class="row">
+          <label>큰 이미지 URL (선택)<input id="anImage" type="url" placeholder="https://….png"></label>
+          <label>작은 이미지 URL (선택)<input id="anThumb" type="url" placeholder="https://….png"></label>
+        </div>
+        <label>하단 문구 (선택)<input id="anFooter" placeholder="SystemBoost Official"></label>
+        <label class="anCheck"><input type="checkbox" id="anTs" checked> 보낸 시각 표시</label>
+        <div class="anActions">
+          <button id="anClear">비우기</button><span class="sp"></span><span id="anStatus" class="mut"></span><button class="p" id="anSend">디스코드에 보내기</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>최근 보낸 글 <small>최근 50개. 여기서 보낸 글만 있고, 다른 기기에서 열어도 같아요</small></h2>
+        <ul class="anHist" id="anHist"></ul>
+      </div>
+      <details class="card anHooks" id="anHooks">
+        <summary>디스코드 연결 <span class="mut" id="anHookSum" style="font-weight:400"></span></summary>
+        <p class="mut">웹후크 주소는 서버에만 저장돼요. 저장한 뒤에는 이 화면에서도 다시 볼 수 없어요. 바꿀 채널만 새 주소를 넣으면 돼요.</p>
+        <div class="row"><button id="anPick">공지 작성기 파일에서 불러오기</button><input id="anFile" type="file" accept=".html,.htm" class="hide"></div>
+        <div id="anHookRows"></div>
+        <div class="anActions"><button class="p" id="anSaveHooks">주소 저장</button><span id="anHookMsg" class="mut"></span></div>
+      </details>
+    </div>
+    <div class="anPrev"><div class="card" style="padding:12px">
+      <h2 style="margin:6px 6px 12px">미리보기</h2>
+      <div class="dc" id="anPreview"></div>
+    </div></div>
+  </div>
+
 </main>
 </div>
 
@@ -239,7 +329,7 @@ async function api(path, body) {
 }
 
 // ------------------------------------------------------------ views
-async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers()]); }
+async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers(), loadAnnounce()]); }
 async function loadMembers() {
   let list;
   try { list = await api("/members?q=" + encodeURIComponent($("mQ").value.trim())); }
@@ -554,6 +644,7 @@ $("look").onclick = async () => {
     (r.revoked ? `<br><span class="err">차단됨: ${esc(r.revoked)}</span> <button data-unrev="${esc(r.id)}">해제</button>` : (r.valid ? ` <button class="d" data-rev="${esc(r.id)}">차단</button>` : ""));
 };
 $("reload").onclick = () => { loadAll(); loadStats(); };
+$("goAnn").onclick = () => $("annTop").scrollIntoView();
 $("out").onclick = () => logout("");
 function logout(msg) { token = ""; try { sessionStorage.removeItem("sbAdmin"); } catch (e) {} $("app").classList.add("hide"); $("login").classList.remove("hide"); $("lerr").textContent = msg; }
 async function login() {
@@ -563,6 +654,230 @@ async function login() {
 }
 $("go").onclick = () => { token = $("tok").value.trim(); login(); };
 $("tok").onkeydown = e => { if (e.key === "Enter") $("go").click(); };
+
+// ------------------------------------------------------------ Discord announcements
+// The server holds the webhook addresses and makes every call to Discord (src/announce.js); this page never has one
+// after they are saved. It keeps only the unsent draft, in this browser.
+const AN_INPUTS = ["channel", "ping", "color", "content", "title", "url", "desc", "image", "thumb", "footer"];
+const anIn = k => $("an" + k[0].toUpperCase() + k.slice(1));
+const AN_COLOR = "#FF7A1A", AN_FOOT = "SystemBoost Official", AN_SEND = "디스코드에 보내기";
+const anToday = () => new Date().toISOString().slice(0, 10);
+const AN_TEMPLATES = [
+  { label: "📣 공지", channel: "ann", ping: "ann", data: () => ({ title: "📣 공지 제목", desc: "공지 내용을 적어 주세요.\n\n-# 문의는 <#1568551800800280576> 에 남겨 주세요." }) },
+  { label: "📝 패치노트", channel: "log", ping: "log", data: () => ({ title: `📝 SystemBoost v0.0.0 — ${anToday()}`, desc: "이번 업데이트 요약을 한두 줄로 적어 주세요.", fields: [
+    { name: "✨ 새 기능", value: "- \n- " }, { name: "⚡ 개선", value: "- " }, { name: "🛠️ 수정", value: "- " }, { name: "⚠️ 알려진 문제", value: "- 없음" }] }) },
+  { label: "🗺️ 로드맵", channel: "road", ping: "", data: () => ({ title: "🗺️ 로드맵 업데이트", desc: "-# 목표 일정이며 바뀔 수 있어요.", fields: [
+    { name: "✅ 완료", value: "- ", inline: true }, { name: "🔨 진행 중", value: "- ", inline: true }, { name: "📅 예정", value: "- ", inline: true }] }) },
+  { label: "⬇️ 다운로드", channel: "dl", ping: "ann", data: () => ({ title: "⬇️ SystemBoost v0.0.0 다운로드", desc: "공식 다운로드 링크는 이곳뿐이에요. 다른 곳의 재업로드 파일은 받지 마세요.", fields: [
+    { name: "🪟 Windows (설치판)", value: "[다운로드](https://)", inline: true }, { name: "🪟 Windows (포터블)", value: "[다운로드](https://)", inline: true }, { name: "🍎 macOS", value: "[다운로드](https://)", inline: true }] }) },
+  { label: "🧪 베타 공지", channel: "beta", ping: "beta", data: () => ({ title: "🧪 베타 테스트 안내", desc: "테스트 기간, 빌드 위치, 집중해서 봐 줄 부분을 적어 주세요.\n\n피드백은 <#1568552144016113764> 에 남겨 주세요." }) },
+  { label: "🔧 점검 안내", channel: "ann", ping: "ann", data: () => ({ title: "🔧 서버/다운로드 점검 안내", desc: "**일시:** \n**영향:** \n\n점검 중에는 일부 기능이 동작하지 않을 수 있어요." }) },
+];
+let anData = { channels: [], roles: {}, others: {}, hist: [] }, anFields = [], anEditing = null, anReady = false;
+const anChannelNow = () => anData.channels.find(c => c.key === $("anChannel").value);
+function anSay(t, cls) { $("anStatus").textContent = t; $("anStatus").className = cls || "mut"; }
+
+function anApplyTemplate(t) {
+  const d = t.data();
+  anLoad({ channel: t.channel, ping: t.ping, color: AN_COLOR, title: d.title, desc: d.desc, footer: AN_FOOT, ts: true, fields: d.fields || [] });
+}
+function anLoad(d) {
+  for (const k of AN_INPUTS) anIn(k).value = d[k] == null ? (k === "ping" ? "" : anIn(k).tagName === "SELECT" ? anIn(k).value : "") : d[k];
+  if (!anChannelNow() && anData.channels[0]) $("anChannel").value = anData.channels[0].key;
+  $("anTs").checked = d.ts !== false;
+  anFields = (d.fields || []).map(f => ({ ...f }));
+  anRenderFields(); anUpdate();
+}
+function anRenderFields() {
+  const box = $("anFields"); box.textContent = "";
+  anFields.forEach((f, i) => {
+    const r = document.createElement("div"); r.className = "anField";
+    r.innerHTML = `<input placeholder="항목 이름"><textarea rows="2" placeholder="내용 (여러 줄 가능)"></textarea><label class="anCheck"><input type="checkbox"> 나란히</label><button title="삭제">×</button>`;
+    const [n, v, c] = [r.querySelector("input"), r.querySelector("textarea"), r.querySelector("[type=checkbox]")];
+    n.value = f.name; v.value = f.value; c.checked = !!f.inline;
+    n.oninput = () => { f.name = n.value; anUpdate(); };
+    v.oninput = () => { f.value = v.value; anUpdate(); };
+    c.onchange = () => { f.inline = c.checked; anUpdate(); };
+    r.querySelector("button").onclick = () => { anFields.splice(i, 1); anRenderFields(); anUpdate(); };
+    box.appendChild(r);
+  });
+}
+function anBuild() {
+  const ping = $("anPing").value, v = k => anIn(k).value.trim(), role = anData.roles[ping];
+  let content = v("content");
+  const mentions = { parse: [], roles: [] };
+  if (ping === "everyone") { content = ("@everyone " + content).trim(); mentions.parse = ["everyone"]; }
+  else if (role) { content = (`<@&${role.id}> ` + content).trim(); mentions.roles = [role.id]; }
+  const hex = v("color").replace("#", ""), e = { color: /^[0-9a-fA-F]{6}$/.test(hex) ? parseInt(hex, 16) : parseInt(AN_COLOR.slice(1), 16) };
+  if (v("title")) e.title = v("title");
+  if (v("url") && e.title) e.url = v("url");
+  if (v("desc")) e.description = $("anDesc").value;
+  const fs = anFields.filter(f => f.name.trim() && f.value.trim()).map(f => ({ name: f.name, value: f.value, inline: !!f.inline }));
+  if (fs.length) e.fields = fs;
+  if (v("image")) e.image = { url: v("image") };
+  if (v("thumb")) e.thumbnail = { url: v("thumb") };
+  if (v("footer")) e.footer = { text: v("footer") };
+  if ($("anTs").checked) e.timestamp = new Date().toISOString();
+  const p = { allowed_mentions: mentions, embeds: e.title || e.description || e.fields || e.image ? [e] : [] };
+  if (content) p.content = content;
+  return p;
+}
+const anLength = e => (e?.title || "").length + (e?.description || "").length + (e?.footer?.text || "").length + (e?.fields || []).reduce((a, f) => a + f.name.length + f.value.length, 0);
+
+// A close reading of Discord's markdown, for the preview only.
+function anMd(src) {
+  if (!src) return "";
+  const blocks = [];
+  let s = src.replace(/```(?:\w+\n)?([\s\S]*?)```/g, (_, c) => { blocks.push(c); return `\u0000${blocks.length - 1}\u0000`; });
+  s = esc(s);
+  s = s.replace(/&lt;#(\d+)&gt;/g, (_, id) => `<span class="md-mention">#${esc(anData.channels.find(x => x.id === id)?.name || anData.others[id] || "channel")}</span>`);
+  s = s.replace(/&lt;@&amp;(\d+)&gt;/g, (_, id) => `<span class="md-mention">@${esc(Object.values(anData.roles).find(x => x.id === id)?.name || "role")}</span>`);
+  s = s.replace(/@everyone/g, '<span class="md-mention">@everyone</span>');
+  s = s.replace(/^### (.*)$/gm, '<span class="md-h3">$1</span>\u0001').replace(/^## (.*)$/gm, '<span class="md-h2">$1</span>\u0001').replace(/^# (.*)$/gm, '<span class="md-h1">$1</span>\u0001');
+  s = s.replace(/^-# (.*)$/gm, '<span class="md-sub">$1</span>\u0001').replace(/^&gt; (.*)$/gm, '<span class="md-quote">$1</span>\u0001').replace(/^[-*] (.*)$/gm, "• $1");
+  s = s.replace(/`([^`]+)`/g, '<span class="md-code">$1</span>');
+  s = s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/__(.+?)__/g, "<u>$1</u>").replace(/\*(.+?)\*/g, "<i>$1</i>").replace(/~~(.+?)~~/g, "<s>$1</s>");
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\u0001\n?/g, "");
+  return s.replace(/\u0000(\d+)\u0000\n?/g, (_, i) => `<span class="md-pre">${esc(blocks[+i])}</span>`);
+}
+function anPreview(p, ch) {
+  const e = p.embeds[0], hh = new Date().toTimeString().slice(0, 5), logo = esc(document.querySelector("link[rel=icon]").href);
+  let h = `<div class="chan"># ${esc(ch.name)}</div><div class="msg"><img class="av" alt="" src="${logo}"><div style="min-width:0;flex:1"><div><span class="name">SystemBoost</span><span class="bot">앱</span><span class="time">오늘 ${hh}</span></div>`;
+  if (p.content) h += `<div class="content">${anMd(p.content)}</div>`;
+  if (e) {
+    const link = /^https?:\/\//.test(e.url || "");
+    h += `<div class="embed" style="border-left-color:#${e.color.toString(16).padStart(6, "0")}"><div>`;
+    if (e.title) h += `<div class="e-title">${link ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${anMd(e.title)}</a>` : anMd(e.title)}</div>`;
+    if (e.description) h += `<div class="e-desc">${anMd(e.description)}</div>`;
+    h += "</div>";
+    if (e.thumbnail) h += `<img class="e-thumb" src="${esc(e.thumbnail.url)}" alt="">`;
+    if (e.fields) h += `<div class="e-fields">${e.fields.map(f => `<div class="e-field${f.inline ? " inline" : ""}"><div class="fn">${anMd(f.name)}</div><div class="fv">${anMd(f.value)}</div></div>`).join("")}</div>`;
+    if (e.image) h += `<img class="e-img" src="${esc(e.image.url)}" alt="">`;
+    if (e.footer || e.timestamp) h += `<div class="e-foot">${e.footer ? esc(e.footer.text) : ""}${e.footer && e.timestamp ? " • " : ""}${e.timestamp ? "오늘 " + hh : ""}</div>`;
+    h += "</div>";
+  }
+  if (!p.content && !e) h += `<div class="content" style="color:var(--dcm)">내용을 입력하면 여기에 미리보기가 나와요.</div>`;
+  return h + "</div></div>";
+}
+function anUpdate() {
+  const ch = anChannelNow(); if (!ch) return;
+  $("anPreview").innerHTML = anPreview(anBuild(), ch);
+  const cnt = (id, n, max) => { const el = $(id); el.textContent = `${n} / ${max}`; el.classList.toggle("over", n > max); };
+  cnt("anCTitle", $("anTitle").value.length, 256); cnt("anCDesc", $("anDesc").value.length, 4096); cnt("anCContent", $("anContent").value.length, 1900);
+  if (anEditing) return;   // the draft stays as it was while a sent post is open
+  try { localStorage.setItem("sbAnDraft", JSON.stringify({ ...Object.fromEntries(AN_INPUTS.map(k => [k, anIn(k).value])), ts: $("anTs").checked, fields: anFields })); } catch (e) {}
+}
+function anExitEdit() {
+  const open = !!anEditing;
+  anEditing = null;
+  $("anEdit").classList.add("hide"); $("anSend").textContent = AN_SEND; $("anChannel").disabled = false;
+  if (open) anRestoreDraft();
+}
+function anRestoreDraft() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem("sbAnDraft")); } catch (e) {}
+  d ? anLoad(d) : anApplyTemplate(AN_TEMPLATES[0]);
+}
+function anRenderHist() {
+  const h = anData.hist;
+  $("anHist").innerHTML = h.length ? h.map(it => {
+    const ch = anData.channels.find(c => c.key === it.channel), t = new Date(it.time).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    return `<li><div class="t"><b>${esc(it.title)}</b><span>#${esc(ch ? ch.name : "?")} · ${esc(t)}${it.edited ? " · 수정됨" : ""}</span></div><button data-an-edit="${esc(it.id)}">수정</button><button class="d" data-an-del="${esc(it.id)}">삭제</button></li>`;
+  }).join("") : `<li class="empty">아직 보낸 글이 없어요</li>`;
+}
+function anRenderChannels() {
+  const sel = $("anChannel"), now = sel.value;
+  sel.innerHTML = anData.channels.map(c => `<option value="${esc(c.key)}">#${esc(c.name)}${c.set ? "" : " (연결 안 됨)"}</option>`).join("");
+  if (now) sel.value = now;
+  const n = anData.channels.filter(c => c.set).length;
+  $("anHookSum").textContent = `${n} / ${anData.channels.length}개 연결됨`;
+  if (n < anData.channels.length) $("anHooks").open = true;
+  for (const c of anData.channels) {
+    const m = document.querySelector(`[data-hook-state="${c.key}"]`);
+    if (m && !m.dataset.note) m.textContent = c.set ? "연결됨" : "연결 안 됨";
+  }
+}
+async function loadAnnounce() {
+  try { anData = await api("/announce"); }
+  catch (e) { if (e.message !== "401") anSay("공지 정보를 불러오지 못했어요: " + e.message, "err"); return; }
+  if (!anReady) {
+    anReady = true;
+    $("anHookRows").innerHTML = anData.channels.map(c => `<label>#${esc(c.name)} · <span data-hook-state="${esc(c.key)}"></span><input type="password" autocomplete="off" data-hook="${esc(c.key)}" placeholder="https://discord.com/api/webhooks/…"></label>`).join("");
+  }
+  const first = !$("anChannel").options.length;
+  anRenderChannels(); anRenderHist();
+  if (first) anRestoreDraft();
+}
+
+$("anTpl").innerHTML = AN_TEMPLATES.map((t, i) => `<button data-an-tpl="${i}">${esc(t.label)}</button>`).join("");
+$("anTpl").onclick = e => { const b = e.target.closest("button"); if (b) { anExitEdit(); anApplyTemplate(AN_TEMPLATES[+b.dataset.anTpl]); } };
+$("anAddField").onclick = () => { if (anFields.length < 25) { anFields.push({ name: "", value: "", inline: false }); anRenderFields(); anUpdate(); } };
+[...AN_INPUTS, "ts"].forEach(k => { const el = anIn(k); el.addEventListener("input", anUpdate); el.addEventListener("change", anUpdate); });
+$("anClear").onclick = () => { anExitEdit(); anLoad({ channel: $("anChannel").value, color: AN_COLOR, footer: AN_FOOT }); anSay(""); };
+$("anCancel").onclick = () => { anExitEdit(); anSay(""); };
+$("anSend").onclick = async () => {
+  const p = anBuild(), ch = anChannelNow(), form = { ...Object.fromEntries(AN_INPUTS.map(k => [k, anIn(k).value])), ts: $("anTs").checked, fields: anFields };
+  if (!p.content && !p.embeds.length) return anSay("보낼 내용이 없어요", "err");
+  if (anLength(p.embeds[0]) > 6000 || $("anDesc").value.length > 4096 || $("anTitle").value.length > 256 || (p.content || "").length > 2000) return anSay("글자 수 제한을 넘었어요", "err");
+  const ping = esc($("anPing").selectedOptions[0].textContent), editing = anEditing;
+  const where = editing ? `#${esc(ch.name)} 채널의 글을 수정해요` : `#${esc(ch.name)} 채널에 보내요 · 알림: ${ping}`;
+  if (!(await ask(editing ? "보낸 글을 수정할까요?" : "디스코드에 보낼까요?", where, editing ? "수정하기" : "보내기"))) return;
+  $("anSend").disabled = true; anSay(editing ? "수정하는 중…" : "보내는 중…");
+  try {
+    const r = await api(editing ? "/announce/edit" : "/announce/send", editing ? { id: editing, payload: p, form } : { channel: ch.key, payload: p, form });
+    anData.hist = r.hist; anRenderHist(); loadLog();
+    anSay(editing ? "수정했어요" : "보냈어요", "okc");
+    if (editing) anExitEdit();
+  } catch (e) { if (e.message !== "401") anSay("실패했어요: " + e.message, "err"); }
+  finally { $("anSend").disabled = false; }
+};
+$("anHist").onclick = async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const it = anData.hist.find(x => x.id === (b.dataset.anEdit || b.dataset.anDel)); if (!it) return;
+  if (b.dataset.anEdit) {
+    anEditing = it.id;   // first: what follows must not land in the draft
+    anLoad({ ...(it.form || {}), channel: it.channel });
+    $("anChannel").disabled = true; $("anSend").textContent = "수정 내용 저장";
+    $("anEdit").classList.remove("hide"); $("anEditL").textContent = "보낸 글 수정 중: " + it.title;
+    anSay(""); $("annTop").scrollIntoView();
+    return;
+  }
+  const ch = anData.channels.find(c => c.key === it.channel);
+  if (!(await ask("이 글을 디스코드에서 삭제할까요?", `#${esc(ch ? ch.name : "?")} · ${esc(it.title)} — 삭제하면 되돌릴 수 없어요.`, "삭제"))) return;
+  try {
+    const r = await api("/announce/delete", { id: it.id });
+    anData.hist = r.hist; anRenderHist(); loadLog();
+    if (anEditing === it.id) anExitEdit();
+    anSay(r.gone ? "디스코드에서 찾지 못해서 목록에서만 지웠어요" : "삭제했어요", "okc");
+  } catch (err) { if (err.message !== "401") anSay("삭제하지 못했어요: " + err.message, "err"); }
+};
+$("anPick").onclick = () => $("anFile").click();
+$("anFile").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  let n = 0;   // read here in the browser; only the addresses go to the server, and only on 저장
+  for (const m of (await f.text()).matchAll(/key:\s*['"](\w+)['"][^}\n]*?hook:\s*['"](https:[^'"]+)['"]/g)) {
+    const input = document.querySelector(`[data-hook="${m[1]}"]`);
+    if (input) { input.value = m[2]; n++; }
+  }
+  $("anHookMsg").textContent = n ? `${n}개 채널의 주소를 읽었어요. '주소 저장'을 눌러 주세요.` : "이 파일에서 웹후크 주소를 찾지 못했어요.";
+  $("anHookMsg").className = n ? "okc" : "err";
+};
+$("anSaveHooks").onclick = async () => {
+  const inputs = [...document.querySelectorAll("[data-hook]")], hooks = Object.fromEntries(inputs.filter(i => i.value.trim()).map(i => [i.dataset.hook, i.value.trim()]));
+  const msg = (t, cls) => { $("anHookMsg").textContent = t; $("anHookMsg").className = cls; };
+  if (!Object.keys(hooks).length) return msg("넣은 주소가 없어요", "err");
+  $("anSaveHooks").disabled = true; msg("디스코드에서 확인하는 중…", "mut");
+  try {
+    const r = await api("/announce/hooks", { hooks });
+    document.querySelectorAll("[data-hook-state]").forEach(m => { const t = r.notes[m.dataset.hookState]; m.dataset.note = t || ""; if (t) { m.textContent = t; m.className = "err"; } else m.className = ""; });
+    inputs.forEach(i => i.value = "");
+    anData.channels = r.channels; anRenderChannels(); loadLog();
+    msg(`${r.saved}개 저장했어요` + (Object.keys(r.notes).length ? ". 빨간 글씨를 확인해 주세요." : ""), Object.keys(r.notes).length ? "err" : "okc");
+  } catch (e) { if (e.message !== "401") msg(e.message, "err"); }
+  finally { $("anSaveHooks").disabled = false; }
+};
 
 // ------------------------------------------------------------ demo data (file:// or ?demo only)
 let demo;
@@ -611,6 +926,15 @@ function demoApi(path, b) {
     if (p === "/members/delete") { demo.members = demo.members.filter(m => m.id !== b.id); L("회원 삭제", b.id); return R({ ok: true }); }
     const ms = demo.members.filter(m => !q.get("q") || m.id.includes(q.get("q")));
     return R({ members: ms, summary: { total: demo.members.length, week: 2, active: 2, invited: 1, blocked: demo.members.filter(m => m.blocked).length } });
+  }
+  if (p.startsWith("/announce")) {
+    demo.an = demo.an || { channels: [{ key: "ann", name: "📣・announcements", id: "1", set: true }, { key: "log", name: "📝・changelog", id: "2", set: false }], roles: { ann: { id: "3", name: "🔔 Announcements" } }, others: {}, hist: [] };
+    if (p === "/announce") return R(demo.an);
+    if (p === "/announce/hooks") { demo.an.channels.forEach(c => { if (b.hooks[c.key]) c.set = true; }); return R({ channels: demo.an.channels, saved: Object.keys(b.hooks).length, notes: {} }); }
+    if (p === "/announce/send") { const q2 = b.payload; demo.an.hist.unshift({ id: String(++demo.n + 1e6), channel: b.channel, title: q2.embeds[0]?.title || q2.content || "(제목 없음)", time: Date.now(), payload: q2, form: b.form }); L("디스코드 공지", "시연"); }
+    if (p === "/announce/edit") Object.assign(demo.an.hist.find(x => x.id === b.id), { title: b.payload.embeds[0]?.title || b.payload.content || "(제목 없음)", edited: Date.now(), form: b.form });
+    if (p === "/announce/delete") demo.an.hist = demo.an.hist.filter(x => x.id !== b.id);
+    return R({ ok: true, hist: demo.an.hist });
   }
   if (p === "/referrals") { demo.refs = demo.refs || [{ code: "FRIEND3", label: "방송 시청자용", plan: "premium", days: 3, max: 100, on: true, used: 17, at: new Date().toISOString() }];
     if (b) { const code = (b.code || "DEMO" + (++demo.n)).toUpperCase(); demo.refs.unshift({ code, label: b.label, plan: b.plan, days: Number(b.days), max: Number(b.max), on: true, used: 0, at: new Date().toISOString() }); L("추천 코드 생성", code); return R({ ok: true, code, ref: demo.refs[0] }); }
