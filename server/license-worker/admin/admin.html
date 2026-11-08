@@ -411,6 +411,8 @@ async function loadSummary() {
   document.querySelectorAll("#mode button").forEach(b => b.classList.toggle("on", b.dataset.m === s.sales));
   $("methodHelp").textContent = s.sales === "off"
     ? "— 꺼져 있어요."
+    : s.sales === "live" && s.cardLiveOpen === false
+    ? "— 실판매로 켜 두었지만, 사용권 계약의 카드 자동 결제 조항이 시행되는 2026년 12월 8일까지는 앱에 카드 결제가 나오지 않아요. 그 전에는 '테스트'로 시험하세요."
     : (s.autoReady && s.autoReady.length ? "— 카드 결제가 확인되면 키가 무작위로 만들어져 자동 승인돼요. 월간·연간은 카드가 등록돼 매번 자동 결제되고 키도 자동 연장돼요." + (s.sales === "test" ? " 지금은 테스트 결제에만 24시간 키가 나가요." : "")
                                          : "— Lemon Squeezy 설정이 아직 끝나지 않아서 앱에서 카드 결제가 잠겨 있어요. 아래 '카드 결제 설정'을 보세요.");
 }
@@ -677,7 +679,7 @@ async function onClick(e) {
     status = t.dataset.s; document.querySelectorAll("#seg button").forEach(b => b.classList.toggle("on", b === t)); loadKeys();
   } else if (t.dataset.m) {
     const m = t.dataset.m;
-    if (m !== "off" && !(await ask("카드 결제를 켤까요?", m === "live" ? "실제 카드 결제가 확인되면 키가 자동으로 나가요. 테스트 결제로 확인한 뒤에만 켜세요." : "Lemon Squeezy 테스트 카드 결제에만 24시간짜리 키가 자동으로 나가요. 앱에 '카드 결제' 선택지가 생겨요.", "켜기"))) return;
+    if (m !== "off" && !(await ask("카드 결제를 켤까요?", m === "live" ? "실제 카드 결제가 확인되면 키가 자동으로 나가요. 테스트 결제로 확인한 뒤에만 켜세요. 앱에는 사용권 계약의 카드 자동 결제 조항이 시행되는 2026년 12월 8일부터 나와요." : "Lemon Squeezy 테스트 카드 결제에만 24시간짜리 키가 자동으로 나가요. 앱에 '카드 결제' 선택지가 생겨요.", "켜기"))) return;
     await api("/sales-mode", { mode: m }); loadSummary(); loadLog();
   }
 }

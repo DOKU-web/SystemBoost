@@ -112,8 +112,17 @@ assert.equal(p.plan, "ultra", "an Ultra product gives an Ultra key");
 assert.equal(p.test, true);
 assert.ok(days(p.expires) < 1.01);
 
-// live
+// live: the app is offered real card checkouts only once the licence agreement's card clause is in force
 await adm("/sales-mode", { mode: "live" });
+if (Date.now() < Date.parse("2026-12-07T15:00:00Z")) {   // until then
+  assert.deepEqual((await j("/status")).methods.card, [], "live card checkouts wait for 2026-12-08 KST");
+  assert.equal((await order("monthly")).http, 503);
+  assert.equal((await j("/checkout?plan=monthly&session=" + "s".repeat(20), { method: "POST" })).http, 503);
+  assert.equal((await adm("/summary")).cardLiveOpen, false);
+}
+env.CARD_LIVE_FROM = "2000-01-01T00:00:00Z";
+assert.ok((await j("/status")).methods.card.includes("ultra_yearly"));
+assert.equal((await adm("/summary")).cardLiveOpen, true);
 assert.equal((await hook("subscription_created", sub(3, V.monthly), { test: true })).ignored, "sales mode live");
 
 // premium monthly: key for the paid period, order approved, first payment gives no second key

@@ -45,6 +45,15 @@ async function salesMode(env) {
   if (MODES.includes(o)) return o;
   return ["test", "live"].includes(env.SALES_MODE) ? env.SALES_MODE : "off";
 }
+// Card subscriptions renew on their own. The licence agreement takes that in from 2026-12-08 KST
+// (clause 3.4), announced 30 days ahead as its clause 13 requires, so the app offers live card
+// checkouts from then on. Test mode is open before. Tests set CARD_LIVE_FROM.
+const CARD_LIVE_FROM = "2026-12-07T15:00:00Z";
+const cardLiveOpen = env => Date.now() >= Date.parse(env.CARD_LIVE_FROM || CARD_LIVE_FROM);
+async function cardOpen(env) {
+  const mode = await salesMode(env);
+  return mode === "test" || (mode === "live" && cardLiveOpen(env));
+}
 
 const CODE_RE = /^SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;   // no 0/O/1/I: easy to read aloud
 function validSession(s) { return /^[A-Za-z0-9-]{16,64}$/.test(s) || CODE_RE.test(s); }
@@ -99,8 +108,7 @@ async function cardPlans(env) {   // plans a card checkout can be made for
   return c.store && env.LS_API_KEY ? Object.keys(PLANS).filter(p => c.variants[p]) : [];
 }
 async function openPlans(env) {   // plans the app may sell right now, per method
-  const mode = await salesMode(env);
-  return { methods: { card: mode === "off" ? [] : await cardPlans(env),
+  return { methods: { card: (await cardOpen(env)) ? await cardPlans(env) : [],
                       manual: Object.keys(await payLinks(env)).filter(p => PLANS[p]) } };
 }
 
@@ -192,7 +200,7 @@ async function ping(req, env) {
 
 // ---------------------------------------------------------------- checkout (automatic payments)
 async function checkout(url, env) {   // kept for direct use; the app goes through /order
-  if ((await salesMode(env)) === "off") return json({ error: "sales closed" }, 503);
+  if (!(await cardOpen(env))) return json({ error: "sales closed" }, 503);
   const plan = url.searchParams.get("plan");
   const session = url.searchParams.get("session") || "";
   if (!PLANS[plan] || !validSession(session)) return json({ error: "bad request" }, 400);
@@ -587,7 +595,8 @@ async function summary(env) {
   const op = await env.LICENSES.list({ prefix: "ord:", limit: 1000 });
   c.ordersOpen = op.keys.filter(k => ["requested", "paid"].includes(k.metadata?.status)).length;
   c.ordersPaid = op.keys.filter(k => k.metadata?.status === "paid").length;
-  return { sales: await salesMode(env), autoReady: await cardPlans(env), salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c };
+  return { sales: await salesMode(env), autoReady: await cardPlans(env), cardLiveOpen: cardLiveOpen(env),
+           salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c };
 }
 async function listKeys(env, q, status) {
   q = q.trim().toLowerCase();

@@ -13,7 +13,7 @@ namespace SystemBoost.App.Services;
 
 public static class Eula
 {
-    public const string Version = "2026-11-06";
+    public const string Version = "2026-11-08";
 
     private sealed record Acceptance(string Version, DateTimeOffset AcceptedAt, string AppVersion);
 
