@@ -11,12 +11,14 @@ struct GpuInfo {
     std::string name;
     LUID luid{};
     uint64_t dedicatedMB = 0;
-    bool integrated = false;   // heuristic: < 512 MB dedicated memory
+    bool integrated = false;   // shares the computer's memory (exact only when asked for: see below)
     bool software = false;
     bool hasOutputs = false;   // a monitor is connected to this adapter
 };
 
-std::vector<GpuInfo> EnumerateGpus();
+// Telling integrated graphics apart opens each adapter, about 0.25 s, so only on request;
+// otherwise integrated is a guess from the memory figure.
+std::vector<GpuInfo> EnumerateGpus(bool exactIntegrated);
 std::string GpusJson(const std::vector<GpuInfo>& gpus);
 
 // Adapter that drives the monitor the window is on.

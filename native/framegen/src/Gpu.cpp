@@ -9,7 +9,19 @@ static ComPtr<IDXGIFactory1> Factory() {
     return f;
 }
 
-std::vector<GpuInfo> EnumerateGpus() {
+// Integrated graphics share the computer's memory. The memory figure alone misread an AMD APU,
+// which reports what the BIOS sets aside for it, often 512 MB or more.
+static bool Integrated(IDXGIAdapter1* a, uint64_t dedicatedMB) {
+    ComPtr<ID3D11Device> dev;
+    D3D11_FEATURE_DATA_D3D11_OPTIONS2 o{};
+    if (SUCCEEDED(D3D11CreateDevice(a, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
+                                    &dev, nullptr, nullptr)) &&
+        SUCCEEDED(dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &o, sizeof o)))
+        return o.UnifiedMemoryArchitecture != FALSE;
+    return dedicatedMB < 512;
+}
+
+std::vector<GpuInfo> EnumerateGpus(bool exactIntegrated) {
     std::vector<GpuInfo> out;
     auto f = Factory();
     ComPtr<IDXGIAdapter1> a;
@@ -22,7 +34,7 @@ std::vector<GpuInfo> EnumerateGpus() {
         g.luid = d.AdapterLuid;
         g.dedicatedMB = uint64_t(d.DedicatedVideoMemory) / (1024 * 1024);
         g.software = (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0;
-        g.integrated = !g.software && g.dedicatedMB < 512;
+        g.integrated = !g.software && (exactIntegrated ? Integrated(a.Get(), g.dedicatedMB) : g.dedicatedMB < 512);
         ComPtr<IDXGIOutput> o;
         g.hasOutputs = SUCCEEDED(a->EnumOutputs(0, &o));
         if (!g.software) out.push_back(g);

@@ -538,7 +538,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         await _gate.WaitAsync();
         try
         {
-            if (!File.Exists(Path.Combine(Environment.SystemDirectory, "nvapi64.dll"))) return NoLimiter;
+            if (!File.Exists(Path.Combine(Environment.SystemDirectory, "nvapi64.dll"))) return NoLimiter(fps);
             var text = fps.ToString(CultureInfo.InvariantCulture);
             // Current drivers take this from an ordinary user, so nothing has to come up over the game.
             bool ok = false;
@@ -550,7 +550,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
                 if (e != null) return e;
                 (ok, data) = await _helper.CallAsync("nv.limit.set", exe, text);
             }
-            if (!ok) return data == "no_nvidia" ? NoLimiter : "게임 프레임을 제한하지 못했어요: " + data;
+            if (!ok) return data == "no_nvidia" ? NoLimiter(fps) : "게임 프레임을 제한하지 못했어요: " + data;
             var parts = data.Split(';');
             if (parts[0] == "keep") return $"이 게임에는 이미 {parts[1]}fps 제한이 걸려 있어요. 게임 그래픽 설정을 낮춘 뒤 다시 눌러 보세요";
             if (!HasEntry(GameLimit, "nvlimit", exe))
@@ -564,7 +564,16 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         catch (Exception e) { return "게임 프레임을 제한하지 못했어요: " + e.Message; }
         finally { _gate.Release(); }
     }
-    private const string NoLimiter = "이 그래픽 카드는 앱에서 제한할 수 없어요. 게임 안 설정에서 프레임을 지금의 4분의 3쯤으로 제한한 뒤 다시 눌러 보세요";
+    // AMD and Intel drivers give the app no per-game limit it can set without touching the game,
+    // and a card-wide one would hold back the overlay too. The user gets the number to set instead.
+    // atiadlxx.dll comes with every AMD display driver; Radeon Chill goes no lower than 30.
+    private static string NoLimiter(int fps)
+    {
+        var n = fps.ToString(CultureInfo.InvariantCulture);
+        return fps >= 30 && File.Exists(Path.Combine(Environment.SystemDirectory, "atiadlxx.dll"))
+            ? $"라데온은 앱이 게임 프레임을 대신 제한할 수 없어요. 게임 설정에서 최대 프레임을 {n}fps로 맞추거나, AMD Software의 이 게임 설정에서 Radeon Chill을 켜고 최소·최대를 둘 다 {n}으로 맞춘 뒤 다시 눌러 보세요"
+            : $"이 그래픽 카드는 앱이 게임 프레임을 대신 제한할 수 없어요. 게임 설정에서 최대 프레임을 {n}fps로 맞춘 뒤 다시 눌러 보세요";
+    }
 
     public async Task EndGameLimitAsync()
     {

@@ -164,6 +164,7 @@
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Spacing="2"><TextBlock Classes="label" Text="GPU 여유가 없으면 게임 프레임 자동 제한" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" Text="NVIDIA 드라이버 설정으로 게임 프레임을 4분의 3쯤으로 낮춰 프레임 생성이 돌 자리를 만들어요" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="라데온·인텔은 앱이 대신 바꿀 수 없어서, 게임에서 맞출 fps 숫자를 알려 드려요" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" Text="프레임 생성을 끄거나 앱을 닫으면 원래대로 돌아가요 · 처음 한 번 관리자 권한을 물어봐요" /></StackPanel>
                 <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoLimit}" OnContent="" OffContent="" />
               </Grid>

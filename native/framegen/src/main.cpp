@@ -233,7 +233,7 @@ int Run(const Settings& s) {
         Emit(json + "]}");
         return 0;
     }
-    auto gpus = EnumerateGpus();
+    auto gpus = EnumerateGpus(s.listGpus || s.genGpu == GenGpu::Integrated);
     if (s.listGpus) { Emit(GpusJson(gpus)); return 0; }
     HWND game = reinterpret_cast<HWND>(static_cast<uintptr_t>(s.hwnd));
     if (!IsWindow(game)) { EmitMsg("error", "game window not found"); return 2; }

@@ -1,0 +1,18 @@
+D3D11 debug layer on WARP, 2026-11-08 (tests/debug_layer_check.cpp)
+All four qualities, with and without upscaling (cursor drawn), capture 320x180 and 301x171 from an
+offset box, output 481x271 when upscaling. WARP is Microsoft's software GPU, not the NVIDIA card the
+other results come from. The layer was active: a first run of the test itself copied a box larger
+than its source picture, and the layer reported that as an ERROR on CopySubresourceRegion.
+
+adapter 0: NVIDIA GeForce RTX 3060 vendor 10DE dedicated 12113 MB shared 49005 MB software 0 uma no
+adapter 1: Microsoft Basic Render Driver vendor 1414 dedicated 0 MB shared 49005 MB software 1 uma yes
+warp uma yes (should be yes)
+low                  clean
+performance          clean
+balanced             clean
+quality              clean
+low upscale          clean
+performance upscale  clean
+balanced upscale     clean
+quality upscale      clean
+debug layer: no warnings or errors
