@@ -56,6 +56,10 @@ details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
 #vizTip{position:fixed;display:none;background:#222;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;pointer-events:none;z-index:9;white-space:nowrap}
 #vizTip b{display:block}#vizTip span{color:var(--mut);font-size:12px}
 #usage.stale{opacity:.6}
+.cardSetup{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}.cardSetup summary{color:var(--txt);font-size:14px;margin:0}
+.cSteps{margin:10px 0 0;padding-left:20px;display:grid;gap:12px}.cSteps li{overflow-wrap:anywhere}
+.cIds{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}.cIds input{margin-top:4px}
+.yes{color:var(--ok)}.no{color:var(--bad)}
 #annTop{scroll-margin-top:72px}
 .anGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
 .anPrev{position:sticky;top:72px}
@@ -148,6 +152,26 @@ details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600
       <div><b>카드 결제</b> <span class="mut" id="methodHelp"></span>
         <div class="seg" id="mode" style="margin-top:8px"><button data-m="off">꺼짐</button><button data-m="test">테스트</button><button data-m="live">실판매</button></div></div>
     </div>
+    <details id="cardSetup" class="cardSetup">
+      <summary>카드 결제 설정 (Lemon Squeezy) <span id="cReady" class="mut"></span></summary>
+      <ol class="cSteps">
+        <li><b>API 키</b> <span id="cKey"></span> · <b>웹훅 서명 비밀</b> <span id="cSign"></span>
+          <div class="mut">바탕화면의 'SystemBoost 카드 결제 키 넣기.cmd'를 더블클릭해서 직접 넣어요. 여기에는 저장되지 않고 보이지도 않아요.</div></li>
+        <li><b>웹훅</b> — Lemon Squeezy Settings → Webhooks에서 아래 주소를 넣고, 서명 비밀은 위에 넣은 것과 같은 값으로 해요.
+          <div class="row" style="margin:6px 0"><code id="cHook" style="flex:1;min-width:0;overflow-wrap:anywhere"></code><button id="cHookCopy">주소 복사</button></div>
+          <div class="mut">보낼 이벤트: subscription_created, subscription_updated, subscription_payment_success, subscription_payment_refunded, order_refunded</div></li>
+        <li><b>상점과 상품 번호</b> — 구독 상품을 플랜마다 하나씩 만들고 번호를 넣어요. 비워 둔 플랜은 카드로 팔지 않아요.
+          <div class="cIds">
+            <label class="mut">상점 번호<input id="cStore" inputmode="numeric" placeholder="예: 12345"></label>
+            <label class="mut">월간 ₩2,900<input id="cV_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">연간 ₩19,900<input id="cV_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">울트라 월간 ₩8,900<input id="cV_ultra_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">울트라 연간 ₩59,900<input id="cV_ultra_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+          </div>
+          <div class="row" style="margin-top:8px"><button class="p" id="cSave">번호 저장</button><span id="cMsg" class="mut"></span></div></li>
+      </ol>
+      <p class="mut">테스트 모드에서 만든 상품 번호와 API 키는 실판매에서 쓸 수 없어요. 실판매로 바꿀 때는 실판매 상품 번호와 API 키로 다시 넣으세요. 결제 금액과 수수료는 Lemon Squeezy 상품에서 정해요.</p>
+    </details>
   </div>
 
   <div class="card">
@@ -329,7 +353,21 @@ async function api(path, body) {
 }
 
 // ------------------------------------------------------------ views
-async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers(), loadAnnounce()]); }
+async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers(), loadAnnounce(), loadCard()]); }
+const CARD_PLANS = ["monthly", "yearly", "ultra_monthly", "ultra_yearly"];
+function showCard(c) {
+  const mark = (id, on) => { $(id).textContent = on ? "등록됨" : "없음"; $(id).className = on ? "yes" : "no"; };
+  mark("cKey", c.apiKey); mark("cSign", c.signing);
+  $("cHook").textContent = c.webhook;
+  $("cStore").value = c.store || "";
+  for (const p of CARD_PLANS) $("cV_" + p).value = c.variants[p] || "";
+  const missing = [!c.apiKey && "API 키", !c.signing && "서명 비밀", !c.store && "상점 번호", !c.ready.length && c.store && c.apiKey && "상품 번호"].filter(Boolean);
+  $("cReady").textContent = missing.length ? "— 아직 필요: " + missing.join(", ") : "— 준비됨: " + c.ready.map(p => PLAN[p]).join(" · ");
+  if (missing.length && !$("cardSetup").dataset.seen) { $("cardSetup").open = true; $("cardSetup").dataset.seen = "1"; }
+}
+async function loadCard() {
+  try { showCard(await api("/card")); } catch (e) { if (e.message !== "401") $("cReady").textContent = "— 불러오지 못했어요: " + e.message; }
+}
 async function loadMembers() {
   let list;
   try { list = await api("/members?q=" + encodeURIComponent($("mQ").value.trim())); }
@@ -374,7 +412,7 @@ async function loadSummary() {
   $("methodHelp").textContent = s.sales === "off"
     ? "— 꺼져 있어요."
     : (s.autoReady && s.autoReady.length ? "— 카드 결제가 확인되면 키가 무작위로 만들어져 자동 승인돼요. 월간·연간은 카드가 등록돼 매번 자동 결제되고 키도 자동 연장돼요." + (s.sales === "test" ? " 지금은 테스트 결제에만 24시간 키가 나가요." : "")
-                                         : "— Lemon Squeezy 설정(상품·API 키)이 아직 없어서 앱에서 카드 결제가 잠겨 있어요.");
+                                         : "— Lemon Squeezy 설정이 아직 끝나지 않아서 앱에서 카드 결제가 잠겨 있어요. 아래 '카드 결제 설정'을 보세요.");
 }
 async function loadOrders() {
   const { orders, count } = await api("/orders?status=" + ostatus);
@@ -565,6 +603,16 @@ $("saveLinks").onclick = async () => {
   try { await api("/pay-links", Object.fromEntries(Object.entries({ ...LINKS, ...TICKET_LINKS }).map(([p, id]) => [p, $(id).value])));
         $("pMsg").textContent = "저장했어요. 앱은 다음에 프리미엄 화면을 열 때 반영해요."; $("pMsg").className = "okc"; loadLinks(); }
   catch (e) { $("pMsg").textContent = e.message; $("pMsg").className = "err"; }
+};
+$("cHookCopy").onclick = () => copy($("cHook").textContent);
+$("cSave").onclick = async () => {
+  const msg = (t, cls) => { $("cMsg").textContent = t; $("cMsg").className = cls; };
+  $("cSave").disabled = true;
+  try {
+    showCard(await api("/card", { store: $("cStore").value, variants: Object.fromEntries(CARD_PLANS.map(p => [p, $("cV_" + p).value])) }));
+    msg("저장했어요", "okc"); loadSummary(); loadLog();
+  } catch (e) { if (e.message !== "401") msg(e.message, "err"); }
+  finally { $("cSave").disabled = false; }
 };
 $("mFind").onclick = () => loadMembers();
 $("mQ").onkeydown = e => { if (e.key === "Enter") loadMembers(); };
@@ -926,6 +974,11 @@ function demoApi(path, b) {
     if (p === "/members/delete") { demo.members = demo.members.filter(m => m.id !== b.id); L("회원 삭제", b.id); return R({ ok: true }); }
     const ms = demo.members.filter(m => !q.get("q") || m.id.includes(q.get("q")));
     return R({ members: ms, summary: { total: demo.members.length, week: 2, active: 2, invited: 1, blocked: demo.members.filter(m => m.blocked).length } });
+  }
+  if (p === "/card") {
+    demo.card = demo.card || { store: "", variants: {}, apiKey: false, signing: false, ready: [], webhook: "https://systemboost-license.example/webhook/lemonsqueezy" };
+    if (b) { demo.card.store = b.store; demo.card.variants = Object.fromEntries(Object.entries(b.variants).filter(([, v]) => v)); L("카드 결제 설정", "시연"); }
+    return R(demo.card);
   }
   if (p.startsWith("/announce")) {
     demo.an = demo.an || { channels: [{ key: "ann", name: "📣・announcements", id: "1", set: true }, { key: "log", name: "📝・changelog", id: "2", set: false }], roles: { ann: { id: "3", name: "🔔 Announcements" } }, others: {}, hist: [] };

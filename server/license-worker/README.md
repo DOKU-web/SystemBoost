@@ -111,21 +111,25 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 대시보드를 고쳤다면 `node build_admin.mjs`로 `src/admin_page.js`를 다시 만듭니다.
 `admin/admin.html`을 파일로 바로 열면 가짜 데이터로 움직이는 시연 모드가 됩니다.
 
-## (선택) 카드 자동 결제 붙이기 — Lemon Squeezy
-카드 등록 · 매달 자동 청구 · 환불 · 세금 처리를 Lemon Squeezy가 하고, 결제되면 웹훅으로 키가 자동 발급됩니다(판매자 확인 없이).
-1. Lemon Squeezy에서 상품 1개 + variant 2개(월간 · 연간 구독) 생성 → `wrangler.toml`에 상점 ID · variant ID
-2. `wrangler secret put LS_SIGNING_SECRET`, `wrangler secret put LS_API_KEY`
-3. 웹훅: `https://…/webhook/lemonsqueezy`, 이벤트 `order_created`, `order_refunded`, `subscription_created`,
-   `subscription_updated`, `subscription_payment_success`
-4. 대시보드 카드 결제 '테스트' → 앱에서 '카드로 결제하기' → Lemon Squeezy 테스트 카드로 결제 → 키(24시간짜리)가 자동으로 뜨는지 확인
-5. '실판매'로 바꾸면 실제 카드 결제가 열립니다. '꺼짐'으로 돌리면 앱에서 카드 결제 선택지가 사라집니다(계좌이체는 그대로).
+## 카드 자동 결제 — Lemon Squeezy
+카드 등록 · 매달(매년) 자동 청구 · 환불 · 세금 처리를 Lemon Squeezy가 하고, 결제되면 웹훅으로 키가 자동 발급됩니다(판매자 확인 없이).
+1. Lemon Squeezy에서 구독 상품을 플랜마다 하나씩(월간, 연간, 울트라 월간, 울트라 연간) 만듭니다.
+2. 바탕화면 `SystemBoost 카드 결제 키 넣기.cmd`로 API 키와 웹훅 서명 비밀을 직접 넣습니다(`wrangler secret put LS_API_KEY`, `LS_SIGNING_SECRET`).
+3. Settings → Webhooks에 대시보드 '카드 결제 설정'에 나온 주소를 넣고, 이벤트 `subscription_created`, `subscription_updated`,
+   `subscription_payment_success`, `subscription_payment_refunded`, `order_refunded`를 고릅니다. 서명 비밀은 2번과 같은 값.
+4. 대시보드 '카드 결제 설정'에 상점 번호와 플랜별 상품(variant) 번호를 넣습니다. 비워 둔 플랜은 카드로 팔지 않습니다.
+5. 대시보드 카드 결제 '테스트' → 앱에서 '카드로 결제하기' → Lemon Squeezy 테스트 카드로 결제 → 키(24시간짜리)가 자동으로 뜨는지 확인
+6. '실판매'로 바꾸면 실제 카드 결제가 열립니다. 테스트 모드의 상품 번호와 API 키는 실판매에서 쓸 수 없으니 실판매 것으로 다시 넣습니다.
+
+어떤 플랜인지는 Lemon Squeezy가 서명해서 보내는 상품 번호로만 정합니다. 결제창 주소의 custom 값은 구매자가 바꿀 수 있어서
+주문 코드를 찾는 데만 씁니다. 첫 결제는 `subscription_created` 한 번으로 키 하나, 갱신은 `subscription_payment_success`(renewal)마다 새 키,
+고객 포털에서 플랜을 바꾸면 `subscription_updated`로 바뀐 플랜의 키가 나갑니다. 첫 결제나 갱신을 환불하면 그 키를 차단합니다.
 
 ## 테스트 (로컬, 실제 결제 없이)
-`node test.mjs <private.pem>` — 확인하는 것:
-- 위조 웹훅 거부, 판매 모드 off/test/live 게이트, 환불 → 자동 차단
-- 결제 링크 없으면 주문 503, http 링크 거부, 주문 코드 발급 → 발급 전 `pending` → 대시보드 발급 → `ready`(같은 키)
-- 관리자: 비밀번호 없음/틀림 401, 대시보드 꺼짐 404, 검색 · 요약 · 차단/해제 → `/check` 반영, 위조 키 판별, 기록, CORS 없음
+- `node test_card.mjs`: 가짜 Lemon Squeezy와 서명한 웹훅으로 카드 결제 전부(플랜별 결제창, 울트라 키, 중복 없음, 갱신 기간,
+  결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
+- `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`
 
 ## 확인 필요
-- Lemon Squeezy 웹훅 필드 이름은 작성 시점 문서 기준입니다. 테스트 모드로 한 번 확인하세요.
+- Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.
 - 실제 Cloudflare 배포에서는 아직 돌려 보지 않았습니다(로컬 가짜 KV로만 확인).

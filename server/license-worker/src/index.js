@@ -30,7 +30,8 @@ export { Stats } from "./stats.js";
 //   LS_SIGNING_SECRET     Lemon Squeezy webhook signing secret
 //   LS_API_KEY            Lemon Squeezy API key (for /checkout)
 //   ADMIN_TOKEN           dashboard password, 6+ characters (unset = dashboard off; wrong tries lock out)
-// Vars (wrangler.toml [vars]): SALES_MODE ("off" | "test" | "live"), LS_STORE_ID, LS_VARIANT_MONTHLY, LS_VARIANT_YEARLY, LS_VARIANT_LIFETIME, PUBLIC_URL
+// Vars (wrangler.toml [vars]): SALES_MODE ("off" | "test" | "live"), PUBLIC_URL. The Lemon Squeezy store and product
+// numbers are entered in the dashboard (the old LS_STORE_ID / LS_VARIANT_* vars are read when it has none).
 // KV namespace binding: LICENSES. Durable Object binding: STATS (stats.js). Cron: hourly download counts.
 
 // SALES_MODE gate (default "off" = no checkout, no keys, whatever arrives):
@@ -82,13 +83,24 @@ async function putOrder(env, o) {
   m.updated = now();
   await env.LICENSES.put("ord:" + code, "", { expirationTtl: ORDER_TTL, metadata: m });
 }
-function lsVariant(env, plan) {
-  const v = { monthly: env.LS_VARIANT_MONTHLY, yearly: env.LS_VARIANT_YEARLY }[plan];
-  return v && v !== "REPLACE" && env.LS_API_KEY ? v : null;
+// Lemon Squeezy: the store and the four product variants are set in the dashboard (KV "config:ls"; the old
+// wrangler.toml vars still count when the dashboard has none). The API key and the webhook signing secret are
+// Worker secrets that only the owner types in (`wrangler secret put`).
+const ID_RE = /^\d{1,12}$/;
+async function lsConfig(env) {
+  let o = {};
+  try { o = JSON.parse((await env.LICENSES.get("config:ls")) || "{}"); } catch {}
+  const id = v => ID_RE.test(String(v ?? "")) ? String(v) : "";
+  return { store: id(o.store) || id(env.LS_STORE_ID),
+           variants: Object.fromEntries(Object.keys(PLANS).map(p => [p, id(o.variants?.[p]) || id(env["LS_VARIANT_" + p.toUpperCase()])])) };
+}
+async function cardPlans(env) {   // plans a card checkout can be made for
+  const c = await lsConfig(env);
+  return c.store && env.LS_API_KEY ? Object.keys(PLANS).filter(p => c.variants[p]) : [];
 }
 async function openPlans(env) {   // plans the app may sell right now, per method
   const mode = await salesMode(env);
-  return { methods: { card: mode === "off" ? [] : Object.keys(PLANS).filter(p => lsVariant(env, p)),
+  return { methods: { card: mode === "off" ? [] : await cardPlans(env),
                       manual: Object.keys(await payLinks(env)).filter(p => PLANS[p]) } };
 }
 
@@ -188,25 +200,28 @@ async function checkout(url, env) {   // kept for direct use; the app goes throu
   return u ? json({ url: u }) : json({ error: "checkout failed" }, 502);
 }
 async function lsCheckout(env, plan, session) {
-  const variant = { monthly: env.LS_VARIANT_MONTHLY, yearly: env.LS_VARIANT_YEARLY }[plan];
-  if (!variant) return null;
-  const res = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + env.LS_API_KEY, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" },
-    body: JSON.stringify({ data: {
-      type: "checkouts",
-      attributes: {
-        checkout_data: { custom: { session, plan } },
-        product_options: { redirect_url: `${env.PUBLIC_URL}/thanks?session=${session}` },
-      },
-      relationships: {
-        store: { data: { type: "stores", id: String(env.LS_STORE_ID) } },
-        variant: { data: { type: "variants", id: String(variant) } },
-      },
-    } }),
-  });
-  if (!res.ok) return null;
-  const j = await res.json();
+  const c = await lsConfig(env), variant = c.variants[plan];
+  if (!variant || !c.store || !env.LS_API_KEY) return null;
+  let res;
+  try {
+    res = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + env.LS_API_KEY, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" },
+      body: JSON.stringify({ data: {
+        type: "checkouts",
+        attributes: {
+          checkout_data: { custom: { session } },   // only to find the buyer's app again; what was bought comes from the variant
+          product_options: { redirect_url: `${env.PUBLIC_URL}/thanks?session=${session}` },
+        },
+        relationships: {
+          store: { data: { type: "stores", id: c.store } },
+          variant: { data: { type: "variants", id: variant } },
+        },
+      } }),
+    });
+  } catch { return null; }
+  if (!res.ok) { await audit(env, "카드 결제", "결제창을 만들지 못함", PLANS[plan] + " · Lemon Squeezy " + res.status); return null; }
+  const j = await res.json().catch(() => null);
   return j?.data?.attributes?.url || null;
 }
 
@@ -215,54 +230,76 @@ async function webhook(req, env) {
   const raw = await req.text();
   if (!(await validSignature(raw, req.headers.get("X-Signature") || "", env.LS_SIGNING_SECRET)))
     return json({ error: "bad signature" }, 401);
-  const body = JSON.parse(raw);
+  let body;
+  try { body = JSON.parse(raw); } catch { return json({ error: "bad json" }, 400); }
   const event = body?.meta?.event_name;
   const testOrder = body?.meta?.test_mode === true;
-  // refunds are handled in every mode: the key of that order is revoked
+  const a = body?.data?.attributes || {};
+  // refunds are handled in every mode: the key of that order, or of that subscription, is revoked
   if (event === "order_refunded") {
     const id = await env.LICENSES.get("order:" + String(body?.data?.id));
     if (id) await revoke(env, id, "환불", "webhook");
     return json({ ok: true });
   }
+  if (event === "subscription_payment_refunded") {
+    const key = await env.LICENSES.get("sub:" + String(a.subscription_id));
+    if (key) await revoke(env, await keyId(key), "환불", "webhook");
+    return json({ ok: true });
+  }
   const mode = await salesMode(env);
   if (mode === "off" || (mode === "live" && testOrder) || (mode === "test" && !testOrder))
     return json({ ok: true, ignored: "sales mode " + mode });   // 200 so Lemon Squeezy does not retry
-  const custom = body?.meta?.custom_data || {};
-  const a = body?.data?.attributes || {};
-  const session = typeof custom.session === "string" && validSession(custom.session) ? custom.session : null;
+  if (!["subscription_created", "subscription_updated", "subscription_payment_success"].includes(event)) return json({ ok: true, ignored: event });
 
-  // one-time purchase (lifetime) -> key without expiry
-  if (event === "order_created" && a.status === "paid" && custom.plan === "lifetime") {
-    const key = await makeKey(env, { plan: "premium", email: a.user_email || "", order: String(body.data.id),
-                                     expires: testOrder ? addDays(new Date().toISOString(), 1) : undefined, test: testOrder, src: "order" });
-    await store(env, session, key, a.user_email);
-    return json({ ok: true });
-  }
-  // subscription start / renewal -> key that expires after the paid period
-  if (["subscription_created", "subscription_updated", "subscription_payment_success"].includes(event)) {
-    const subId = String(event === "subscription_payment_success" ? a.subscription_id : body.data.id);
-    const sub = event === "subscription_payment_success" ? null : a;
-    const renewsAt = sub?.renews_at || a.renews_at || null;
-    const status = sub?.status || "active";
-    if (!["active", "on_trial"].includes(status) && event !== "subscription_payment_success") {
-      await env.LICENSES.delete("sub:" + subId);   // cancelled/expired: stop issuing renewals
+  // Subscriptions only: start, plan change and renewal each give a key that lasts the paid period.
+  // What was bought is the variant, which Lemon Squeezy reports itself. Custom data rides on the checkout
+  // address and a buyer can change it, so it only says which app to hand the key to.
+  const custom = body?.meta?.custom_data || {};
+  const session = typeof custom.session === "string" && validSession(custom.session) ? custom.session : null;
+  const invoice = event === "subscription_payment_success";
+  const subId = String(invoice ? a.subscription_id : body?.data?.id);
+  if (!/^\d{1,20}$/.test(subId)) return json({ ok: true, ignored: "no subscription" });
+  const variants = (await lsConfig(env)).variants;
+  const byVariant = a.variant_id == null ? null : Object.keys(variants).find(p => variants[p] === String(a.variant_id)) || null;
+  const known = await env.LICENSES.get("subplan:" + subId);
+  if (event === "subscription_updated") {
+    if (!["active", "on_trial"].includes(a.status)) {   // cancelled, paused, unpaid, expired: no more renewals
+      await env.LICENSES.delete("sub:" + subId);
       return json({ ok: true });
     }
-    let expires = renewsAt ? addDays(renewsAt, GRACE_DAYS) : addDays(new Date().toISOString(), 31 + GRACE_DAYS);
-    if (testOrder) expires = addDays(new Date().toISOString(), 1);   // test keys never last
-    const key = await makeKey(env, { plan: "premium", email: a.user_email || "", sub: subId, expires, test: testOrder, src: "subscription" });
-    await env.LICENSES.put("sub:" + subId, key);
-    await store(env, session, key, a.user_email);
-    return json({ ok: true });
+    // nothing the key carries has changed, or subscription_created has not arrived yet and will give the key
+    if (!byVariant || !known || byVariant === known) return json({ ok: true });
   }
-  return json({ ok: true, ignored: event });
+  if (invoice && a.billing_reason !== "renewal") return json({ ok: true, ignored: "first payment" });   // subscription_created gave that key
+  if (event === "subscription_created" && !["active", "on_trial"].includes(a.status)) return json({ ok: true, ignored: "status " + a.status });
+  const plan = invoice ? known : byVariant;
+  if (!PLANS[plan]) {
+    await audit(env, "카드 결제", "어떤 플랜인지 몰라서 키를 만들지 않음", "구독 " + subId + " · 상품 " + String(a.variant_id ?? "?"));
+    return json({ ok: true, ignored: "unknown variant" });
+  }
+  const period = plan.endsWith("yearly") ? 366 : 31;
+  let expires = !invoice && a.renews_at ? addDays(a.renews_at, GRACE_DAYS) : addDays(now(), period + GRACE_DAYS);
+  if (testOrder) expires = addDays(now(), 1);   // test keys never last
+  const what = { subscription_created: "카드 결제", subscription_updated: "플랜 변경", subscription_payment_success: "자동 갱신" }[event];
+  const key = await makeKey(env, { plan: plan.startsWith("ultra") ? "ultra" : "premium", email: a.user_email || "", sub: subId, expires, test: testOrder,
+                                   src: "subscription", note: [session && event === "subscription_created" ? session : "", PLANS[plan] + " " + what].filter(Boolean).join(" · ") });
+  await env.LICENSES.put("sub:" + subId, key);
+  await env.LICENSES.put("subplan:" + subId, plan);
+  if (event === "subscription_created") {
+    if (a.order_id != null) await env.LICENSES.put("order:" + String(a.order_id), await keyId(key));   // a refund of the first payment
+    await store(env, session, key, a.user_email, plan);
+  } else {
+    if (a.user_email) await env.LICENSES.put("email:" + String(a.user_email).toLowerCase(), key);
+    await audit(env, "카드 결제", what, "구독 " + subId + " · " + PLANS[plan] + " · " + (await keyId(key)));
+  }
+  return json({ ok: true });
 }
 
-async function store(env, session, key, email) {
+async function store(env, session, key, email, plan) {
   if (session) await env.LICENSES.put("session:" + session, key, { expirationTtl: SESSION_TTL });
   if (session && CODE_RE.test(session)) {   // verified payment -> order approved automatically
-    const o = (await getOrder(env, session)) || { code: session, plan: "", at: now() };
-    Object.assign(o, { status: "approved", method: "card", keyId: await keyId(key), email: (email || "").slice(0, 80), approvedAt: now() });
+    const o = (await getOrder(env, session)) || { code: session, plan, at: now() };
+    Object.assign(o, { status: "approved", method: "card", plan: o.plan || plan, keyId: await keyId(key), email: (email || "").slice(0, 80), approvedAt: now() });
     await putOrder(env, o);
     await audit(env, "카드 결제", "자동 승인", session + " · " + o.keyId + (email ? " · " + email : ""));
   }
@@ -483,6 +520,21 @@ async function admin(req, url, env) {
       await audit(env, "admin", "결제 링크", Object.keys(o).map(p => PLANS[p]).join(", ") || "모두 비움");
       return json({ pay: o }, 200, false);
     }
+    case "GET /card": return json(await cardSetup(env), 200, false);
+    case "POST /card": {
+      const ids = { store: String(body.store ?? "").trim(), variants: {} };
+      if (ids.store && !ID_RE.test(ids.store)) return json({ error: "상점 번호는 숫자예요" }, 400, false);
+      for (const p of Object.keys(PLANS)) {
+        const v = String(body.variants?.[p] ?? "").trim();
+        if (v && !ID_RE.test(v)) return json({ error: PLANS[p] + " 상품 번호는 숫자예요" }, 400, false);
+        if (v) ids.variants[p] = v;
+      }
+      const used = Object.values(ids.variants);
+      if (new Set(used).size !== used.length) return json({ error: "두 플랜에 같은 상품 번호를 넣었어요" }, 400, false);
+      await env.LICENSES.put("config:ls", JSON.stringify(ids));
+      await audit(env, "admin", "카드 결제 설정", "상점 " + (ids.store || "없음") + " · " + (Object.keys(ids.variants).map(p => PLANS[p]).join(", ") || "상품 없음"));
+      return json(await cardSetup(env), 200, false);
+    }
     case "POST /lookup": return json(await lookup(env, String(body.key || "")), 200, false);
     case "POST /sales-mode": {
       if (!MODES.includes(body.mode)) return json({ error: "bad mode" }, 400, false);
@@ -492,6 +544,13 @@ async function admin(req, url, env) {
     }
   }
   return json({ error: "not found" }, 404, false);
+}
+
+// What the dashboard shows for card payments. The two secrets are only reported as set or not.
+async function cardSetup(env) {
+  const c = await lsConfig(env);
+  return { ...c, apiKey: !!env.LS_API_KEY, signing: !!env.LS_SIGNING_SECRET, ready: await cardPlans(env),
+           webhook: (env.PUBLIC_URL || "") + "/webhook/lemonsqueezy", sales: await salesMode(env) };
 }
 
 async function tokenOk(header, token) {
@@ -528,7 +587,7 @@ async function summary(env) {
   const op = await env.LICENSES.list({ prefix: "ord:", limit: 1000 });
   c.ordersOpen = op.keys.filter(k => ["requested", "paid"].includes(k.metadata?.status)).length;
   c.ordersPaid = op.keys.filter(k => k.metadata?.status === "paid").length;
-  return { sales: await salesMode(env), autoReady: Object.keys(PLANS).filter(p => lsVariant(env, p)), salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c };
+  return { sales: await salesMode(env), autoReady: await cardPlans(env), salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c };
 }
 async function listKeys(env, q, status) {
   q = q.trim().toLowerCase();
