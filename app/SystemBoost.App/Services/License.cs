@@ -1,5 +1,6 @@
-// Free / Premium / Ultra.
-// Two ways to own Premium (Ultra = a key whose plan is "ultra": Premium plus what UltraOnly lists):
+// Free / Premium / Ultra / Pro.
+// Two ways to own Premium (Ultra = a key whose plan is "ultra": Premium plus what UltraOnly lists;
+// Pro = a key whose plan is "pro": Ultra plus what ProOnly lists, the work and streaming features on Windows):
 //  1) Steam build: the "SystemBoost Premium" DLC (checked through Steamworks;
 //     ISteamOwnership is the hook - wire Steamworks.NET here).
 //  2) Direct downloads (installer / portable / macOS): a license key bought on
@@ -23,6 +24,9 @@ public enum PremiumFeature
     CpuLimit,                // resource sharing: hard CPU cap
     PerGameProfiles,
     Overclock,
+    StreamMode,              // Pro: streaming app first, notifications off while streaming
+    WorkMode,                // Pro: video calls and chosen work apps first
+    StartupApps,             // Pro: turn programs that start with Windows off and on
 }
 
 public sealed record LicenseInfo(string Plan, string Email, DateTime? Expires, string Source, string? Sub = null);
@@ -63,14 +67,17 @@ public static class License
             return KeyActive;
         }
     }
-    public static bool IsUltra { get { Load(); return KeyActive && _info!.Plan == "ultra"; } }
+    public static bool IsUltra { get { Load(); return KeyActive && _info!.Plan is "ultra" or "pro"; } }
+    public static bool IsPro { get { Load(); return KeyActive && _info!.Plan == "pro"; } }
     private static bool KeyActive => _info != null && (_info.Expires == null || _info.Expires > DateTime.UtcNow);
 
     // Which plan opens a feature is decided here and the messages follow. Change the table in PremiumPage with it.
     private static bool UltraOnly(PremiumFeature f) =>
         f is PremiumFeature.UltraMultiplier or PremiumFeature.DualGpu or PremiumFeature.PerGameProfiles or PremiumFeature.Overclock;
-    public static bool Allowed(PremiumFeature f) => UltraOnly(f) ? IsUltra : IsPremium;
-    public static string PlanOf(PremiumFeature f) => UltraOnly(f) ? "울트라" : "프리미엄";
+    private static bool ProOnly(PremiumFeature f) =>
+        f is PremiumFeature.StreamMode or PremiumFeature.WorkMode or PremiumFeature.StartupApps;
+    public static bool Allowed(PremiumFeature f) => ProOnly(f) ? IsPro : UltraOnly(f) ? IsUltra : IsPremium;
+    public static string PlanOf(PremiumFeature f) => ProOnly(f) ? "프로" : UltraOnly(f) ? "울트라" : "프리미엄";
 
     // Activation can happen on a background thread (order watcher, revocation check): UI handlers run on the UI thread.
     private static void RaiseChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => Changed?.Invoke());
@@ -260,8 +267,9 @@ public static class License
     }
 
     /// Raised on the UI thread when the key for the pending order arrived and was registered.
-    /// Arguments: key, activation error (null = premium is on).
-    public static event Action<string, string?>? KeyArrived;
+    /// Arguments: key, activation error (null = premium is on), every key of the order (a bundle has one per PC;
+    /// the first is the one registered here).
+    public static event Action<string, string?, string[]>? KeyArrived;
     private static int _watching;
 
     /// Polls for the pending order's key while the app runs: every 5 s for the first 15 minutes
@@ -281,9 +289,13 @@ public static class License
                         var st = doc.RootElement.GetProperty("status").GetString();
                         if (st == "ready" && doc.RootElement.GetProperty("key").GetString() is string key)
                         {
+                            var keys = new System.Collections.Generic.List<string>();
+                            if (doc.RootElement.TryGetProperty("keys", out var ks) && ks.ValueKind == JsonValueKind.Array)
+                                foreach (var k in ks.EnumerateArray()) if (k.GetString() is { Length: > 0 } one) keys.Add(one);
+                            if (!keys.Contains(key)) keys.Insert(0, key);
                             ForgetPending();
                             var err = Activate(key, "paid");
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() => KeyArrived?.Invoke(key, err));
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() => KeyArrived?.Invoke(key, err, keys.ToArray()));
                             break;
                         }
                         if (st == "rejected")

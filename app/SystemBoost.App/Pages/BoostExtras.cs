@@ -1,6 +1,6 @@
 // Controls under the toggles of the Windows boost pages: the game list and the
 // one-click profile, per-game measurement, the standby limit and trim targets,
-// GPU tuning values, the CPU's core layout.
+// GPU tuning values, the CPU's core layout, and for Pro the work programs and startup programs.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -53,7 +53,107 @@ internal static class BoostExtras
                     ? $"이 CPU는 하이브리드예요: P코어 쪽 {c.performance}스레드, E코어 {c.efficient}스레드"
                     : "이 CPU는 E코어가 없어서 'E코어로' 항목은 쓸 수 없어요", "muted", wrap: true));
                 break;
+            case BoostCategory.Pro:
+                yield return Ui.Card(WorkApps(b, status));
+                yield return Ui.Card(Startup(b, status));
+                yield return Ui.Card(Activity(b));
+                break;
         }
+    }
+
+    private static Control WorkApps(WindowsBoostBackend b, TextBlock status)
+    {
+        var p = new StackPanel { Spacing = 8 };
+        p.Children.Add(Ui.Text("업무 프로그램", "h2"));
+        p.Children.Add(Ui.Text("업무 모드에서 화상 회의 프로그램과 함께 우선순위를 올릴 프로그램을 고르세요. 지금 창이 열려 있는 프로그램이 보여요. "
+                               + "우선순위가 '보통'인 프로그램만 올리고, 게임과 시스템 프로그램은 건드리지 않아요.", "muted", wrap: true));
+        var list = new StackPanel { Spacing = 2 };
+        void Refresh()
+        {
+            list.Children.Clear();
+            var chosen = new HashSet<string>(b.WorkApps, StringComparer.OrdinalIgnoreCase);
+            var shown = WindowedApps().Concat(chosen).Distinct(StringComparer.OrdinalIgnoreCase)
+                                      .Where(n => !WindowsBoostBackend.MeetingApps.Contains(n)).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+            if (shown.Count == 0) list.Children.Add(Ui.Text("창이 열린 프로그램이 없어요. 업무 프로그램을 켠 뒤 '목록 새로 고침'을 누르세요.", "muted", wrap: true));
+            foreach (var name in shown)
+            {
+                var c = new CheckBox { Content = name, IsChecked = chosen.Contains(name) };
+                c.IsCheckedChanged += (_, _) =>
+                {
+                    if (c.IsChecked == true) chosen.Add(name); else chosen.Remove(name);
+                    b.SetWorkApps(chosen);
+                    status.Text = $"업무 프로그램 {chosen.Count}개";
+                };
+                list.Children.Add(c);
+            }
+        }
+        var again = Ui.Button("목록 새로 고침", "ghost");
+        again.HorizontalAlignment = HorizontalAlignment.Left;
+        again.Click += (_, _) => Refresh();
+        p.Children.Add(list);
+        p.Children.Add(again);
+        Refresh();
+        return p;
+    }
+
+    private static Control Startup(WindowsBoostBackend b, TextBlock status)
+    {
+        var p = new StackPanel { Spacing = 8 };
+        var head = new StackPanel { Orientation = Orientation.Horizontal };
+        head.Children.Add(Ui.Text(WindowsBoostBackend.StartupTitle, "h2"));
+        head.Children.Add(Ui.Badge(License.PlanOf(PremiumFeature.StartupApps)));
+        p.Children.Add(head);
+        p.Children.Add(Ui.Text("Windows에 로그인할 때 같이 켜지는 프로그램이에요(이 사용자). 끈 프로그램은 다음 로그인부터 저절로 켜지지 않고, 프로그램과 설정은 지우지 않아요. "
+                               + "다시 켜거나 '백업 · 되돌리기'에서 한 번에 원래대로 돌릴 수 있어요. 모든 사용자에게 걸린 항목은 작업 관리자의 '시작 앱'에서 바꿔요.", "muted", wrap: true));
+        var list = new StackPanel();
+        void Refresh()
+        {
+            list.Children.Clear();
+            List<StartupApps.Item> items;
+            try { items = StartupApps.List(StartupApps.User); }
+            catch (Exception e) { list.Children.Add(Ui.Text("목록을 읽지 못했어요: " + e.Message, "muted", wrap: true)); return; }
+            if (items.Count == 0) list.Children.Add(Ui.Text("이 사용자에게 걸린 시작 프로그램이 없어요.", "muted"));
+            bool first = true;
+            foreach (var item in items)
+            {
+                var sw = new ToggleSwitch { OnContent = "", OffContent = "", IsChecked = item.Enabled };
+                Avalonia.Automation.AutomationProperties.SetName(sw, item.Name);
+                sw.IsCheckedChanged += async (_, _) =>
+                {
+                    sw.IsEnabled = false;
+                    status.Text = await b.SetStartupAsync(item, sw.IsChecked == true);
+                    Refresh();   // shows what is set now, also when it was refused
+                };
+                list.Children.Add(Ui.Row(item.Name, item.Command, sw, first));
+                first = false;
+            }
+        }
+        var again = Ui.Button("목록 새로 고침", "ghost");
+        again.HorizontalAlignment = HorizontalAlignment.Left;
+        again.Click += (_, _) => Refresh();
+        p.Children.Add(list);
+        p.Children.Add(again);
+        Refresh();
+        return p;
+    }
+
+    // Programs of this user with a window open: what someone works in. Games and system programs are left out.
+    private static List<string> WindowedApps()
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int session = Process.GetCurrentProcess().SessionId, self = Environment.ProcessId;
+        foreach (var p in Process.GetProcesses())
+        {
+            try
+            {
+                if (p.Id == self || p.SessionId != session || p.MainWindowHandle == IntPtr.Zero) continue;
+                var name = p.ProcessName;
+                if (!ResourceManagers.IsProtected(name) && !ResourceManagers.LooksLikeGame(p.Id, name)) names.Add(name);
+            }
+            catch (Exception) { }
+            finally { p.Dispose(); }
+        }
+        return names.ToList();
     }
 
     private static Control GameMeasure(WindowsBoostBackend b, TextBlock status)
@@ -315,7 +415,12 @@ internal sealed class NoticeWindow : Window
 {
     private const int ShownMs = 7000;
 
-    public NoticeWindow(string text)
+    // Windows 10 2004 and later: screen capture and broadcasts leave the window out; it stays on the screen.
+    private const uint ExcludeFromCapture = 0x11;
+    [System.Runtime.InteropServices.DllImport("user32")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+
+    /// hideFromCapture: while streaming, so the notice is not in the broadcast.
+    public NoticeWindow(string text, bool hideFromCapture = false)
     {
         SystemDecorations = SystemDecorations.None;
         Topmost = true;
@@ -333,6 +438,8 @@ internal sealed class NoticeWindow : Window
         };
         Opened += (_, _) =>
         {
+            if (hideFromCapture && OperatingSystem.IsWindows() && TryGetPlatformHandle()?.Handle is IntPtr h && h != IntPtr.Zero)
+                SetWindowDisplayAffinity(h, ExcludeFromCapture);
             if (Screens.Primary is { } s) Position = new PixelPoint(s.WorkingArea.Right - (int)(Bounds.Width * s.Scaling) - 16, s.WorkingArea.Y + 16);
             DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(ShownMs));
         };

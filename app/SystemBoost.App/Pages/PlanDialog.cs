@@ -16,19 +16,20 @@ public sealed class PlanDialog : Window
 {
     private static readonly IBrush Orange = new SolidColorBrush(Color.Parse("#FF7A1A"));
 
-    private readonly (string feature, string free, string premium, string ultra, bool windowsOnly)[] _rows;
-    private readonly Grid _cards = new() { ColumnDefinitions = new ColumnDefinitions("*,12,*,12,*") };
+    private readonly PremiumPage.PlanRow[] _rows;
+    private readonly Grid _cards = new() { ColumnDefinitions = new ColumnDefinitions(PremiumPage.SellsPro ? "*,12,*,12,*,12,*" : "*,12,*,12,*") };
     private string _period = "yearly";
+    private static readonly string[] Tiers = { "free", "premium", "ultra", "pro" };   // by rank
 
-    /// What the buyer picked: tier and period for the Premium page. Null when closed without picking.
-    public (bool Ultra, string Period)? Choice { get; private set; }
+    /// What the buyer picked: tier (premium, ultra, pro) and period for the Premium page. Null when closed without picking.
+    public (string Tier, string Period)? Choice { get; private set; }
 
     public PlanDialog(bool boostReady)
     {
-        _rows = PremiumPage.Rows.Where(r => boostReady || r.feature != PremiumPage.BoostRow).ToArray();
+        _rows = PremiumPage.Rows.Where(r => boostReady || r.Feature != PremiumPage.BoostRow).ToArray();
         Title = "플랜 업그레이드";
         Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://SystemBoost/Assets/SystemBoost.ico")));
-        Width = 960; SizeToContent = SizeToContent.Height;
+        Width = PremiumPage.SellsPro ? 1180 : 960; SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -70,11 +71,14 @@ public sealed class PlanDialog : Window
     {
         bool monthly = _period == "monthly";
         _cards.Children.Clear();
-        Add(0, Card(0, "무료", "₩0", Lines(null, r => r.free, _ => "—")));
+        Add(0, Card(0, "무료", "₩0", Lines(null, r => r.Free, _ => "—")));
         Add(2, Card(1, "프리미엄", monthly ? PremiumPage.PriceMonthly : PremiumPage.PriceYearly,
-                    Lines("무료의 모든 기능", r => r.premium, r => r.free)));
+                    Lines("무료의 모든 기능", r => r.Premium, r => r.Free)));
         Add(4, Card(2, "울트라", monthly ? PremiumPage.PriceUltraMonthly : PremiumPage.PriceUltraYearly,
-                    Lines("프리미엄의 모든 기능", r => r.ultra, r => r.premium)));
+                    Lines("프리미엄의 모든 기능", r => r.Ultra, r => r.Premium)));
+        if (PremiumPage.SellsPro)
+            Add(6, Card(3, "프로", monthly ? PremiumPage.PriceProMonthly : PremiumPage.PriceProYearly,
+                        Lines("울트라의 모든 기능", r => r.Pro, r => r.Ultra)));
     }
 
     private void Add(int column, Control card)
@@ -83,9 +87,7 @@ public sealed class PlanDialog : Window
         _cards.Children.Add(card);
     }
 
-    private List<Control> Lines(string? first,
-        Func<(string feature, string free, string premium, string ultra, bool windowsOnly), string> cell,
-        Func<(string feature, string free, string premium, string ultra, bool windowsOnly), string> below)
+    private List<Control> Lines(string? first, Func<PremiumPage.PlanRow, string> cell, Func<PremiumPage.PlanRow, string> below)
     {
         var lines = new List<Control>();
         if (first != null) lines.Add(Ui.Text(first, "label", wrap: true));
@@ -93,7 +95,7 @@ public sealed class PlanDialog : Window
         {
             var value = cell(r);
             if (value == "—" || value == below(r)) continue;
-            lines.Add(Ui.Text(r.feature, "muted", wrap: true));
+            lines.Add(Ui.Text(r.Feature, "muted", wrap: true));
             if (value != "●")
             {
                 var v = Ui.Text(value, "label", wrap: true);
@@ -129,7 +131,7 @@ public sealed class PlanDialog : Window
         var now = PlanStatus.Rank;
         bool up = rank > now;
         bool extend = rank == now && PlanStatus.CanExtend;
-        var text = up ? (rank == 2 ? "울트라로 업그레이드" : "프리미엄으로 업그레이드")
+        var text = up ? rank switch { 3 => "프로로 업그레이드", 2 => "울트라로 업그레이드", _ => "프리미엄으로 업그레이드" }
                  : extend ? "기간 연장"
                  : rank == now ? "사용 중"
                  : "포함되어 있어요";
@@ -137,7 +139,7 @@ public sealed class PlanDialog : Window
         b.HorizontalAlignment = HorizontalAlignment.Stretch;
         b.HorizontalContentAlignment = HorizontalAlignment.Center;
         b.IsEnabled = up || extend;
-        b.Click += (_, _) => { Choice = (rank == 2, _period); Close(); };
+        b.Click += (_, _) => { Choice = (Tiers[rank], _period); Close(); };
         return b;
     }
 }

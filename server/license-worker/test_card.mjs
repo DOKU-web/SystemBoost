@@ -64,7 +64,7 @@ assert.match((await adm("/card", { store: "1", variants: { monthly: "x1" } })).e
 assert.match((await adm("/card", { store: "1", variants: { monthly: "5", yearly: "5" } })).error, /같은 상품/);
 s = await adm("/card", { store: " 42 ", variants: V });
 assert.equal(s.store, "42");
-assert.deepEqual(s.variants, V);
+assert.deepEqual(s.variants, { ...V, pro_monthly: "", pro_yearly: "" });
 assert.deepEqual(s.ready, [], "no API key yet");
 assert.ok((await adm("/log")).log.some(l => l.action === "카드 결제 설정"));
 

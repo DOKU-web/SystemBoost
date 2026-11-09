@@ -72,7 +72,7 @@ public static class Telemetry
                 id = prefs.Id,
                 ver = Updater.CurrentVersion.Split('+')[0],
                 os = Platform.IsMac ? "mac" : "win",
-                plan = License.IsUltra ? "ultra" : License.IsPremium ? "premium" : "free",
+                plan = License.IsPro ? "pro" : License.IsUltra ? "ultra" : License.IsPremium ? "premium" : "free",
                 fg = frameGen,
                 boost = boost ? 1 : 0,
             });

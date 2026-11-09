@@ -57,7 +57,7 @@ public sealed class AccountPage : UserControl
         Fact(1, "사용 기간", PlanStatus.Period);
         Fact(2, "프레임 생성 배수", PlanStatus.Multipliers);
         p.Children.Add(facts);
-        bool top = PlanStatus.Rank == 2 && !PlanStatus.CanExtend;
+        bool top = PlanStatus.Rank >= PlanStatus.TopRank && !PlanStatus.CanExtend;
         var open = Ui.Button(top ? "플랜 보기" : "플랜 업그레이드", top ? "ghost" : "primary");
         open.Click += (_, _) => _openPlans();
         p.Children.Add(Left(open));

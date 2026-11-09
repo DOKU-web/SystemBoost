@@ -19,7 +19,7 @@ public partial class MainWindow : Window
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         var b = new WindowsBoostBackend();
         FrameGenViewModel.Limiter = b;
-        b.Notice += text => Avalonia.Threading.Dispatcher.UIThread.Post(() => new NoticeWindow(text).Show());
+        b.Notice += text => Avalonia.Threading.Dispatcher.UIThread.Post(() => new NoticeWindow(text, OperatingSystem.IsWindows() && b.Streaming).Show());
         return b;
     }
     private readonly Dictionary<string, Control> _cache = new();
@@ -40,6 +40,8 @@ public partial class MainWindow : Window
             AddNav("▦   CPU", "cpu", () => new BoostPage(BoostCategory.Cpu, "CPU", _backend));
         if (BoostCatalog.CategoryAvailable(BoostCategory.Network))
             AddNav("◇   네트워크 · 시스템", "net", () => new BoostPage(BoostCategory.Network, "네트워크 · 시스템", _backend, BoostCategory.System));
+        if (BoostCatalog.CategoryAvailable(BoostCategory.Pro))
+            AddNav("▩   업무 · 방송", "pro", () => new BoostPage(BoostCategory.Pro, "업무 · 방송", _backend));
         if (Platform.IsMac)
             AddNav("🍷   윈도우 게임", "wine", () => new WindowsGamesPage(Go));
         AddNav("▧   벤치마크 · 기록", "bench", () => new BenchmarkPage());
@@ -55,10 +57,10 @@ public partial class MainWindow : Window
         UpdateLater.Click += (_, _) => { _updateDismissed = true; UpdateBar(); };
         UpdateRestart.Click += (_, _) => { Shutdown(applyUpdateOnExit: false); Updater.ApplyAndRestart(); };
         UpdateBar();
-        License.KeyArrived += async (key, err) =>   // seller confirmed a payment -> key popup
+        License.KeyArrived += async (key, err, keys) =>   // seller confirmed a payment -> key popup (a bundle lists every key)
         {
             Go("premium");
-            await new KeyDialog(key, err).ShowDialog(this);
+            await new KeyDialog(key, err, keys).ShowDialog(this);
         };
         Go("fg");
         if (OperatingSystem.IsWindows() && _backend is WindowsBoostBackend win) _ = win.StartAsync();
@@ -75,7 +77,7 @@ public partial class MainWindow : Window
         _plansOpen = false;
         if (plans.Choice is not { } pick) return;
         Go("premium");
-        (PageHost.Content as PremiumPage)?.Choose(pick.Ultra, pick.Period);
+        (PageHost.Content as PremiumPage)?.Choose(pick.Tier, pick.Period);
     }
 
     private readonly Dictionary<string, Button> _navByKey = new();
@@ -106,8 +108,9 @@ public partial class MainWindow : Window
 
     private void UpdatePlan()
     {
-        PlanTitle.Text = License.IsUltra ? "울트라 ★" : License.IsPremium ? "프리미엄 ★" : "무료";
-        PlanText.Text = License.IsUltra ? "모든 기능 사용 중" : License.IsPremium ? "프리미엄 기능 사용 중" : "누르면 플랜 업그레이드";
+        PlanTitle.Text = License.IsPro ? "프로 ★" : License.IsUltra ? "울트라 ★" : License.IsPremium ? "프리미엄 ★" : "무료";
+        PlanText.Text = PlanStatus.Rank >= PlanStatus.TopRank ? "모든 기능 사용 중"
+                      : License.IsUltra ? "울트라 기능 사용 중" : License.IsPremium ? "프리미엄 기능 사용 중" : "누르면 플랜 업그레이드";
     }
 
     // What the usage statistics report about this moment.

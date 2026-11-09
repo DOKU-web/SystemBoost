@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace SystemBoost.App.Services;
 
-public enum BoostCategory { GameBoost, Ram, Gpu, Cpu, Network, System }
+public enum BoostCategory { GameBoost, Ram, Gpu, Cpu, Network, System, Pro }
 
 public sealed record BoostFeature(string Id, BoostCategory Category, string Title, string Description,
                                   bool RequiresAdmin, bool WindowsOnly = true, PremiumFeature? Needs = null,
@@ -50,6 +50,9 @@ public static class BoostCatalog
         new("sys.gamemode", BoostCategory.System, "Windows 게임 모드", "", false),
         new("sys.dvr", BoostCategory.System, "Xbox 백그라운드 녹화 끄기", "", false),
         new("sys.focus", BoostCategory.System, "게임 중 알림·업데이트 일시정지", "Windows 업데이트는 최대 1일만 멈춰요", true),
+        // work and streaming (Pro, WindowsBoostBackend.Pro.cs)
+        new("pro.stream", BoostCategory.Pro, "방송 모드", "OBS · Streamlabs · PRISM · XSplit이 켜져 있는 동안 방송 프로그램 우선순위를 '보통 이상'으로 올리고 Windows 알림을 꺼요. SystemBoost 알림은 방송 화면에 잡히지 않게 하고, 다른 프로그램의 큰 전송을 알려요. 방송 프로그램이 꺼지면 원래대로", false, Needs: PremiumFeature.StreamMode),
+        new("pro.work", BoostCategory.Pro, "업무 모드", "화상 회의(Zoom · Teams · Webex · Skype)와 아래에서 고른 업무 프로그램이 켜져 있는 동안 우선순위를 '보통 이상'으로 올려요. 꺼지면 원래대로", false, Needs: PremiumFeature.WorkMode),
         // macOS (MacBoostBackend)
         new("mac.lowpower", BoostCategory.GameBoost, "저전력 모드 끄기", "켜져 있으면 CPU·GPU 성능이 크게 낮아져요", true, WindowsOnly: false, MacOnly: true),
         new("mac.tm", BoostCategory.GameBoost, "Time Machine 자동 백업 멈추기", "게임 중 디스크·CPU를 쓰는 백업을 멈춰요. 끝나면 꼭 되돌리세요", true, WindowsOnly: false, MacOnly: true),

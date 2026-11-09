@@ -8,7 +8,7 @@ export { Stats } from "./stats.js";
 //   POST /checkout?plan=monthly|yearly&session=<id>
 //                                creates a Lemon Squeezy checkout carrying the session -> {url}
 //   POST /webhook/lemonsqueezy   Lemon Squeezy webhook (X-Signature HMAC-SHA256 checked)
-//   GET  /claim?session=<id>     app polls this after opening checkout -> {status, key}
+//   GET  /claim?session=<id>     app polls this after opening checkout -> {status, key, keys?} (keys: a bundle)
 //   GET  /thanks?session=<id>    checkout "return to" page that shows the key
 //   GET  /renew?sub=<id>         latest key of an active subscription (app renews before expiry)
 //   GET  /status                 {sales, pay:{monthly,yearly}} - the app enables "결제하기" only for plans
@@ -58,11 +58,30 @@ async function cardOpen(env) {
 const CODE_RE = /^SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;   // no 0/O/1/I: easy to read aloud
 function validSession(s) { return /^[A-Za-z0-9-]{16,64}$/.test(s) || CODE_RE.test(s); }
 // On sale. Lifetime is no longer sold; keys and orders from before keep working.
-const PLANS = { monthly: "월간", yearly: "연간", ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간" };
+// A plan id is [tier_]period[_xN]: the tier is what the key opens (premium, ultra, pro), the period how long it
+// lasts, and _xN a bundle of N yearly keys, one per PC, sold at a discount by manual payment only.
+const PLANS = { monthly: "월간", yearly: "연간", ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간",
+                pro_monthly: "프로 월간", pro_yearly: "프로 연간",
+                yearly_x5: "연간 5대 묶음", yearly_x10: "연간 10대 묶음",
+                ultra_yearly_x5: "울트라 연간 5대 묶음", ultra_yearly_x10: "울트라 연간 10대 묶음",
+                pro_yearly_x5: "프로 연간 5대 묶음", pro_yearly_x10: "프로 연간 10대 묶음" };
 const PLAN_DAYS = { monthly: 31, yearly: 366 };            // manual subscription keys (+3 days grace)
+const TIERS = ["premium", "ultra", "pro"];                 // a key's "plan"
+const TIER_KO = { premium: "프리미엄", ultra: "울트라", pro: "프로" };
+const tierOf = plan => /^ultra_/.test(plan) ? "ultra" : /^pro_/.test(plan) ? "pro" : "premium";
+const seatsOf = plan => Number((/_x(\d+)$/.exec(plan) || [0, 1])[1]);
+const periodOf = plan => plan.replace(/^(ultra|pro)_/, "").replace(/_x\d+$/, "");
+const SINGLE_PLANS = Object.keys(PLANS).filter(p => seatsOf(p) === 1);
+// Bundles are in the licence agreement from its 2026-12-09 KST revision (clauses 2.1, 3.5, 3.9), announced
+// 30 days ahead as its clause 13 requires, so the app offers them from then on. Tests set BUNDLE_FROM.
+const BUNDLE_FROM = "2026-12-08T15:00:00Z";
+const bundleOpen = env => Date.now() >= Date.parse(env.BUNDLE_FROM || BUNDLE_FROM);
+const MAX_SEATS = 20;                                      // keys one issue may make
 
 // A fixed-price payment link cannot take a discount, so a discount ticket has its own link for each plan.
-const LINK_KEYS = Object.keys(PLANS).flatMap(p => [p, p + "_ticket"]);
+// Bundles are discounted already and take no ticket.
+const LINK_KEYS = Object.keys(PLANS).flatMap(p => seatsOf(p) > 1 ? [p] : [p, p + "_ticket"]);
+const linkLabel = p => PLANS[p] || PLANS[p.replace(/_ticket$/, "")] + " 할인";
 
 async function payLinks(env) {
   try { const o = JSON.parse((await env.LICENSES.get("config:pay_urls")) || "{}"); 
@@ -101,15 +120,15 @@ async function lsConfig(env) {
   try { o = JSON.parse((await env.LICENSES.get("config:ls")) || "{}"); } catch {}
   const id = v => ID_RE.test(String(v ?? "")) ? String(v) : "";
   return { store: id(o.store) || id(env.LS_STORE_ID),
-           variants: Object.fromEntries(Object.keys(PLANS).map(p => [p, id(o.variants?.[p]) || id(env["LS_VARIANT_" + p.toUpperCase()])])) };
+           variants: Object.fromEntries(SINGLE_PLANS.map(p => [p, id(o.variants?.[p]) || id(env["LS_VARIANT_" + p.toUpperCase()])])) };
 }
 async function cardPlans(env) {   // plans a card checkout can be made for
   const c = await lsConfig(env);
-  return c.store && env.LS_API_KEY ? Object.keys(PLANS).filter(p => c.variants[p]) : [];
+  return c.store && env.LS_API_KEY ? SINGLE_PLANS.filter(p => c.variants[p]) : [];
 }
 async function openPlans(env) {   // plans the app may sell right now, per method
   return { methods: { card: (await cardOpen(env)) ? await cardPlans(env) : [],
-                      manual: Object.keys(await payLinks(env)).filter(p => PLANS[p]) } };
+                      manual: Object.keys(await payLinks(env)).filter(p => PLANS[p] && (seatsOf(p) === 1 || bundleOpen(env))) } };
 }
 
 async function order(req, url, env) {
@@ -289,7 +308,7 @@ async function webhook(req, env) {
   let expires = !invoice && a.renews_at ? addDays(a.renews_at, GRACE_DAYS) : addDays(now(), period + GRACE_DAYS);
   if (testOrder) expires = addDays(now(), 1);   // test keys never last
   const what = { subscription_created: "카드 결제", subscription_updated: "플랜 변경", subscription_payment_success: "자동 갱신" }[event];
-  const key = await makeKey(env, { plan: plan.startsWith("ultra") ? "ultra" : "premium", email: a.user_email || "", sub: subId, expires, test: testOrder,
+  const key = await makeKey(env, { plan: tierOf(plan), email: a.user_email || "", sub: subId, expires, test: testOrder,
                                    src: "subscription", note: [session && event === "subscription_created" ? session : "", PLANS[plan] + " " + what].filter(Boolean).join(" · ") });
   await env.LICENSES.put("sub:" + subId, key);
   await env.LICENSES.put("subplan:" + subId, plan);
@@ -319,7 +338,10 @@ async function claim(url, env) {
   const s = url.searchParams.get("session") || "";
   if (!validSession(s)) return json({ error: "bad session" }, 400);
   const key = await env.LICENSES.get("session:" + s);
-  if (key) return json({ status: "ready", key });
+  if (key) {   // a bundle also lists every key; the app registers the first one on this PC
+    const keys = CODE_RE.test(s) ? JSON.parse((await env.LICENSES.get("bundle:" + s)) || "null") : null;
+    return json({ status: "ready", key, ...(Array.isArray(keys) && keys.length > 1 ? { keys } : {}) });
+  }
   const o = CODE_RE.test(s) ? await getOrder(env, s) : null;
   if (o?.status === "rejected") return json({ status: "rejected", reason: o.reason || "" });
   return json({ status: "pending", order: o?.status || "" });
@@ -521,18 +543,18 @@ async function admin(req, url, env) {
       const o = {};
       for (const p of LINK_KEYS) {
         const v = String(body[p] || "").trim();
-        if (v && !/^https:\/\/\S+$/.test(v)) return json({ error: (PLANS[p] || PLANS[p.replace("_ticket", "")] + " 할인") + " 링크는 https:// 로 시작해야 해요" }, 400, false);
+        if (v && !/^https:\/\/\S+$/.test(v)) return json({ error: linkLabel(p) + " 링크는 https:// 로 시작해야 해요" }, 400, false);
         if (v) o[p] = v;
       }
       await env.LICENSES.put("config:pay_urls", JSON.stringify(o));
-      await audit(env, "admin", "결제 링크", Object.keys(o).map(p => PLANS[p]).join(", ") || "모두 비움");
+      await audit(env, "admin", "결제 링크", Object.keys(o).map(linkLabel).join(", ") || "모두 비움");
       return json({ pay: o }, 200, false);
     }
     case "GET /card": return json(await cardSetup(env), 200, false);
     case "POST /card": {
       const ids = { store: String(body.store ?? "").trim(), variants: {} };
       if (ids.store && !ID_RE.test(ids.store)) return json({ error: "상점 번호는 숫자예요" }, 400, false);
-      for (const p of Object.keys(PLANS)) {
+      for (const p of SINGLE_PLANS) {
         const v = String(body.variants?.[p] ?? "").trim();
         if (v && !ID_RE.test(v)) return json({ error: PLANS[p] + " 상품 번호는 숫자예요" }, 400, false);
         if (v) ids.variants[p] = v;
@@ -644,7 +666,7 @@ async function grant(env, code, device, plan, days) {
   const day = refDay();
   await env.LICENSES.put(day, String(Number((await env.LICENSES.get(day)) || 0) + 1), { expirationTtl: 60 * 60 * 48 });
   const key = await makeKey(env, { plan, email: "", expires: addDays(now(), days), src: "referral", note: "추천 코드 " + code });
-  await audit(env, "app", "추천 코드 사용", code + " · " + (plan === "ultra" ? "울트라" : "프리미엄") + " " + days + "일");
+  await audit(env, "app", "추천 코드 사용", code + " · " + (TIER_KO[plan] || "프리미엄") + " " + days + "일");
   return { key, plan, days };
 }
 async function useRef(env, r, device) {
@@ -724,7 +746,7 @@ async function addRef(env, b) {
   const days = Math.floor(Number(b.days)), max = Math.floor(Number(b.max));
   if (!(days >= 1 && days <= 30)) return { error: "기간은 1~30일이에요" };
   if (!(max >= 1 && max <= 10000)) return { error: "사용 횟수는 1~10000이에요" };
-  const r = { code, label: String(b.label || "").trim().slice(0, 80), plan: b.plan === "ultra" ? "ultra" : "premium",
+  const r = { code, label: String(b.label || "").trim().slice(0, 80), plan: TIERS.includes(b.plan) ? b.plan : "premium",
               days, max, on: true, used: 0, at: now() };
   await putRef(env, r);
   await audit(env, "admin", "추천 코드 생성", code + " · " + r.days + "일 · " + r.max + "회" + (r.label ? " · " + r.label : ""));
@@ -736,27 +758,39 @@ async function adminIssue(env, b) {
   const note = String(b.note || "").trim().slice(0, 200);
   const code = String(b.code || "").trim().toUpperCase();
   if (code && !CODE_RE.test(code)) return { error: "주문 코드 형식이 아니에요 (SB-XXXX-XXXX)" };
-  const period = String(b.plan || "").replace(/^ultra_/, "");   // orders say ultra_monthly etc.
+  const plan = String(b.plan || "");
+  const period = periodOf(plan);   // orders say ultra_monthly, pro_yearly_x5 etc.; the form says monthly / yearly / days
   let days = 0;
   if (period === "days") days = Math.floor(Number(b.days));
   else if (PLAN_DAYS[period]) days = PLAN_DAYS[period] + GRACE_DAYS;
   else if (period !== "lifetime" || !code) return { error: "플랜을 고르세요" };   // an order placed while it was on sale can still be approved
   if (period === "days" && !(days >= 1 && days <= 3650)) return { error: "기간은 1~3650일이에요" };
   if (!note && !code) return { error: "주문 코드나 메모(발급 이유) 중 하나는 적어 주세요" };
+  const seats = b.seats == null || b.seats === "" ? seatsOf(plan) : Math.floor(Number(b.seats));
+  if (!(seats >= 1 && seats <= MAX_SEATS)) return { error: "키 개수는 1~" + MAX_SEATS + "개예요" };
   const src = code ? "payment" : "manual";
-  const tier = b.tier === "ultra" || period !== b.plan ? "ultra" : "premium";   // the key's "plan"; ultra also opens frame generation x6 and x8
-  const key = await makeKey(env, { plan: tier, email, expires: days ? addDays(now(), days) : undefined, src,
-                                   note: (code ? code + (note ? " · " : "") : "") + note });
-  const id = await keyId(key);
+  // the key's "plan": ultra also opens frame generation x6 and x8, pro adds the work and streaming features
+  const tier = tierOf(plan) !== "premium" ? tierOf(plan) : TIERS.includes(b.tier) ? b.tier : "premium";
+  const keys = [], ids = [];
+  for (let i = 1; i <= seats; i++) {   // a bundle is that many separate keys: one per PC, each can be turned off alone
+    const k = await makeKey(env, { plan: tier, email, expires: days ? addDays(now(), days) : undefined, src,
+                                   note: [code, seats > 1 ? seats + "대 묶음 " + i + "/" + seats : "", note].filter(Boolean).join(" · ") });
+    keys.push(k); ids.push(await keyId(k));
+  }
+  const key = keys[0], id = ids[0];
   if (code) {   // the buyer's app is polling /claim?session=<code> -> popup
-    await env.LICENSES.put("session:" + code, key, { expirationTtl: 60 * 60 * 24 * 30 });
-    const o = (await getOrder(env, code)) || { code, plan: b.plan, at: now(), method: "manual" };
-    Object.assign(o, { status: "approved", keyId: id, email: email.slice(0, 80), approvedAt: now() });
+    const ttl = { expirationTtl: 60 * 60 * 24 * 30 };
+    await env.LICENSES.put("session:" + code, key, ttl);
+    if (seats > 1) await env.LICENSES.put("bundle:" + code, JSON.stringify(keys), ttl);
+    const o = (await getOrder(env, code)) || { code, plan, at: now(), method: "manual" };
+    Object.assign(o, { status: "approved", keyId: id, email: email.slice(0, 80), approvedAt: now(), ...(seats > 1 ? { seats } : {}) });
     await putOrder(env, o);
   }
-  await audit(env, "admin", "키 발급", id + " · " + (code || "코드 없음") + " · " + (email || "메일 없음") + " · " +
-              (days ? days + "일" : "평생") + (tier === "ultra" ? " · 울트라" : "") + (note ? " · " + note : ""));
-  return { key, id };
+  // a bundle's key ids go last: the log keeps 300 characters
+  await audit(env, "admin", "키 발급", (seats > 1 ? seats + "대 묶음" : id) + " · " + (code || "코드 없음") + " · " + (email || "메일 없음") + " · " +
+              (days ? days + "일" : "평생") + (tier !== "premium" ? " · " + TIER_KO[tier] : "") + (note ? " · " + note : "") +
+              (seats > 1 ? " · " + ids.join(", ") : ""));
+  return { key, id, keys, ids };
 }
 async function lookup(env, key) {
   key = key.trim();

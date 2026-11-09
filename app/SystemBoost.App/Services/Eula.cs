@@ -13,7 +13,7 @@ namespace SystemBoost.App.Services;
 
 public static class Eula
 {
-    public const string Version = "2026-11-08";
+    public const string Version = "2026-11-09";   // Pro plan and bundle keys, in force 2026-12-09
 
     private sealed record Acceptance(string Version, DateTimeOffset AcceptedAt, string AppVersion);
 
