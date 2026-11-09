@@ -64,6 +64,7 @@ bool callerAllowed(HANDLE pipe, DWORD parent) {
     ocShutdown();
     nvLimitShutdown();
     fpsShutdown();
+    fpsLiveShutdown();
     ExitProcess(code);
 }
 

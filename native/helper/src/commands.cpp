@@ -190,6 +190,9 @@ std::string dispatch(const std::vector<std::string>& f) {
     if (c == "fps.mark" && n == 1) return fpsMark();
     if (c == "fps.read" && n == 2 && sb::isInt(f[1], 1, 4294967295LL)) return fpsRead(std::stoul(f[1]));
     if (c == "fps.stop" && n == 1) return fpsStop();
+    if (c == "fps.live.start" && n == 1) return fpsLiveStart();
+    if (c == "fps.live" && n == 2 && sb::isInt(f[1], 1, 4294967295LL)) return fpsLiveRead(std::stoul(f[1]));
+    if (c == "fps.live.stop" && n == 1) return fpsLiveStop();
 
     return err("refused");
 }

@@ -40,3 +40,11 @@ std::string fpsMark();
 std::string fpsRead(unsigned long pid);
 std::string fpsStop();
 void fpsShutdown();
+
+// fpslive.cpp: the on-screen FPS display, its own tracing session beside fpsmeter.cpp
+struct FpsLive { double fps, low, steady; };
+FpsLive fpsLiveRate(const std::vector<long long>& sortedTicks, long long ticksPerSecond);
+std::string fpsLiveStart();
+std::string fpsLiveRead(unsigned long pid);
+std::string fpsLiveStop();
+void fpsLiveShutdown();

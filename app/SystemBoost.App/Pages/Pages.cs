@@ -57,6 +57,7 @@ public sealed class DashboardPage : UserControl
             grid.Children.Add(c);
         }
         root.Children.Add(grid);
+        if (OperatingSystem.IsWindows()) root.Children.Add(Ui.Card(FpsOverlay.Card()));
         Content = new ScrollViewer { Content = root };
     }
 }

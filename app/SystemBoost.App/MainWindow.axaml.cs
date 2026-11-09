@@ -65,7 +65,11 @@ public partial class MainWindow : Window
             await new KeyDialog(key, err, keys).ShowDialog(this);
         };
         Go("fg");
-        if (OperatingSystem.IsWindows() && _backend is WindowsBoostBackend win) _ = win.StartAsync();
+        if (OperatingSystem.IsWindows() && _backend is WindowsBoostBackend win)
+        {
+            _ = win.StartAsync();
+            FpsOverlay.Init(win, _frameGen);   // FPS in a corner of the screen, if it was left on
+        }
     }
 
     private bool _plansOpen;
@@ -123,6 +127,7 @@ public partial class MainWindow : Window
     {
         if (_shutDown) return;
         _shutDown = true;
+        if (OperatingSystem.IsWindows()) FpsOverlay.Shutdown();
         _frameGen.Dispose();
         _resources.Dispose();   // puts every app's priority / limits back
         (_backend as IDisposable)?.Dispose();   // what was only for the running game goes back
