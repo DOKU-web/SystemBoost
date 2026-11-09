@@ -859,13 +859,18 @@
 "FPS 표시": "FPS display",
 "위치": "Position",
 "원본 {0}": "Source {0}",
-"게임 화면이 앞에 있는 동안 화면 구석에 FPS를 작게 띄워요. 켜 두면 앱을 켤 때 함께 시작해요.": "Shows the FPS small in a corner of the screen while a game is in front. Left on, it starts with the app.",
 "FPS 측정을 준비하는 중… (관리자 권한을 물어볼 수 있어요)": "Getting the FPS counter ready… (Windows may ask for administrator rights)",
 "켜져 있어요 · 게임 화면이 앞에 있으면 구석에 떠요": "On · shows in the corner while a game is in front",
 "관리자 권한을 허용하지 않아서 FPS를 잴 수 없어요": "Administrator rights were not allowed, so the FPS cannot be counted",
 "FPS를 잴 수 없어요 ({0})": "The FPS cannot be counted ({0})",
 "FPS 측정이 멈췄어요. 다시 켜 주세요": "FPS counting stopped. Turn it on again",
-"큰 숫자는 지난 1초의 FPS, 아래 줄은 최근 10초에서 가장 느린 1% 프레임으로 잰 1% 낮은 값이에요. 프레임 생성 중에는 큰 숫자가 출력 FPS, 아래 줄이 게임의 원본 FPS예요.": "The big number is the FPS over the last second; the line below is the 1% low, from the slowest 1% of frames in the last 10 seconds. During frame generation the big number is the output FPS and the line below is the game's source FPS.",
-"Windows가 기록하는 화면 출력 횟수로 재요 (PresentMon, Xbox Game Bar와 같은 방식). 게임 파일과 메모리는 건드리지 않아요. 이 기록은 관리자 권한이 있어야 읽을 수 있어서 켤 때 관리자 권한을 물어봐요 (앱을 켤 때마다 한 번).": "Counted from the frames Windows records the game presenting (the way PresentMon and the Xbox Game Bar do). Game files and memory are not touched. Reading that record needs administrator rights, so Windows asks when it turns on (once each time the app starts).",
-"FPS 창은 클릭이 통과하는 별도 창이라 화면 캡처와 방송에도 보여요. 전체 화면 전용 모드 게임에서는 안 보일 수 있으니 테두리 없는 창 모드를 쓰세요.": "The FPS box is a separate window that clicks pass through, so it shows in screenshots and broadcasts too. It may not show over a game in exclusive full screen mode; use borderless windowed mode."
+"게임 화면이 앞에 있는 동안 화면 구석에 FPS를 작게 띄워요.": "Shows the FPS small in a corner of the screen while a game is in front.",
+"앱을 켤 때 함께 시작": "Start with the app",
+"켜 둔 채로 앱을 끄면 다음에 앱을 켤 때 FPS 표시도 시작하고, 그때 관리자 권한을 물어봐요. 끄면 필요할 때 여기서 직접 켜요.": "If it is on when the app closes, the FPS display starts again with the app, and Windows asks for administrator rights then. Unchecked, you turn it on here when you need it.",
+"아래 줄 표시 (1% 낮은 값)": "Show the line below (1% low)",
+"아래 줄은 최근 10초에서 가장 느린 1% 프레임으로 잰 1% 낮은 값이에요. 큰 숫자는 지난 1초의 FPS예요. 프레임 생성 중에는 큰 숫자가 출력 FPS, 아래 줄이 게임의 원본 FPS예요.": "The line below is the 1% low, from the slowest 1% of frames in the last 10 seconds. The big number is the FPS over the last second. During frame generation the big number is the output FPS and the line below is the game's source FPS.",
+"방송 · 캡처에서 숨기기": "Hide from broadcasts and screenshots",
+"주의: 캡처에서 숨긴 창이 게임 위에 있으면 게임 보안 프로그램(안티치트)이 핵 오버레이로 볼 수 있어요. 안티치트가 있는 온라인 게임에서는 켜지 마세요. 끄면 FPS 창이 화면 캡처와 방송에도 보여요.": "Caution: a window hidden from capture over a game can look like a cheat overlay to game security (anti-cheat) programs. Do not turn this on for online games with anti-cheat. Unchecked, the FPS box shows in screenshots and broadcasts too.",
+"Windows가 기록하는 화면 출력 횟수로 재요 (PresentMon, Xbox Game Bar와 같은 방식). 게임 파일과 메모리는 건드리지 않아요. 이 기록은 관리자 권한이 있어야 읽을 수 있어서, 앱을 켠 뒤 처음 켤 때 관리자 권한을 물어봐요.": "Counted from the frames Windows records the game presenting (the way PresentMon and the Xbox Game Bar do). Game files and memory are not touched. Reading that record needs administrator rights, so Windows asks the first time it turns on after the app starts.",
+"FPS 창은 클릭이 통과하는 별도 창이에요. 전체 화면 전용 모드 게임에서는 안 보일 수 있으니 테두리 없는 창 모드를 쓰세요.": "The FPS box is a separate window that clicks pass through. It may not show over a game in exclusive full screen mode; use borderless windowed mode."
 }

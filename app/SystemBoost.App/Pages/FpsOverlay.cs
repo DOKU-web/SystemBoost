@@ -1,8 +1,9 @@
 // FPS in a corner of the screen while a game is in front (Windows). The numbers come from
 // WindowsBoostBackend.FpsLiveReadAsync: Windows event tracing, the game is never opened or touched.
 // The display is a separate small window that clicks pass through and that never takes the focus.
-// It is never hidden from capture (SetWindowDisplayAffinity): anti-cheat programs read a capture-hidden
-// window over a game as a cheat overlay, so it shows in screenshots and broadcasts like any window.
+// By default it is not hidden from capture, so it shows in screenshots and broadcasts like any window:
+// anti-cheat programs can read a capture-hidden window over a game as a cheat overlay. Hiding it
+// (SetWindowDisplayAffinity) is an option the user turns on past a warning.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -28,15 +29,21 @@ public static class FpsOverlay
     private const double ShowAfterSeconds = 2;   // drawn this long without a pause: a short burst of an ordinary app stays quiet
 
     // ------------------------------------------------------------ settings
-    private sealed record Prefs(bool On = false, int Corner = 0);
+    /// On: on when the app last closed. AutoStart: then it starts again with the app (asking for admin rights).
+    /// Lower: the line under the number. HideFromCapture: left out of screenshots and broadcasts.
+    private sealed record Prefs(bool On = false, int Corner = 0, bool AutoStart = true, bool Lower = true, bool HideFromCapture = false);
     private static string PrefsFile => Path.Combine(Platform.DataDir, "fps-overlay.json");
+    private static Prefs? _prefs;
     private static Prefs Load()
     {
-        try { return File.Exists(PrefsFile) ? JsonSerializer.Deserialize<Prefs>(File.ReadAllText(PrefsFile)) ?? new() : new(); }
-        catch (Exception) { return new(); }
+        if (_prefs != null) return _prefs;
+        try { _prefs = File.Exists(PrefsFile) ? JsonSerializer.Deserialize<Prefs>(File.ReadAllText(PrefsFile)) : null; }
+        catch (Exception) { }
+        return _prefs ??= new();
     }
     private static void Store(Prefs p)
     {
+        _prefs = p;
         try { File.WriteAllText(PrefsFile, JsonSerializer.Serialize(p)); } catch (Exception) { }
     }
     public static bool On => Load().On;
@@ -44,6 +51,13 @@ public static class FpsOverlay
     {
         get => Math.Clamp(Load().Corner, 0, Corners.Length - 1);
         set => Store(Load() with { Corner = Math.Clamp(value, 0, Corners.Length - 1) });
+    }
+    public static bool AutoStart { get => Load().AutoStart; set => Store(Load() with { AutoStart = value }); }
+    public static bool Lower { get => Load().Lower; set => Store(Load() with { Lower = value }); }
+    public static bool HideFromCapture
+    {
+        get => Load().HideFromCapture;
+        set { Store(Load() with { HideFromCapture = value }); _window?.SetHiddenFromCapture(value); }
     }
 
     /// For the dashboard card; raised on the UI thread.
@@ -58,13 +72,13 @@ public static class FpsOverlay
     private static FpsOverlayWindow? _window;
     private static uint _shownPid;
 
-    /// Once at app start, on the UI thread: starts after the agreement if it was left on.
+    /// Once at app start, on the UI thread: starts after the agreement if it was left on and starts with the app.
     public static async void Init(WindowsBoostBackend backend, FrameGenViewModel frameGen)
     {
         _backend = backend;
         _frameGen = frameGen;
         await Eula.WhenAccepted;
-        if (On) await RunAsync();
+        if (On && AutoStart) await RunAsync();
     }
 
     public static async Task SetOnAsync(bool on)
@@ -95,6 +109,7 @@ public static class FpsOverlay
         }
         SetStatus("켜져 있어요 · 게임 화면이 앞에 있으면 구석에 떠요");
         _window ??= new FpsOverlayWindow();
+        _window.SetHiddenFromCapture(HideFromCapture);
         while (!run.IsCancellationRequested)
         {
             if (!_backend.FpsLiveRunning) { await StopAsync("FPS 측정이 멈췄어요. 다시 켜 주세요"); Store(Load() with { On = false }); return; }
@@ -132,11 +147,12 @@ public static class FpsOverlay
         if (pid == 0 || pid == Environment.ProcessId || pid == shell) { Hide(); return; }   // desktop, taskbar, File Explorer, this app
         var read = await _backend!.FpsLiveReadAsync((int)pid);
         if (read is not { } r || (pid != _shownPid && r.Steady < ShowAfterSeconds) || _run == null) { Hide(); return; }
-        string big, small;
+        string big;
+        string? small;
         if (_frameGen is { Running: true } fg && int.TryParse(fg.OutFps, out var output) && output > 0)
         { big = output.ToString(); small = Lang.T($"원본 {r.Fps:0}"); }
         else { big = r.Fps.ToString("0"); small = $"1% {r.Low:0}"; }
-        _window?.Show(front, Corner, big, small);
+        _window?.Show(front, Corner, big, Lower ? small : null);
         _shownPid = pid;
     }
 
@@ -153,18 +169,34 @@ public static class FpsOverlay
         var toggle = new ToggleSwitch { OnContent = "", OffContent = "", IsChecked = _run != null || On };
         Avalonia.Automation.AutomationProperties.SetName(toggle, "FPS 표시");
         var list = new StackPanel();
-        list.Children.Add(Ui.Row("FPS 표시", "게임 화면이 앞에 있는 동안 화면 구석에 FPS를 작게 띄워요. 켜 두면 앱을 켤 때 함께 시작해요.", toggle, first: true));
+        list.Children.Add(Ui.Row("FPS 표시", "게임 화면이 앞에 있는 동안 화면 구석에 FPS를 작게 띄워요.", toggle, first: true));
         var corner = new ComboBox { ItemsSource = Corners, SelectedIndex = Corner, Width = 150 };
         corner.SelectionChanged += (_, _) => { if (corner.SelectedIndex >= 0) Corner = corner.SelectedIndex; };
         list.Children.Add(Ui.Row("위치", "", corner));
         p.Children.Add(list);
         var status = Ui.Text(Status, "label", wrap: true);
         p.Children.Add(status);
-        p.Children.Add(Ui.Text("큰 숫자는 지난 1초의 FPS, 아래 줄은 최근 10초에서 가장 느린 1% 프레임으로 잰 1% 낮은 값이에요. " +
+
+        var auto = new CheckBox { Content = "앱을 켤 때 함께 시작", IsChecked = AutoStart };
+        auto.IsCheckedChanged += (_, _) => AutoStart = auto.IsChecked == true;
+        p.Children.Add(auto);
+        p.Children.Add(Ui.Text("켜 둔 채로 앱을 끄면 다음에 앱을 켤 때 FPS 표시도 시작하고, 그때 관리자 권한을 물어봐요. 끄면 필요할 때 여기서 직접 켜요.", "muted", wrap: true));
+        var lower = new CheckBox { Content = "아래 줄 표시 (1% 낮은 값)", IsChecked = Lower };
+        lower.IsCheckedChanged += (_, _) => Lower = lower.IsChecked == true;
+        p.Children.Add(lower);
+        p.Children.Add(Ui.Text("아래 줄은 최근 10초에서 가장 느린 1% 프레임으로 잰 1% 낮은 값이에요. 큰 숫자는 지난 1초의 FPS예요. " +
                                "프레임 생성 중에는 큰 숫자가 출력 FPS, 아래 줄이 게임의 원본 FPS예요.", "muted", wrap: true));
+        var hide = new CheckBox { Content = "방송 · 캡처에서 숨기기", IsChecked = HideFromCapture };
+        hide.IsCheckedChanged += (_, _) => HideFromCapture = hide.IsChecked == true;
+        p.Children.Add(hide);
+        var warning = Ui.Text("주의: 캡처에서 숨긴 창이 게임 위에 있으면 게임 보안 프로그램(안티치트)이 핵 오버레이로 볼 수 있어요. " +
+                              "안티치트가 있는 온라인 게임에서는 켜지 마세요. 끄면 FPS 창이 화면 캡처와 방송에도 보여요.", "muted", wrap: true);
+        warning.Foreground = new SolidColorBrush(Color.Parse("#FF7A1A"));
+        p.Children.Add(warning);
+
         p.Children.Add(Ui.Text("Windows가 기록하는 화면 출력 횟수로 재요 (PresentMon, Xbox Game Bar와 같은 방식). 게임 파일과 메모리는 건드리지 않아요. " +
-                               "이 기록은 관리자 권한이 있어야 읽을 수 있어서 켤 때 관리자 권한을 물어봐요 (앱을 켤 때마다 한 번).", "muted", wrap: true));
-        p.Children.Add(Ui.Text("FPS 창은 클릭이 통과하는 별도 창이라 화면 캡처와 방송에도 보여요. 전체 화면 전용 모드 게임에서는 안 보일 수 있으니 테두리 없는 창 모드를 쓰세요.", "muted", wrap: true));
+                               "이 기록은 관리자 권한이 있어야 읽을 수 있어서, 앱을 켠 뒤 처음 켤 때 관리자 권한을 물어봐요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text("FPS 창은 클릭이 통과하는 별도 창이에요. 전체 화면 전용 모드 게임에서는 안 보일 수 있으니 테두리 없는 창 모드를 쓰세요.", "muted", wrap: true));
         bool setting = false;
         toggle.IsCheckedChanged += async (_, _) => { if (!setting) await SetOnAsync(toggle.IsChecked == true); };
         void Refresh()
@@ -220,8 +252,12 @@ internal sealed class FpsOverlayWindow : IDisposable
                                ClassName, "SystemBoost FPS", WsPopup, 0, 0, 1, 1, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
     }
 
-    /// Shows the numbers in a corner of the monitor the game window is on.
-    public void Show(IntPtr game, int corner, string big, string small)
+    /// Left out of screenshots and broadcasts (Windows 10 2004 and later), or back in them. False if Windows refused.
+    public bool SetHiddenFromCapture(bool hidden) =>
+        _hwnd != IntPtr.Zero && SetWindowDisplayAffinity(_hwnd, hidden ? 0x11u : 0u);   // WDA_EXCLUDEFROMCAPTURE / WDA_NONE
+
+    /// Shows the numbers in a corner of the monitor the game window is on; small null: one line.
+    public void Show(IntPtr game, int corner, string big, string? small)
     {
         if (_hwnd == IntPtr.Zero) return;
         var monitor = MonitorFromWindow(game, 2);   // nearest
@@ -242,7 +278,7 @@ internal sealed class FpsOverlayWindow : IDisposable
         _shown = false;
     }
 
-    private bool Draw(string big, string small, int corner, double scale, RECT monitor)
+    private bool Draw(string big, string? small, int corner, double scale, RECT monitor)
     {
         var number = new TextBlock { Text = big, FontFamily = Font, FontSize = 20, FontWeight = FontWeight.Bold, Foreground = Orange, MinWidth = 38 };
         var unit = new TextBlock { Text = "FPS", FontFamily = Font, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Gray,
@@ -252,7 +288,8 @@ internal sealed class FpsOverlayWindow : IDisposable
         top.Children.Add(unit);
         var lines = new StackPanel();
         lines.Children.Add(top);
-        lines.Children.Add(new TextBlock { Text = small, FontFamily = Font, FontSize = 11, Foreground = Gray, Margin = new Thickness(0, -2, 0, 0) });
+        if (small != null)
+            lines.Children.Add(new TextBlock { Text = small, FontFamily = Font, FontSize = 11, Foreground = Gray, Margin = new Thickness(0, -2, 0, 0) });
         var box = new Border { Background = Back, CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 3, 10, 5), Child = lines };
         box.Measure(Size.Infinity);
         box.Arrange(new Rect(box.DesiredSize));
@@ -322,6 +359,7 @@ internal sealed class FpsOverlayWindow : IDisposable
     private static extern IntPtr CreateWindowEx(int exStyle, string cls, string title, int style, int x, int y, int w, int h,
                                                 IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
     [DllImport("user32")] private static extern bool DestroyWindow(IntPtr hwnd);
+    [DllImport("user32")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
     [DllImport("user32")] private static extern bool ShowWindow(IntPtr hwnd, int cmd);
     [DllImport("user32")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int flags);
