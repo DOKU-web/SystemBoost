@@ -1,4 +1,4 @@
-:root{--bg:#0b0b0c;--card:#141416;--line:#26262a;--txt:#ecebe8;--mut:#8f8e8b;--or:#ff7a1a;--ul:#c79bff}
+:root{--bg:#0b0b0c;--card:#141416;--line:#26262a;--txt:#ecebe8;--mut:#8f8e8b;--or:#ff7a1a;--ul:#c79bff;--bz:#5ec8e0}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.65 system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo","Hiragino Sans","Microsoft YaHei",sans-serif}
 a{color:inherit}
@@ -73,3 +73,8 @@ p.cont{padding-left:18px}
 body.license p.note{color:var(--mut);font-size:14px;background:none;border:0;padding:0}
 .sum{background:var(--card);border-left:3px solid var(--or);border-radius:8px;padding:10px 16px;margin:10px 0;font-size:15px}
 body.license .tbl{padding:0}body.license table{font-size:14px}body.license th,body.license td{text-align:left;vertical-align:top;padding:9px 8px}
+th.bh{color:var(--bz)}td.b{color:var(--bz)}
+.tier.biz{border-color:#1f4f5e;background:linear-gradient(160deg,#122026,#141416)}.tier.biz .tp{color:var(--bz)}
+.tier .tn .w{margin-left:4px}
+h3.bt{margin:22px 0 8px;font-size:17px}
+table.bund td:first-child{font-weight:600}

@@ -3,6 +3,8 @@
 import base64, html, json, re, sys
 sys.path.insert(0, "/home/claude/work/site")
 from i18n import LANGS, S, LIC_NOTE
+from i18n_plans import apply as apply_plans, BUNDLES
+apply_plans(S)
 
 DC = "https://discord.gg/zUyeV2SJwm"
 REPO = "DOKU-web/SystemBoost"
@@ -33,12 +35,18 @@ def index_body(L):
     W = '<span class="w">Windows</span>'
     WN = '<span class="w">Windows · NVIDIA</span>'
     n = '<td class="n">—</td>'
-    dot, pd, ud = "<td>●</td>", '<td class="p">●</td>', '<td class="u">●</td>'
-    table = f'''<tr><th>{s["th"]}</th><th>{s["free"]}</th><th class="ph">{s["prem"]}</th><th class="uh">{s["ultra"]}</th></tr>
-<tr><td>{rows[0]}</td><td>{s["x2"]}</td><td class="p">{s["xp"]}</td><td class="u">{s["xu"]}</td></tr>
-<tr><td>{rows[1]}</td><td>{s["qf"]}</td><td class="p">{s["qp"]}</td><td class="u">{s["qp"]}</td></tr>
-<tr><td>{rows[2]}</td>{dot}{pd}{ud}</tr><tr><td>{rows[3]}</td>{dot}{pd}{ud}</tr><tr><td>{rows[4]}</td>{dot}{pd}{ud}</tr><tr><td>{rows[5]}</td>{dot}{pd}{ud}</tr>
-<tr><td>{rows[6]} {W}</td>{n}{pd}{ud}</tr><tr><td>{rows[7]}</td>{n}{n}{ud}</tr><tr><td>{rows[8]} {W}</td>{n}{n}{ud}</tr><tr><td>{rows[9]} {WN}</td>{n}{n}{ud}</tr>'''
+    dot, pd, ud, bd = "<td>●</td>", '<td class="p">●</td>', '<td class="u">●</td>', '<td class="b">●</td>'
+    table = f'''<tr><th>{s["th"]}</th><th>{s["free"]}</th><th class="ph">{s["prem"]}</th><th class="uh">{s["ultra"]}</th><th class="bh">{s["biz"]}</th></tr>
+<tr><td>{rows[0]}</td><td>{s["x2"]}</td><td class="p">{s["xp"]}</td><td class="u">{s["xu"]}</td><td class="b">{s["xu"]}</td></tr>
+<tr><td>{rows[1]}</td><td>{s["qf"]}</td><td class="p">{s["qp"]}</td><td class="u">{s["qp"]}</td><td class="b">{s["qp"]}</td></tr>'''
+    table += "".join(f"<tr><td>{rows[i]}</td>{dot}{pd}{ud}{bd}</tr>" for i in (2, 3, 4, 5))
+    table += f"<tr><td>{rows[6]} {W}</td>{n}{pd}{ud}{bd}</tr><tr><td>{rows[7]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[8]} {W}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[9]} {WN}</td>{n}{n}{ud}{bd}</tr>"
+    table += "".join(f"<tr><td>{r} {W}</td>{n}{n}{n}{bd}</tr>" for r in s["rb"])
+    name = {"premium": ("prem", "p"), "ultra": ("ultra", "u"), "biz": ("biz", "b")}
+    won = lambda v: f"₩{v:,}"
+    btable = f'<tr><th></th><th>{s["b5"]}</th><th>{s["b10"]}</th></tr>' + "".join(
+        f'<tr><td class="{name[t][1]}">{s[name[t][0]]}</td><td>{won(t5)} <span class="w">{s["each"]} {won(e5)}</span></td>'
+        f'<td>{won(t10)} <span class="w">{s["each"]} {won(e10)}</span></td></tr>' for t, t5, e5, t10, e10 in BUNDLES)
     return f'''{header(s, "index")}
 <section class="hero" id="top">
   <img src="icon.png" alt="SystemBoost">
@@ -64,8 +72,12 @@ def index_body(L):
   <div class="tier"><div class="tn">{s["free"]}</div><div class="tp">₩0</div><div class="ts">{s["free_sub"]}</div></div>
   <div class="tier hot"><div class="tn">{s["prem"]}</div><div class="tp">₩2,900<small> {s["mo"]}</small></div><div class="ts">{s["py_p"]}</div></div>
   <div class="tier ultra"><div class="tn">{s["ultra"]}</div><div class="tp">₩8,900<small> {s["mo"]}</small></div><div class="ts">{s["py_u"]}</div></div>
+  <div class="tier biz"><div class="tn">{s["biz"]} <span class="w">{s["biz_w"]}</span></div><div class="tp">₩12,900<small> {s["mo"]}</small></div><div class="ts">{s["py_b"]}</div></div>
 </div>
 <div class="card tbl"><table>{table}</table></div>
+<h3 class="bt">{s["bh"]}</h3>
+<div class="card tbl"><table class="bund">{btable}</table></div>
+<p class="pl">{s["bn"]}</p>
 <ul class="fine"><li>{s["krw"]}</li>{lis(s["fine"])}</ul>
 <h2>{s["ih"]}</h2>
 <div class="note"><b>{s["iw"]}</b><ol>{lis(s["iwl"])}</ol></div>
@@ -86,6 +98,9 @@ def parse_eula(path):
         elif cur and ln.strip(): cur["l"].append(ln)
     return head, secs
 
+# (article index from 0, paragraph) -> which revision changed it
+REVS = {(2, "3"): 8, (1, "1"): 9, (2, "2"): 9, (2, "5"): 9, (2, "8"): 9, (2, "9"): 9, (5, "1"): 9, (10, "2"): 9}
+
 def eula_html(head, secs, rev_label, art3):
     out, toc = [], []
     for k, s in enumerate(secs):
@@ -94,9 +109,9 @@ def eula_html(head, secs, rev_label, art3):
         for ln in s["l"]:
             imp = ln.startswith("! "); t = html.escape((ln[2:] if imp else ln).strip())
             m = re.match(r"(\d+)\.\s+(.*)", t)
-            changed = k == 2 and m and m.group(1) == "3"
+            changed = REVS.get((k, m.group(1))) if m else None
             if m: t = f'<span class="no">{m.group(1)}.</span> {m.group(2)}'
-            if changed: t += f' <span class="rev">{rev_label}</span>'
+            if changed: t += f' <span class="rev">{rev_label[changed]}</span>'
             cls = "chg" if changed else ("imp" if imp else ("cont" if not m and body else ""))
             body.append(f'<p class="{cls}">{t}</p>' if cls else f"<p>{t}</p>")
         out.append(f'<h2 id="a{k+1}">{html.escape(s["t"])}</h2>\n' + "\n".join(body))
@@ -104,8 +119,8 @@ def eula_html(head, secs, rev_label, art3):
 
 LT = {
  "ko": dict(h1="사용권 계약 · 개인정보", sub='앱을 처음 실행할 때 보여 주는 사용권 계약과 같은 내용이에요. 앱의 설정 → "사용권 계약 보기"에서도 볼 수 있어요.',
-   revh="계약 개정 안내", revp='카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌어요. 바뀐 조항은 <b>2026년 12월 8일</b>부터 시행하고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요. 0.8.8로 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
-   rev="2026년 12월 8일 개정", toc="목차", imp="표시가 있는 조항(주황 테두리)은 꼭 읽어 주세요.",
+   revh="계약 개정 안내", revp='계약이 두 번 바뀌어요. 바뀐 조항에는 개정 날짜가 붙어 있어요.<br>• <b>2026년 12월 8일</b>: 카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요.<br>• <b>2026년 12월 9일</b>: 산업 플랜, 5대 · 10대 묶음 키, 플랜 이름에 맞춰 <a href="#a2">제2조 제1항</a>, <a href="#a3">제3조 제2항 · 제5항 · 제8항 · 제9항</a>, <a href="#a6">제6조 제1항</a>, <a href="#a11">제11조 제2항</a>이 바뀌어요. 프리미엄 플랜은 이름만 프로로 바뀌고 기능과 가격은 그대로예요. 묶음 키는 그날부터 팔아요.<br>앱을 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
+   rev="2026년 12월 8일 개정", rev9="2026년 12월 9일 개정", toc="목차", imp="표시가 있는 조항(주황 테두리)은 꼭 읽어 주세요.",
    priv="개인정보 처리 안내", oss="오픈소스 라이선스", contact="판매자 정보와 문의",
    privsum="사용권 계약 제8조를 표로 정리했어요. 보내는 정보는 아래가 전부예요.",
    cols=["언제", "어디로", "보내는 것", "보관"],
@@ -125,8 +140,8 @@ LT = {
    own="SystemBoost 자체 코드(앱, 프레임 생성 엔진, 셰이더)는 DOKKU가 직접 만든 것이에요.",
    contactp=f'판매자: DOKKU<br>라이선스, 키, 시험 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
  "en": dict(h1="License Agreement · Privacy", sub='This is the same agreement the app shows on first start. You can read it again in the app under Settings → "View license agreement".',
-   revh="Upcoming revision", revp='<a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions. The revised paragraph takes effect on <b>December 8, 2026</b>, and card subscriptions go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically. After updating to 0.8.8 you accept the revised agreement once.',
-   rev="Revised Dec 8, 2026", toc="Contents", imp="Please read the marked articles (orange border) carefully.",
+   revh="Upcoming revisions", revp='The agreement changes twice. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>After updating the app you accept the revised agreement once.',
+   rev="Revised Dec 8, 2026", rev9="Revised Dec 9, 2026", toc="Contents", imp="Please read the marked articles (orange border) carefully.",
    priv="Privacy summary", oss="Open-source licenses", contact="Seller and contact",
    privsum="Article 8 of the agreement as a table. This is everything the app sends.",
    cols=["When", "Where", "What is sent", "Kept for"],
@@ -155,7 +170,7 @@ OSS = [('<a href="https://github.com/AvaloniaUI/Avalonia">Avalonia</a>', "MIT"),
 def license_body(L, eulas):
     s = S[L]; base = "ko" if L == "ko" else "en"; t = LT[base]
     head, secs = eulas[base]
-    toc, body = eula_html(head, secs, t["rev"], 3)
+    toc, body = eula_html(head, secs, {8: t["rev"], 9: t["rev9"]}, 3)
     rows = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in t["rows"])
     oss = "".join(f"<tr><td>{a}</td><td>{b}</td><td>{u}</td></tr>" for (a, b), u in zip(OSS, t["ossuse"]))
     note = f'<div class="langnote">{LIC_NOTE[L]}</div>' if L in LIC_NOTE else ""
