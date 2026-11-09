@@ -229,6 +229,7 @@ public sealed partial class WindowsBoostBackend
         await _gate.WaitAsync();
         try
         {
+            if (!on && StartupApps.Guarded(item)) return $"{item.Name}: 게임 보안 프로그램이라 그대로 둬요";
             var old = _s.Backups.FirstOrDefault(b => b.Feature == StartupFeature && b.Kind == "startup" && b.Key == item.Approved && b.Name == item.Name);
             var cur = StartupApps.Read(item.Approved, item.Name);
             if (old == null && StartupApps.IsOn(cur) == on) return $"{item.Name}: 이미 {(on ? "켜져" : "꺼져")} 있어요";
@@ -296,6 +297,21 @@ public static class StartupApps
                 items.Add(new(name, f, at.ApprovedFolder, IsOn(Read(at.ApprovedFolder, name))));
             }
         return items.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    /// A game security program (by its entry name or program file): its autostart is not turned off here.
+    public static bool Guarded(Item i) =>
+        new[] { i.Name, Path.GetFileNameWithoutExtension(i.Name), ProgramOf(i.Command) }
+            .Any(n => !string.IsNullOrEmpty(n) && ResourceManagers.AntiCheat.Contains(n));
+
+    /// The program a Run command starts, without folder and extension: "C:\x\y.exe" -a, C:\x\y.exe -a, or a file in the folder.
+    public static string? ProgramOf(string command)
+    {
+        var c = command.Trim();
+        string path;
+        if (c.StartsWith('"')) { int end = c.IndexOf('"', 1); path = end > 0 ? c[1..end] : c[1..]; }
+        else { int exe = c.IndexOf(".exe", StringComparison.OrdinalIgnoreCase); path = exe > 0 ? c[..(exe + 4)] : c.Split(' ')[0]; }
+        try { return Path.GetFileNameWithoutExtension(path); } catch (ArgumentException) { return null; }
     }
 
     /// No switch, or an even first byte, is on: Task Manager writes 02 for on and 03 for off.

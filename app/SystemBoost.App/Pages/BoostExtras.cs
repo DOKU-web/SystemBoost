@@ -117,6 +117,8 @@ internal static class BoostExtras
             foreach (var item in items)
             {
                 var sw = new ToggleSwitch { OnContent = "", OffContent = "", IsChecked = item.Enabled };
+                var guarded = StartupApps.Guarded(item);
+                if (guarded && item.Enabled) sw.IsEnabled = false;   // a game security program: only turning it back on is allowed
                 Avalonia.Automation.AutomationProperties.SetName(sw, item.Name);
                 sw.IsCheckedChanged += async (_, _) =>
                 {
@@ -124,7 +126,7 @@ internal static class BoostExtras
                     status.Text = await b.SetStartupAsync(item, sw.IsChecked == true);
                     Refresh();   // shows what is set now, also when it was refused
                 };
-                list.Children.Add(Ui.Row(item.Name, item.Command, sw, first));
+                list.Children.Add(Ui.Row(item.Name, guarded ? "게임 보안 프로그램이라 그대로 둬요 · " + item.Command : item.Command, sw, first));
                 first = false;
             }
         }
@@ -415,12 +417,8 @@ internal sealed class NoticeWindow : Window
 {
     private const int ShownMs = 7000;
 
-    // Windows 10 2004 and later: screen capture and broadcasts leave the window out; it stays on the screen.
-    private const uint ExcludeFromCapture = 0x11;
-    [System.Runtime.InteropServices.DllImport("user32")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
-
-    /// hideFromCapture: while streaming, so the notice is not in the broadcast.
-    public NoticeWindow(string text, bool hideFromCapture = false)
+    // Never hidden from capture (SetWindowDisplayAffinity): anti-cheat programs read that over a game as a cheat overlay.
+    public NoticeWindow(string text)
     {
         SystemDecorations = SystemDecorations.None;
         Topmost = true;
@@ -438,8 +436,6 @@ internal sealed class NoticeWindow : Window
         };
         Opened += (_, _) =>
         {
-            if (hideFromCapture && OperatingSystem.IsWindows() && TryGetPlatformHandle()?.Handle is IntPtr h && h != IntPtr.Zero)
-                SetWindowDisplayAffinity(h, ExcludeFromCapture);
             if (Screens.Primary is { } s) Position = new PixelPoint(s.WorkingArea.Right - (int)(Bounds.Width * s.Scaling) - 16, s.WorkingArea.Y + 16);
             DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(ShownMs));
         };

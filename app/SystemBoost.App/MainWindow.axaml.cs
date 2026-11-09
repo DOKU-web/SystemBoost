@@ -19,7 +19,9 @@ public partial class MainWindow : Window
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         var b = new WindowsBoostBackend();
         FrameGenViewModel.Limiter = b;
-        b.Notice += text => Avalonia.Threading.Dispatcher.UIThread.Post(() => new NoticeWindow(text, OperatingSystem.IsWindows() && b.Streaming).Show());
+        // While streaming no notice window opens (the text is in 최근 동작 already): a window hidden from capture
+        // over a game looks like a cheat overlay to anti-cheat programs, and a plain one would be in the broadcast.
+        b.Notice += text => Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!(OperatingSystem.IsWindows() && b.Streaming)) new NoticeWindow(text).Show(); });
         return b;
     }
     private readonly Dictionary<string, Control> _cache = new();

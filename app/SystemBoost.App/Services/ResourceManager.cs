@@ -208,12 +208,9 @@ public static class ResourceManagers
     [DllImport("kernel32")] private static extern bool CloseHandle(IntPtr h);
 
     // Never touch these (system, the game we capture, ourselves, anti-cheat programs).
-    public static readonly HashSet<string> Protected = new(StringComparer.OrdinalIgnoreCase)
+    /// Game security (anti-cheat) programs: never changed, and their autostart is never turned off.
+    public static readonly HashSet<string> AntiCheat = new(StringComparer.OrdinalIgnoreCase)
     {
-        "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "dwm",
-        "explorer", "audiodg", "fontdrvhost", "SystemBoost", "sb_framegen", "sb-framegen-mac",
-        "kernel_task", "launchd", "WindowServer", "loginwindow", "Dock", "Finder",
-        "StarCitizen", "RSI Launcher", "sb_helper",
         // anti-cheat: Easy Anti-Cheat, BattlEye, Vanguard, FACEIT, ESEA, EA, PunkBuster
         "EasyAntiCheat", "EasyAntiCheat_EOS", "EasyAntiCheat_Setup", "start_protected_game", "BEService", "BEService_x64",
         "vgc", "vgtray", "vgm", "FACEITClient", "faceit", "FACEITService", "ESEAClient",
@@ -223,6 +220,14 @@ public static class ResourceManagers
         "xcoronahost.xem", "xxd-0.xem", "x3.xem", "BlackCipher.aes", "BlackCipher64.aes", "BlackCall.aes", "BlackCall64.aes",
         "SGuard64", "SGuardSvc64", "ACE-Tray", "NeacClient",
     };
+
+    public static readonly HashSet<string> Protected = new(new[]
+    {
+        "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "dwm",
+        "explorer", "audiodg", "fontdrvhost", "SystemBoost", "sb_framegen", "sb-framegen-mac",
+        "kernel_task", "launchd", "WindowServer", "loginwindow", "Dock", "Finder",
+        "StarCitizen", "RSI Launcher", "sb_helper",
+    }.Concat(AntiCheat), StringComparer.OrdinalIgnoreCase);
 }
 
 // =============================================================== Windows

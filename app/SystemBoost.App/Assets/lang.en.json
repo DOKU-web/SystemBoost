@@ -804,7 +804,7 @@
 "시작 프로그램 정리": "Startup programs",
 "방송 모드": "Stream mode",
 "업무 모드": "Work mode",
-"OBS · Streamlabs · PRISM · XSplit이 켜져 있는 동안 방송 프로그램 우선순위를 '보통 이상'으로 올리고 Windows 알림을 꺼요. SystemBoost 알림은 방송 화면에 잡히지 않게 하고, 다른 프로그램의 큰 전송을 알려요. 방송 프로그램이 꺼지면 원래대로": "While OBS · Streamlabs · PRISM · XSplit runs, raises the streaming app to 'Above normal' and turns Windows notifications off. SystemBoost's own notices stay out of the broadcast, and big transfers by other programs are reported. All back when the streaming app closes",
+"OBS · Streamlabs · PRISM · XSplit이 켜져 있는 동안 방송 프로그램 우선순위를 '보통 이상'으로 올리고 Windows 알림을 꺼요. 방송 중에는 SystemBoost 알림 창을 띄우지 않고 '최근 동작'에 남기며, 다른 프로그램의 큰 전송을 알려요. 방송 프로그램이 꺼지면 원래대로": "While OBS · Streamlabs · PRISM · XSplit runs, raises the streaming app to 'Above normal' and turns Windows notifications off. While streaming, SystemBoost opens no notice windows and keeps notices in 'Recent activity', and big transfers by other programs are reported. All back when the streaming app closes",
 "화상 회의(Zoom · Teams · Webex · Skype)와 아래에서 고른 업무 프로그램이 켜져 있는 동안 우선순위를 '보통 이상'으로 올려요. 꺼지면 원래대로": "While a video call (Zoom · Teams · Webex · Skype) or a work app chosen below runs, raises it to 'Above normal'. Back when it closes",
 "켰어요. 방송 프로그램이 켜지면 적용돼요": "On. Applies when a streaming app starts",
 "켰어요. 화상 회의나 고른 업무 프로그램이 켜지면 적용돼요": "On. Applies when a video call or a chosen work app starts",
@@ -848,5 +848,7 @@
 "프로 월간": "Pro monthly",
 "프로 연간": "Pro yearly",
 "프로 연간 5대 묶음": "Pro yearly, 5-PC bundle",
-"프로 연간 10대 묶음": "Pro yearly, 10-PC bundle"
+"프로 연간 10대 묶음": "Pro yearly, 10-PC bundle",
+"게임 보안 프로그램이라 그대로 둬요 · {0}": "Game security program, left as it is · {0}",
+"{0}: 게임 보안 프로그램이라 그대로 둬요": "{0}: a game security program, left as it is"
 }
