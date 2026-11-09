@@ -30,8 +30,8 @@ Overlay::Overlay(ID3D11Device* dev, ID3D11DeviceContext* ctx, bool showInCapture
                             nullptr, wc.hInstance, nullptr);
     if (!hwnd_) throw HrError{HRESULT_FROM_WIN32(GetLastError()), "CreateWindowEx"};
     SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
-    // keep our own output out of every capture (no feedback loop with DXGI capture,
-    // and recording software sees the game, not the generated frames)
+    // With DXGI capture our own output must stay out of the screen copy, or it would feed back
+    // into itself. The caller passes showInCapture when nothing needs that.
     if (!showInCapture) SetWindowDisplayAffinity(hwnd_, WDA_EXCLUDEFROMCAPTURE);
 
     ComPtr<IDXGIDevice> dxgi;

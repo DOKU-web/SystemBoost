@@ -258,11 +258,13 @@ int Run(const Settings& s) {
 #endif
     std::unique_ptr<ICapture> cap;
     std::unique_ptr<CrossAdapterCopy> xcopy;
+    bool windowCapture = false;
 #ifdef SBFG_WITH_WGC
     if (api == CaptureApi::Wgc) {
         // cursor: drawn by us in upscaling mode, otherwise optional
         cap = CreateWgcCapture(genDev.Get(), game, s.captureCursor && !s.upscale);
         if (!cap) EmitMsg("warning", "Windows.Graphics.Capture failed, using DXGI capture");
+        windowCapture = cap != nullptr;
     }
 #endif
     if (!cap) {
@@ -287,7 +289,10 @@ int Run(const Settings& s) {
         dir = dir.substr(0, dir.find_last_of(L"\\/")) + L"\\shaders";
     }
     FrameGenGpu fg(genDev.Get(), genCtx.Get(), dir);
-    Overlay overlay(genDev.Get(), genCtx.Get(), s.showInCapture);
+    // DXGI copies the whole screen, overlay included, so there the overlay has to stay out of
+    // captures. Window capture copies only the game's window and never sees it, so there it is an
+    // ordinary window: anti-cheat software can take a window hidden from capture for a cheat's.
+    Overlay overlay(genDev.Get(), genCtx.Get(), s.showInCapture || windowCapture);
     CursorManager cursor(genDev.Get());
     if (s.upscale) InstallCursorSafety();
 

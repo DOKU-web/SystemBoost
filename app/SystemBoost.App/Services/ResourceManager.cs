@@ -1,6 +1,7 @@
 // Per-app resource sharing: measure CPU / RAM / GPU per app and decide who gets more.
 // Principle: the game process itself is never opened or modified (anti-cheat
-// safety). The game gets more by lowering everything else.
+// safety). The game gets more by lowering everything else. A process that may be a
+// game (LooksLikeGame) is only ever read the way Task Manager reads it.
 //
 // Windows (same-user processes, no admin needed):
 //   Priority   High-ish/Normal/BelowNormal/Idle priority class
@@ -18,6 +19,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace SystemBoost.App.Services;
@@ -31,6 +34,7 @@ public sealed class AppSample
     public double Cpu { get; set; }       // % of all cores
     public double RamMB { get; set; }
     public double Gpu { get; set; } = -1; // % (-1 = not available)
+    public bool Game { get; set; }        // may be a game: shown, never changed
 }
 
 public interface IResourceManager : IDisposable
@@ -72,16 +76,152 @@ public static class ResourceManagers
         catch (Exception) { return null; }
     }
 
-    [DllImport("user32", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    /// Folders of the games on the boost page, each ending in a backslash.
+    public static List<string> GameFolders { get; set; } = new();
 
-    // Never touch these (system, the game we capture, ourselves).
+    /// True for a game or anything that may belong to one: the games on the boost page and
+    /// what lives next to them, anti-cheat programs, whatever covers a whole screen, programs
+    /// in the folders game stores install into, and every game Windows itself has recognised
+    /// (Game Bar's list). Such a process is never opened with a right that could change it.
+    /// Finding out reads only its path, which Task Manager reads too.
+    public static bool LooksLikeGame(int pid, string name)
+    {
+        if (IsProtected(name)) return true;
+        return OperatingSystem.IsWindows() && LooksLikeGameWin(pid);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool LooksLikeGameWin(int pid)
+    {
+        if (FullscreenPids().Contains(pid)) return true;
+        var path = ImagePath(pid);
+        if (path == null) return true;   // even its path is closed to us: leave it alone
+        if (GameFolderMarks.Any(m => path.Contains(m, StringComparison.OrdinalIgnoreCase))) return true;
+        if (GameFolders.Any(f => path.StartsWith(f, StringComparison.OrdinalIgnoreCase))) return true;
+        return KnownGames().Contains(path);
+    }
+
+    // Folders that game stores and publishers install into.
+    private static readonly string[] GameFolderMarks =
+    {
+        @"\steamapps\", @"\Epic Games\", @"\Riot Games\", @"\XboxGames\", @"\Ubisoft Game Launcher\games\",
+        @"\EA Games\", @"\Electronic Arts\", @"\GOG Galaxy\Games\", @"\Rockstar Games\", @"\Roblox\Versions\",
+        @"\Roberts Space Industries\", @"\Nexon\", @"\Kakao Games\", @"\Smilegate\", @"\Netmarble\", @"\NCSOFT\",
+        @"\PlayNC\", @"\Pearl Abyss\", @"\Games\",
+    };
+
+    private static readonly object CacheLock = new();
+    private static readonly Dictionary<int, string?> Paths = new();
+    private static DateTime _pathsAt = DateTime.MinValue;
+    private static HashSet<int> _fullscreen = new();
+    private static DateTime _fullscreenAt = DateTime.MinValue;
+    private static HashSet<string> _known = new(StringComparer.OrdinalIgnoreCase);
+    private static DateTime _knownAt = DateTime.MinValue;
+
+    /// The program file of a process, null when Windows does not show it to us.
+    /// The handle can only query, the same right Task Manager uses.
+    public static string? ImagePath(int pid)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        lock (CacheLock)
+        {
+            if (DateTime.UtcNow - _pathsAt > TimeSpan.FromSeconds(30)) { Paths.Clear(); _pathsAt = DateTime.UtcNow; }
+            if (Paths.TryGetValue(pid, out var cached)) return cached;
+        }
+        string? path = null;
+        var h = OpenProcess(QueryLimited, false, pid);
+        if (h != IntPtr.Zero)
+        {
+            var sb = new StringBuilder(1024);
+            int len = sb.Capacity;
+            if (QueryFullProcessImageName(h, 0, sb, ref len)) path = sb.ToString(0, len);
+            CloseHandle(h);
+        }
+        lock (CacheLock) Paths[pid] = path;
+        return path;
+    }
+
+    // Processes with a window over a whole monitor: borderless and fullscreen games. A
+    // maximised window with a title bar is an ordinary program.
+    [SupportedOSPlatform("windows")]
+    private static HashSet<int> FullscreenPids()
+    {
+        lock (CacheLock) if (DateTime.UtcNow - _fullscreenAt < TimeSpan.FromSeconds(2)) return _fullscreen;
+        var set = new HashSet<int>();
+        EnumWindows((hwnd, _) =>
+        {
+            if (!IsWindowVisible(hwnd) || IsIconic(hwnd) || !GetWindowRect(hwnd, out var r)) return true;
+            if (IsZoomed(hwnd) && (GetWindowLong(hwnd, GwlStyle) & WsCaption) == WsCaption) return true;
+            var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            var mon = MonitorFromWindow(hwnd, 0 /* MONITOR_DEFAULTTONULL */);
+            if (mon == IntPtr.Zero || !GetMonitorInfo(mon, ref mi)) return true;
+            if (r.Left <= mi.rcMonitor.Left && r.Top <= mi.rcMonitor.Top && r.Right >= mi.rcMonitor.Right && r.Bottom >= mi.rcMonitor.Bottom)
+            {
+                GetWindowThreadProcessId(hwnd, out var pid);
+                set.Add((int)pid);
+            }
+            return true;
+        }, IntPtr.Zero);
+        set.Remove(Environment.ProcessId);
+        lock (CacheLock) { _fullscreen = set; _fullscreenAt = DateTime.UtcNow; }
+        return set;
+    }
+
+    // Windows keeps the games it has recognised for Game Mode and Game Bar here.
+    [SupportedOSPlatform("windows")]
+    private static HashSet<string> KnownGames()
+    {
+        lock (CacheLock) if (DateTime.UtcNow - _knownAt < TimeSpan.FromMinutes(1)) return _known;
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"System\GameConfigStore\Children");
+            if (k != null)
+                foreach (var sub in k.GetSubKeyNames())
+                {
+                    using var c = k.OpenSubKey(sub);
+                    if (c?.GetValue("MatchedExeFullPath") is string p && p.Length > 0) set.Add(p);
+                }
+        }
+        catch (Exception) { }
+        lock (CacheLock) { _known = set; _knownAt = DateTime.UtcNow; }
+        return set;
+    }
+
+    private const uint QueryLimited = 0x1000;          // PROCESS_QUERY_LIMITED_INFORMATION
+    private const int GwlStyle = -16;
+    private const int WsCaption = 0x00C00000;
+    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct MONITORINFO { public int cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+    [DllImport("user32", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32")] private static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+    [DllImport("user32")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32")] private static extern bool IsZoomed(IntPtr hwnd);
+    [DllImport("user32")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
+    [DllImport("user32")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [DllImport("user32")] private static extern bool GetMonitorInfo(IntPtr mon, ref MONITORINFO mi);
+    [DllImport("kernel32", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool QueryFullProcessImageName(IntPtr h, uint flags, StringBuilder name, ref int size);
+    [DllImport("kernel32")] private static extern bool CloseHandle(IntPtr h);
+
+    // Never touch these (system, the game we capture, ourselves, anti-cheat programs).
     public static readonly HashSet<string> Protected = new(StringComparer.OrdinalIgnoreCase)
     {
         "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "dwm",
         "explorer", "audiodg", "fontdrvhost", "SystemBoost", "sb_framegen", "sb-framegen-mac",
         "kernel_task", "launchd", "WindowServer", "loginwindow", "Dock", "Finder",
-        "EasyAntiCheat", "EasyAntiCheat_EOS", "BEService", "vgc", "vgtray", "FACEITClient", "faceit", "StarCitizen", "RSI Launcher",
-        "sb_helper",
+        "StarCitizen", "RSI Launcher", "sb_helper",
+        // anti-cheat: Easy Anti-Cheat, BattlEye, Vanguard, FACEIT, ESEA, EA, PunkBuster
+        "EasyAntiCheat", "EasyAntiCheat_EOS", "EasyAntiCheat_Setup", "start_protected_game", "BEService", "BEService_x64",
+        "vgc", "vgtray", "vgm", "FACEITClient", "faceit", "FACEITService", "ESEAClient",
+        "EAAntiCheat.GameService", "EAAntiCheat.GameServiceLauncher", "PnkBstrA", "PnkBstrB",
+        // nProtect GameGuard, XIGNCODE3, Nexon BlackCipher, Tencent ACE, NetEase
+        "GameMon", "GameMon.des", "GameMon64", "GameMon64.des", "GameGuard.des", "npggNT.des",
+        "xcoronahost.xem", "xxd-0.xem", "x3.xem", "BlackCipher.aes", "BlackCipher64.aes", "BlackCall.aes", "BlackCall64.aes",
+        "SGuard64", "SGuardSvc64", "ACE-Tray", "NeacClient",
     };
 }
 
@@ -94,7 +234,7 @@ public sealed class WinResourceManager : IResourceManager
     public bool MeasuresGpu => _gpu != null;
 
     private readonly Dictionary<int, (TimeSpan cpu, DateTime t)> _last = new();
-    private readonly Dictionary<int, (ProcessPriorityClass prio, string name, string? exe)> _changed = new();
+    private readonly Dictionary<int, (uint prio, string name, string? exe)> _changed = new();
     private readonly Dictionary<int, IntPtr> _jobs = new();
     private readonly Dictionary<string, string?> _gpuOrig = new(StringComparer.OrdinalIgnoreCase);
     private readonly GpuCounters? _gpu = GpuCounters.TryCreate();
@@ -116,7 +256,8 @@ public sealed class WinResourceManager : IResourceManager
                     pct = (cpu - prev.cpu).TotalMilliseconds / Math.Max(1, (now - prev.t).TotalMilliseconds) / Environment.ProcessorCount * 100;
                 _last[p.Id] = (cpu, now);
                 list.Add(new AppSample { Pid = p.Id, Name = p.ProcessName, Cpu = pct, RamMB = p.PrivateMemorySize64 / 1048576.0,
-                                         Gpu = gpu.TryGetValue(p.Id, out var g) ? g : (_gpu != null ? 0 : -1) });
+                                         Gpu = gpu.TryGetValue(p.Id, out var g) ? g : (_gpu != null ? 0 : -1),
+                                         Game = ResourceManagers.LooksLikeGame(p.Id, p.ProcessName) });
             }
             catch (Exception) { /* access denied / exited */ }
             finally { p.Dispose(); }
@@ -126,19 +267,27 @@ public sealed class WinResourceManager : IResourceManager
         {
             Pid = g.OrderByDescending(a => a.RamMB).First().Pid, Name = g.Key,
             Cpu = g.Sum(a => a.Cpu), RamMB = g.Sum(a => a.RamMB), Gpu = g.Any(a => a.Gpu >= 0) ? g.Sum(a => Math.Max(0, a.Gpu)) : -1,
+            Game = g.Any(a => a.Game),
         }).ToList();
     });
 
     public Task<string> SetLevelAsync(AppSample app, ShareLevel level, int cap = 25) => Task.Run(() =>
     {
-        if (ResourceManagers.IsProtected(app.Name)) return $"{app.Name}: 게임과 시스템 프로세스는 바꾸지 않아요";
-        int done = 0, failed = 0;
+        const string Leave = "{0}: 게임과 시스템 프로세스는 바꾸지 않아요";
+        if (app.Game || ResourceManagers.IsProtected(app.Name)) return string.Format(Leave, app.Name);
+        int done = 0, failed = 0, games = 0;
         foreach (var p in Process.GetProcessesByName(app.Name))
         {
-            try { Apply(p, level, cap); done++; }
+            try
+            {
+                if (ResourceManagers.LooksLikeGame(p.Id, app.Name)) { games++; continue; }
+                Apply(p, level, cap);
+                done++;
+            }
             catch (Exception) { failed++; }
             finally { p.Dispose(); }
         }
+        if (done == 0 && games > 0) return string.Format(Leave, app.Name);
         string what = level switch
         {
             ShareLevel.Priority => "우선 (CPU 우선순위 높음)",
@@ -149,35 +298,46 @@ public sealed class WinResourceManager : IResourceManager
         return failed > 0 && done == 0 ? $"{app.Name}: 권한이 없어 바꾸지 못했어요" : $"{app.Name}: {what}";
     });
 
+    // Only the rights each change needs: no memory access, and no right to end the program
+    // except for the CPU cap, where Windows asks for it to put the program in a job.
+    private const uint SetInformation = 0x0200, SetQuota = 0x0100, Terminate = 0x0001, QueryLimited = 0x1000;
+    private const uint AboveNormalClass = 0x8000, BelowNormalClass = 0x4000;
+
     private void Apply(Process p, ShareLevel level, int cap)
     {
-        if (!_changed.ContainsKey(p.Id))
+        uint rights = SetInformation | QueryLimited | (level == ShareLevel.Limit ? SetQuota | Terminate : 0);
+        var h = OpenProcess(rights, false, p.Id);
+        if (h == IntPtr.Zero) throw new InvalidOperationException("open");
+        try
         {
-            string? exe = null;
-            try { exe = p.MainModule?.FileName; } catch (Exception) { }
-            _changed[p.Id] = (p.PriorityClass, p.ProcessName, exe);
+            if (!_changed.ContainsKey(p.Id))
+            {
+                uint prio = GetPriorityClass(h);
+                if (prio == 0) throw new InvalidOperationException("priority");
+                _changed[p.Id] = (prio, p.ProcessName, ResourceManagers.ImagePath(p.Id));
+            }
+            var orig = _changed[p.Id];
+            switch (level)
+            {
+                case ShareLevel.Priority:
+                    SetPriorityClass(h, AboveNormalClass);   // never High/Realtime: input & audio would suffer
+                    SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p.Id, h, 0);
+                    break;
+                case ShareLevel.Normal:
+                    SetPriorityClass(h, orig.prio);
+                    SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p.Id, h, 0); SetGpuPref(orig.exe, false);
+                    break;
+                case ShareLevel.Lower:
+                    SetPriorityClass(h, BelowNormalClass);
+                    SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p.Id, h, 0); SetGpuPref(orig.exe, true);
+                    break;
+                case ShareLevel.Limit:
+                    SetPriorityClass(h, BelowNormalClass);
+                    SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p.Id, h, Math.Clamp(cap, 5, 90)); SetGpuPref(orig.exe, true);
+                    break;
+            }
         }
-        var orig = _changed[p.Id];
-        IntPtr h = p.Handle;
-        switch (level)
-        {
-            case ShareLevel.Priority:
-                p.PriorityClass = ProcessPriorityClass.AboveNormal;   // never High/Realtime: input & audio would suffer
-                SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p, 0);
-                break;
-            case ShareLevel.Normal:
-                p.PriorityClass = orig.prio;
-                SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p, 0); SetGpuPref(orig.exe, false);
-                break;
-            case ShareLevel.Lower:
-                p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p, 0); SetGpuPref(orig.exe, true);
-                break;
-            case ShareLevel.Limit:
-                p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p, Math.Clamp(cap, 5, 90)); SetGpuPref(orig.exe, true);
-                break;
-        }
+        finally { CloseHandle(h); }
     }
 
     public Task RestoreAllAsync() => Task.Run(() =>
@@ -186,9 +346,18 @@ public sealed class WinResourceManager : IResourceManager
         {
             try
             {
+                // the number may belong to another program by now
                 using var p = Process.GetProcessById(pid);
-                p.PriorityClass = orig.prio;
-                SetEco(p.Handle, false); SetMemPrio(p.Handle, 5); SetCpuCap(p, 0);
+                if (string.Equals(p.ProcessName, orig.name, StringComparison.OrdinalIgnoreCase))
+                {
+                    var h = OpenProcess(SetInformation | QueryLimited, false, pid);
+                    if (h != IntPtr.Zero)
+                    {
+                        SetPriorityClass(h, orig.prio); SetEco(h, false); SetMemPrio(h, 5);
+                        CloseHandle(h);
+                    }
+                    SetCpuCap(pid, IntPtr.Zero, 0);
+                }
             }
             catch (Exception) { }
             SetGpuPref(orig.exe, false);
@@ -201,14 +370,14 @@ public sealed class WinResourceManager : IResourceManager
     public void Dispose() { RestoreAllAsync().Wait(3000); _gpu?.Dispose(); }
 
     // ---- Win32 -----------------------------------------------------------
-    private void SetCpuCap(Process p, int percent)
+    private void SetCpuCap(int pid, IntPtr h, int percent)
     {
-        if (!_jobs.TryGetValue(p.Id, out var job))
+        if (!_jobs.TryGetValue(pid, out var job))
         {
             if (percent == 0) return;
             job = CreateJobObject(IntPtr.Zero, null);
-            if (job == IntPtr.Zero || !AssignProcessToJobObject(job, p.Handle)) { if (job != IntPtr.Zero) CloseHandle(job); throw new InvalidOperationException("job"); }
-            _jobs[p.Id] = job;
+            if (job == IntPtr.Zero || !AssignProcessToJobObject(job, h)) { if (job != IntPtr.Zero) CloseHandle(job); throw new InvalidOperationException("job"); }
+            _jobs[pid] = job;
         }
         var info = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
         {
@@ -255,6 +424,9 @@ public sealed class WinResourceManager : IResourceManager
     [DllImport("kernel32", SetLastError = true)] private static extern bool SetProcessInformation(IntPtr h, int cls, ref PROCESS_POWER_THROTTLING_STATE info, uint len);
     [DllImport("kernel32", SetLastError = true)] private static extern bool SetProcessInformation(IntPtr h, int cls, ref MEMORY_PRIORITY_INFORMATION info, uint len);
     [DllImport("kernel32")] private static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32", SetLastError = true)] private static extern uint GetPriorityClass(IntPtr h);
+    [DllImport("kernel32", SetLastError = true)] private static extern bool SetPriorityClass(IntPtr h, uint cls);
 }
 
 /// Per-process GPU utilisation from the "GPU Engine" performance counters

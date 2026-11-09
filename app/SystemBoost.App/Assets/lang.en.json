@@ -494,6 +494,7 @@
 "취소했어요 (바뀐 것 없음)": "Canceled (nothing changed)",
 "실패했어요: {0}": "Failed: {0}",
 "{0}: 게임과 시스템 프로세스는 바꾸지 않아요": "{0}: games and system processes are not changed",
+"게임이라 그대로 둬요": "A game: left as it is",
 "우선 (CPU 우선순위 높음)": "Raise (higher CPU priority)",
 "보통 (원래대로)": "Normal (original)",
 "낮춤 (우선순위·메모리 우선순위 낮춤, 효율 모드, 다음 실행부터 내장 GPU)": "Lower (lower CPU and memory priority, efficiency mode, integrated GPU from the next launch)",

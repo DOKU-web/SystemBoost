@@ -215,7 +215,7 @@ public sealed class ResourcePage : UserControl
     private void UpdateRows()
     {
         var apps = RowApps();
-        var key = string.Join("|", apps.Select(a => a.Name));
+        var key = string.Join("|", apps.Select(a => a.Game ? a.Name + "*" : a.Name));
         if (key != _rowKey) { _rowKey = key; BuildRows(); return; }
         foreach (var a in apps) if (_usageText.TryGetValue(a.Name, out var t)) t.Text = Usage(a);
     }
@@ -275,7 +275,14 @@ public sealed class ResourcePage : UserControl
                 };
                 segP.Children.Add(t);
             }
-            right.Children.Add(seg);
+            if (a.Game)
+            {
+                // anti-cheat safety: a game is never opened; it gets more when the others are lowered
+                var keep = Ui.Text("게임이라 그대로 둬요", "muted");
+                keep.VerticalAlignment = VerticalAlignment.Center;
+                right.Children.Add(keep);
+            }
+            else right.Children.Add(seg);
             var row = Ui.Row(a.Name, Usage(a), right, first);
             if (row.Child is Grid g && g.Children[0] is StackPanel sp && sp.Children.Count > 1 && sp.Children[1] is TextBlock ut)
                 _usageText[a.Name] = ut;

@@ -301,7 +301,7 @@ internal static class BoostExtras
         {
             try
             {
-                if (p.SessionId == session && p.WorkingSet64 >= ListedAppMinBytes && !ResourceManagers.IsProtected(p.ProcessName)) names.Add(p.ProcessName);
+                if (p.SessionId == session && p.WorkingSet64 >= ListedAppMinBytes && !ResourceManagers.LooksLikeGame(p.Id, p.ProcessName)) names.Add(p.ProcessName);
             }
             catch (Exception) { }
             finally { p.Dispose(); }

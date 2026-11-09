@@ -129,7 +129,19 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     private void Publish()
     {
         ResourceManagers.Games = _s.Games.Select(Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ResourceManagers.GameFolders = _s.Games.Select(GameFolder).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         Changed?.Invoke();
+    }
+
+    // The folder a game is installed in, where its launcher, crash reporter and anti-cheat sit too.
+    private static string? GameFolder(string exe)
+    {
+        var dir = Path.GetDirectoryName(exe);
+        if (string.IsNullOrEmpty(dir)) return null;
+        int i = dir.IndexOf(@"\Binaries\", StringComparison.OrdinalIgnoreCase);   // Unreal games keep the rest one level up
+        if (i > 0) dir = dir[..i];
+        // a game right in a drive or in Program Files would take everything there with it
+        return dir.Count(c => c == '\\') >= 2 ? dir + @"\" : null;
     }
 
     private void Log(string line)
@@ -855,7 +867,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             {
                 try
                 {
-                    if (p.SessionId != session) continue;
+                    if (p.SessionId != session || ResourceManagers.LooksLikeGame(p.Id, name)) continue;
                     before += p.WorkingSet64;
                     var h = OpenProcess(ProcessSetQuota | ProcessQueryLimited, false, p.Id);
                     if (h == IntPtr.Zero) { after += p.WorkingSet64; continue; }
@@ -906,13 +918,16 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         return e == 0 ? null : (Environment.ProcessorCount - e, e);
     }
 
+    // Processes this put on the E-cores. Locked by _gate like everything else here.
+    private readonly HashSet<int> _onECores = new();
+
     private int MoveToEfficientCores()
     {
         var mask = EfficientMask();
         if (mask == 0) return 0;
         int moved = 0, session = Process.GetCurrentProcess().SessionId;
-        // A launcher on the game list can start the real game under another name, so the
-        // window in front always keeps all cores.
+        // The window in front is never opened: it is the game, or a game a launcher started
+        // under another name. Only what this moved earlier gets its cores back there.
         GetWindowThreadProcessId(GetForegroundWindow(), out var front);
         foreach (var p in Process.GetProcesses())
         {
@@ -920,15 +935,19 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             {
                 if (p.SessionId != session || p.Id == Environment.ProcessId) continue;
                 var name = p.ProcessName;
-                if (ResourceManagers.IsProtected(name) || KeepOnPCores.Contains(name)) continue;
+                bool game = p.Id == front || KeepOnPCores.Contains(name) || ResourceManagers.LooksLikeGame(p.Id, name);
+                if (game)
+                {
+                    if (_onECores.Remove(p.Id)) AllCores(p.Id, mask);
+                    continue;
+                }
                 var h = OpenProcess(ProcessSetInformation | ProcessQueryLimited, false, p.Id);
                 if (h == IntPtr.Zero) continue;
                 // a process that limited itself keeps its own setting
                 if (GetProcessAffinityMask(h, out var own, out var system))
                 {
-                    if (p.Id == front) { if ((ulong)own == mask) SetProcessAffinityMask(h, system); }
-                    else if ((ulong)own == mask) moved++;
-                    else if (own == system && SetProcessAffinityMask(h, (UIntPtr)mask)) moved++;
+                    if ((ulong)own == mask) moved++;
+                    else if (own == system && SetProcessAffinityMask(h, (UIntPtr)mask)) { moved++; _onECores.Add(p.Id); }
                 }
                 CloseHandle(h);
             }
@@ -938,22 +957,31 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         return moved;
     }
 
-    private static void ClearCores()
+    private void ClearCores()
     {
         var mask = EfficientMask();
         if (mask == 0) return;
+        int session = Process.GetCurrentProcess().SessionId;
         foreach (var p in Process.GetProcesses())
         {
             try
             {
-                var h = OpenProcess(ProcessSetInformation | ProcessQueryLimited, false, p.Id);
-                if (h == IntPtr.Zero) continue;
-                if (GetProcessAffinityMask(h, out var own, out var system) && (ulong)own == mask) SetProcessAffinityMask(h, system);
-                CloseHandle(h);
+                // what this moved; after a restart, what still sits on exactly the E-cores, games left out
+                if (_onECores.Contains(p.Id) || (p.SessionId == session && !ResourceManagers.LooksLikeGame(p.Id, p.ProcessName)))
+                    AllCores(p.Id, mask);
             }
             catch (Exception) { }
             finally { p.Dispose(); }
         }
+        _onECores.Clear();
+    }
+
+    private static void AllCores(int pid, ulong mask)
+    {
+        var h = OpenProcess(ProcessSetInformation | ProcessQueryLimited, false, pid);
+        if (h == IntPtr.Zero) return;
+        if (GetProcessAffinityMask(h, out var own, out var system) && (ulong)own == mask) SetProcessAffinityMask(h, system);
+        CloseHandle(h);
     }
 
     private bool OnHighPlan()
