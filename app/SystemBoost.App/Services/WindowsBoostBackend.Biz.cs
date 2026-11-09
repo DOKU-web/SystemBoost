@@ -1,8 +1,8 @@
-// Pro: the work and streaming features (Windows).
-//   pro.stream   while a streaming app runs: its priority goes from Normal to AboveNormal, Windows notifications
+// Biz: the work and streaming features (Windows).
+//   biz.stream   while a streaming app runs: its priority goes from Normal to AboveNormal, Windows notifications
 //                are off, SystemBoost's own notices stay out of the broadcast (MainWindow), and big transfers of
 //                other programs are reported. All of it goes back when the streaming app closes.
-//   pro.work     while a video call app or a work app the user picked runs: its priority Normal -> AboveNormal.
+//   biz.work     while a video call app or a work app the user picked runs: its priority Normal -> AboveNormal.
 //   startup      programs that start with Windows for this user, turned off and on with the switch Task Manager
 //                uses (StartupApproved). The program and its Run entry or shortcut stay where they are.
 // Only a program at Normal is raised, and it goes back only if it is still the same program at the value set here:
@@ -21,8 +21,8 @@ namespace SystemBoost.App.Services;
 
 public sealed partial class WindowsBoostBackend
 {
-    internal static readonly string[] ProModes = { "pro.stream", "pro.work" };
-    internal const string StartupFeature = "pro.startup";
+    internal static readonly string[] BizModes = { "biz.stream", "biz.work" };
+    internal const string StartupFeature = "biz.startup";
     internal const string StartupTitle = "시작 프로그램 정리";
     internal static readonly HashSet<string> StreamApps = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -56,50 +56,50 @@ public sealed partial class WindowsBoostBackend
         return set;
     }
 
-    private static PremiumFeature NeedOf(string mode) => mode == "pro.stream" ? PremiumFeature.StreamMode : PremiumFeature.WorkMode;
+    private static PremiumFeature NeedOf(string mode) => mode == "biz.stream" ? PremiumFeature.StreamMode : PremiumFeature.WorkMode;
 
-    private string ApplyProMode(string id)
+    private string ApplyBizMode(string id)
     {
         if (!License.Allowed(NeedOf(id))) return $"{License.PlanOf(NeedOf(id))} 기능이에요 (바뀐 것 없음)";
         if (!_s.Enabled.Contains(id)) _s.Enabled.Add(id);
         Save();
-        return id == "pro.stream" ? "켰어요. 방송 프로그램이 켜지면 적용돼요" : "켰어요. 화상 회의나 고른 업무 프로그램이 켜지면 적용돼요";
+        return id == "biz.stream" ? "켰어요. 방송 프로그램이 켜지면 적용돼요" : "켰어요. 화상 회의나 고른 업무 프로그램이 켜지면 적용돼요";
     }
 
     // ------------------------------------------------------------ every 2 seconds
-    private async Task ProTickAsync(HashSet<string> names)
+    private async Task BizTickAsync(HashSet<string> names)
     {
         if (_measuring) return;     // nothing may move while frames are compared
-        bool stream = _s.Enabled.Contains("pro.stream") && License.Allowed(PremiumFeature.StreamMode) && StreamApps.Overlaps(names);
+        bool stream = _s.Enabled.Contains("biz.stream") && License.Allowed(PremiumFeature.StreamMode) && StreamApps.Overlaps(names);
         if (stream && !_streaming)
         {
             _streaming = true;
             Log("방송 프로그램을 감지했어요: 방송 모드");
             Publish();
         }
-        else if (!stream && (_streaming || _raised.Values.Any(r => r.mode == "pro.stream") || _s.Backups.Any(b => b.Feature == "pro.stream")))
+        else if (!stream && (_streaming || _raised.Values.Any(r => r.mode == "biz.stream") || _s.Backups.Any(b => b.Feature == "biz.stream")))
         {
-            Log(await EndProModeAsync("pro.stream") ?? "방송 모드를 끝냈어요");
+            Log(await EndBizModeAsync("biz.stream") ?? "방송 모드를 끝냈어요");
             Publish();
         }
         if (stream)
         {
-            int n = Raise("pro.stream", StreamApps);
+            int n = Raise("biz.stream", StreamApps);
             if (n > 0) Log($"방송 프로그램 {n}개의 우선순위를 '보통 이상'으로 올렸어요");
-            if (QuietNotifications("pro.stream")) Log("방송 중에는 Windows 알림을 꺼요");
+            if (QuietNotifications("biz.stream")) Log("방송 중에는 Windows 알림을 꺼요");
             await WatchNetworkAsync();
         }
 
         var work = WorkSet();
-        bool working = _s.Enabled.Contains("pro.work") && License.Allowed(PremiumFeature.WorkMode) && work.Overlaps(names);
+        bool working = _s.Enabled.Contains("biz.work") && License.Allowed(PremiumFeature.WorkMode) && work.Overlaps(names);
         if (working)
         {
-            int n = Raise("pro.work", work);
+            int n = Raise("biz.work", work);
             if (n > 0) Log($"업무 프로그램 {n}개의 우선순위를 '보통 이상'으로 올렸어요");
         }
-        else if (_raised.Values.Any(r => r.mode == "pro.work"))
+        else if (_raised.Values.Any(r => r.mode == "biz.work"))
         {
-            var r = await EndProModeAsync("pro.work");
+            var r = await EndBizModeAsync("biz.work");
             if (r != null) Log(r);
         }
         ForgetExited();
@@ -135,7 +135,7 @@ public sealed partial class WindowsBoostBackend
     }
 
     /// Puts back what a mode changed. A message when something went back or failed, else null.
-    private async Task<string?> EndProModeAsync(string id)
+    private async Task<string?> EndBizModeAsync(string id)
     {
         int back = 0;
         foreach (var (pid, r) in _raised.Where(kv => kv.Value.mode == id).ToList())
@@ -146,11 +146,11 @@ public sealed partial class WindowsBoostBackend
         _leftAlone.Clear();
         var done = new List<string>();
         if (back > 0) done.Add($"우선순위 {back}개를 원래대로 돌렸어요");
-        if (id == "pro.stream")
+        if (id == "biz.stream")
         {
             _streaming = false;
             // a game with "알림 일시정지" still running keeps the notifications off
-            if (_gameRunning && _s.Enabled.Contains("sys.focus") && !_stop.IsCancellationRequested) HandOverToast("pro.stream", "sys.focus");
+            if (_gameRunning && _s.Enabled.Contains("sys.focus") && !_stop.IsCancellationRequested) HandOverToast("biz.stream", "sys.focus");
             var mine = _s.Backups.Where(b => b.Feature == id).ToList();
             if (mine.Count > 0)
             {
@@ -161,11 +161,11 @@ public sealed partial class WindowsBoostBackend
         return done.Count > 0 ? string.Join(" · ", done) : null;   // " · " so each part is translated
     }
 
-    private async Task EndAllProModesAsync()
+    private async Task EndAllBizModesAsync()
     {
-        foreach (var id in ProModes)
+        foreach (var id in BizModes)
         {
-            var r = await EndProModeAsync(id);
+            var r = await EndBizModeAsync(id);
             if (r != null) Log(r);
         }
     }
@@ -225,7 +225,7 @@ public sealed partial class WindowsBoostBackend
     public async Task<string> SetStartupAsync(StartupApps.Item item, bool on)
     {
         if (!License.Allowed(PremiumFeature.StartupApps))
-            return $"{StartupTitle}는 {License.PlanOf(PremiumFeature.StartupApps)} 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
+            return $"{StartupTitle}는 {License.PlanOf(PremiumFeature.StartupApps)} 기능이에요. 왼쪽 '★ 플랜'에서 열 수 있어요.";
         await _gate.WaitAsync();
         try
         {

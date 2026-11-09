@@ -40,12 +40,12 @@ public partial class MainWindow : Window
             AddNav("▦   CPU", "cpu", () => new BoostPage(BoostCategory.Cpu, "CPU", _backend));
         if (BoostCatalog.CategoryAvailable(BoostCategory.Network))
             AddNav("◇   네트워크 · 시스템", "net", () => new BoostPage(BoostCategory.Network, "네트워크 · 시스템", _backend, BoostCategory.System));
-        if (BoostCatalog.CategoryAvailable(BoostCategory.Pro))
-            AddNav("▩   업무 · 방송", "pro", () => new BoostPage(BoostCategory.Pro, "업무 · 방송", _backend));
+        if (BoostCatalog.CategoryAvailable(BoostCategory.Biz))
+            AddNav("▩   업무 · 방송", "biz", () => new BoostPage(BoostCategory.Biz, "업무 · 방송", _backend));
         if (Platform.IsMac)
             AddNav("🍷   윈도우 게임", "wine", () => new WindowsGamesPage(Go));
         AddNav("▧   벤치마크 · 기록", "bench", () => new BenchmarkPage());
-        AddNav("★   프리미엄", "premium", () => new PremiumPage(_backend.Connected));
+        AddNav("★   플랜", "premium", () => new PremiumPage(_backend.Connected));
         AddNav("◈   계정", "account", () => new AccountPage(OpenPlans));
         AddNav("↺   백업 · 되돌리기", "backup", () => new BackupPage(_backend));
         NavSettings.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
@@ -108,9 +108,9 @@ public partial class MainWindow : Window
 
     private void UpdatePlan()
     {
-        PlanTitle.Text = License.IsPro ? "프로 ★" : License.IsUltra ? "울트라 ★" : License.IsPremium ? "프리미엄 ★" : "무료";
+        PlanTitle.Text = License.IsBiz ? "산업 ★" : License.IsUltra ? "울트라 ★" : License.IsPremium ? "프로 ★" : "무료";
         PlanText.Text = PlanStatus.Rank >= PlanStatus.TopRank ? "모든 기능 사용 중"
-                      : License.IsUltra ? "울트라 기능 사용 중" : License.IsPremium ? "프리미엄 기능 사용 중" : "누르면 플랜 업그레이드";
+                      : License.IsUltra ? "울트라 기능 사용 중" : License.IsPremium ? "프로 기능 사용 중" : "누르면 플랜 업그레이드";
     }
 
     // What the usage statistics report about this moment.

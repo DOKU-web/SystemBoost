@@ -7,7 +7,7 @@
 //   Only while a game runs   ram.standby, ram.workingset, cpu.ecores, cpu.power,
 //                            net.monitor, sys.focus, boost.profiles
 //   Only while the app runs  gpu.oc, the frame limit for frame generation (fg.limit)
-//   Pro (WindowsBoostBackend.Pro.cs)  pro.stream and pro.work while their programs run; startup programs until turned back
+//   Biz (WindowsBoostBackend.Biz.cs)  biz.stream and biz.work while their programs run; startup programs until turned back
 // Admin-only work goes through sb_helper (BoostHelper.cs).
 using Microsoft.Win32;
 using System;
@@ -49,7 +49,7 @@ public sealed class BoostState
     public List<string> OneClickOwned { get; set; } = new();  // what one-click turned on and must undo
     public int StandbyLimitMB { get; set; } = 1024;
     public List<string> TrimTargets { get; set; } = new();
-    public List<string> WorkApps { get; set; } = new();        // Pro work mode: programs raised with the video calls
+    public List<string> WorkApps { get; set; } = new();        // Biz work mode: programs raised with the video calls
     public GpuChoice Gpu { get; set; } = new();
     public Dictionary<string, GameProfile> GameProfiles { get; set; } = new();
 }
@@ -196,7 +196,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     private async Task RecoverAsync()
     {
         await PutGpuBackAsync();
-        var stream = _s.Backups.Where(b => b.Feature == "pro.stream").ToList();
+        var stream = _s.Backups.Where(b => b.Feature == "biz.stream").ToList();
         if (stream.Count > 0) await RestoreAsync(stream);
         // the helper undoes it as it exits; a power cut leaves it
         if (Has(GameLimit)) await RestoreAsync(_s.Backups.Where(b => b.Feature == GameLimit).ToList());
@@ -214,7 +214,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             // called on the UI thread, which helper replies must not wait for
             Task.Run(async () =>
             {
-                await EndAllProModesAsync();
+                await EndAllBizModesAsync();
                 await EndGameTimeAsync();
                 if (_s.OneClick) await OneClickOffAsync();
                 // the helper does this too as it exits; here the backup is cleared as well
@@ -251,7 +251,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     {
         "boost.oneclick" => _s.OneClick,
         "gpu.hags" => Has(id) || ReadMachineDword(GraphicsDrivers, "HwSchMode") == 2,
-        _ when GameTime.Contains(id) || ProModes.Contains(id) => _s.Enabled.Contains(id),
+        _ when GameTime.Contains(id) || BizModes.Contains(id) => _s.Enabled.Contains(id),
         _ => Has(id),
     });
 
@@ -284,7 +284,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             _s.OneClickOwned.Clear();
             _s.Enabled.Clear();
             _profileItems.Clear();
-            await EndAllProModesAsync();
+            await EndAllBizModesAsync();
             if (_s.Backups.Any(IsAdminKind))
             {
                 var e = await _helper.EnsureAsync();
@@ -354,7 +354,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             case "net.adapterpower": return await ApplyAdapterPowerAsync();
             case "gpu.oc": return await ApplyGpuTuningAsync();
             case "boost.profiles" when !License.Allowed(PremiumFeature.PerGameProfiles): return $"{License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요 (바뀐 것 없음)";
-            case "pro.stream" or "pro.work": return ApplyProMode(id);
+            case "biz.stream" or "biz.work": return ApplyBizMode(id);
         }
         if (!GameTime.Contains(id)) return "아직 준비 중이에요 (바뀐 것 없음)";
         if (id == "cpu.ecores" && EfficientMask() == 0) return "이 CPU는 E코어가 없어서 쓸 수 없어요 (바뀐 것 없음)";
@@ -379,10 +379,10 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     private async Task<string> RevertCoreAsync(string id)
     {
         if (id == "boost.oneclick") return await OneClickOffAsync();
-        if (ProModes.Contains(id))
+        if (BizModes.Contains(id))
         {
             _s.Enabled.Remove(id);
-            return await EndProModeAsync(id) ?? "껐어요";
+            return await EndBizModeAsync(id) ?? "껐어요";
         }
         if (GameTime.Contains(id))
         {
@@ -737,7 +737,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             _gameRunning = true;
             _gameName = game;
             Log($"{game} 실행을 감지했어요");
-            foreach (var id in _s.Enabled.Where(GameTime.Contains).ToList()) Log(await ActivateAsync(id));   // the Pro modes follow their own programs
+            foreach (var id in _s.Enabled.Where(GameTime.Contains).ToList()) Log(await ActivateAsync(id));   // the Biz modes follow their own programs
             Save();
             Publish();
         }
@@ -753,7 +753,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             Publish();
         }
         if (_gameRunning) await InGameAsync();
-        await ProTickAsync(names);
+        await BizTickAsync(names);
     }
 
     private string? RunningGames(HashSet<string> names)
@@ -815,7 +815,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         foreach (var id in GameTime)
         {
             // still streaming: the stream mode keeps the notifications off
-            if (id == "sys.focus" && _streaming && !_stop.IsCancellationRequested) HandOverToast("sys.focus", "pro.stream");
+            if (id == "sys.focus" && _streaming && !_stop.IsCancellationRequested) HandOverToast("sys.focus", "biz.stream");
             var mine = _s.Backups.Where(b => b.Feature == id).ToList();
             if (mine.Count == 0) continue;
             // the update pause ends by itself within a day if the helper is not there now

@@ -58,19 +58,19 @@ async function cardOpen(env) {
 const CODE_RE = /^SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;   // no 0/O/1/I: easy to read aloud
 function validSession(s) { return /^[A-Za-z0-9-]{16,64}$/.test(s) || CODE_RE.test(s); }
 // On sale. Lifetime is no longer sold; keys and orders from before keep working.
-// A plan id is [tier_]period[_xN]: the tier is what the key opens (premium, ultra, pro), the period how long it
+// A plan id is [tier_]period[_xN]: the tier is what the key opens (premium, ultra, biz), the period how long it
 // lasts, and _xN a bundle of N yearly keys, one per PC, sold at a discount by manual payment only.
-const PLANS = { monthly: "월간", yearly: "연간", ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간",
-                pro_monthly: "프로 월간", pro_yearly: "프로 연간",
-                yearly_x5: "연간 5대 묶음", yearly_x10: "연간 10대 묶음",
+const PLANS = { monthly: "프로 월간", yearly: "프로 연간", ultra_monthly: "울트라 월간", ultra_yearly: "울트라 연간",
+                biz_monthly: "산업 월간", biz_yearly: "산업 연간",
+                yearly_x5: "프로 연간 5대 묶음", yearly_x10: "프로 연간 10대 묶음",
                 ultra_yearly_x5: "울트라 연간 5대 묶음", ultra_yearly_x10: "울트라 연간 10대 묶음",
-                pro_yearly_x5: "프로 연간 5대 묶음", pro_yearly_x10: "프로 연간 10대 묶음" };
+                biz_yearly_x5: "산업 연간 5대 묶음", biz_yearly_x10: "산업 연간 10대 묶음" };
 const PLAN_DAYS = { monthly: 31, yearly: 366 };            // manual subscription keys (+3 days grace)
-const TIERS = ["premium", "ultra", "pro"];                 // a key's "plan"
-const TIER_KO = { premium: "프리미엄", ultra: "울트라", pro: "프로" };
-const tierOf = plan => /^ultra_/.test(plan) ? "ultra" : /^pro_/.test(plan) ? "pro" : "premium";
+const TIERS = ["premium", "ultra", "biz"];                 // a key's "plan"
+const TIER_KO = { premium: "프로", ultra: "울트라", biz: "산업" };
+const tierOf = plan => /^ultra_/.test(plan) ? "ultra" : /^biz_/.test(plan) ? "biz" : "premium";
 const seatsOf = plan => Number((/_x(\d+)$/.exec(plan) || [0, 1])[1]);
-const periodOf = plan => plan.replace(/^(ultra|pro)_/, "").replace(/_x\d+$/, "");
+const periodOf = plan => plan.replace(/^(ultra|biz)_/, "").replace(/_x\d+$/, "");
 const SINGLE_PLANS = Object.keys(PLANS).filter(p => seatsOf(p) === 1);
 // Bundles are in the licence agreement from its 2026-12-09 KST revision (clauses 2.1, 3.5, 3.9), announced
 // 30 days ahead as its clause 13 requires, so the app offers them from then on. Tests set BUNDLE_FROM.
@@ -358,11 +358,11 @@ async function thanks(url, env) {
   const s = url.searchParams.get("session") || "";
   const key = validSession(s) ? await env.LICENSES.get("session:" + s) : null;
   const body = key
-    ? `<h1>결제가 완료됐어요</h1><p>SystemBoost가 켜져 있으면 키가 자동으로 등록돼요. 아니라면 아래 키를 복사해 '★ 프리미엄 → 라이선스 키'에 넣으세요.</p>
+    ? `<h1>결제가 완료됐어요</h1><p>SystemBoost가 켜져 있으면 키가 자동으로 등록돼요. 아니라면 아래 키를 복사해 '★ 플랜 → 라이선스 키'(0.8.9 이하는 '★ 프리미엄')에 넣으세요.</p>
        <textarea readonly onclick="this.select()">${escapeHtml(key)}</textarea><p class="m">같은 키가 결제한 메일 주소로도 저장돼 있어요. 키를 잃어버리면 문의해 주세요.</p>`
     : `<h1>결제를 확인하는 중이에요</h1><p>보통 몇 초 걸려요. 이 페이지는 자동으로 새로고침돼요.</p><script>setTimeout(()=>location.reload(),3000)</script>`;
   return new Response(`<!DOCTYPE html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SystemBoost 프리미엄</title><style>body{background:#0b0b0c;color:#e8e6e3;font-family:system-ui,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;line-height:1.6}
+<title>SystemBoost</title><style>body{background:#0b0b0c;color:#e8e6e3;font-family:system-ui,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;line-height:1.6}
 h1{color:#ff7a1a}textarea{width:100%;height:110px;background:#141416;color:#e8e6e3;border:1px solid #333;border-radius:10px;padding:12px;font-family:monospace}.m{color:#8b8a88;font-size:14px}</style>
 <body>${body}</body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 }
@@ -666,7 +666,7 @@ async function grant(env, code, device, plan, days) {
   const day = refDay();
   await env.LICENSES.put(day, String(Number((await env.LICENSES.get(day)) || 0) + 1), { expirationTtl: 60 * 60 * 48 });
   const key = await makeKey(env, { plan, email: "", expires: addDays(now(), days), src: "referral", note: "추천 코드 " + code });
-  await audit(env, "app", "추천 코드 사용", code + " · " + (TIER_KO[plan] || "프리미엄") + " " + days + "일");
+  await audit(env, "app", "추천 코드 사용", code + " · " + (TIER_KO[plan] || "프로") + " " + days + "일");
   return { key, plan, days };
 }
 async function useRef(env, r, device) {
@@ -759,7 +759,7 @@ async function adminIssue(env, b) {
   const code = String(b.code || "").trim().toUpperCase();
   if (code && !CODE_RE.test(code)) return { error: "주문 코드 형식이 아니에요 (SB-XXXX-XXXX)" };
   const plan = String(b.plan || "");
-  const period = periodOf(plan);   // orders say ultra_monthly, pro_yearly_x5 etc.; the form says monthly / yearly / days
+  const period = periodOf(plan);   // orders say ultra_monthly, biz_yearly_x5 etc.; the form says monthly / yearly / days
   let days = 0;
   if (period === "days") days = Math.floor(Number(b.days));
   else if (PLAN_DAYS[period]) days = PLAN_DAYS[period] + GRACE_DAYS;
@@ -769,7 +769,7 @@ async function adminIssue(env, b) {
   const seats = b.seats == null || b.seats === "" ? seatsOf(plan) : Math.floor(Number(b.seats));
   if (!(seats >= 1 && seats <= MAX_SEATS)) return { error: "키 개수는 1~" + MAX_SEATS + "개예요" };
   const src = code ? "payment" : "manual";
-  // the key's "plan": ultra also opens frame generation x6 and x8, pro adds the work and streaming features
+  // the key's "plan": ultra also opens frame generation x6 and x8, biz adds the work and streaming features
   const tier = tierOf(plan) !== "premium" ? tierOf(plan) : TIERS.includes(b.tier) ? b.tier : "premium";
   const keys = [], ids = [];
   for (let i = 1; i <= seats; i++) {   // a bundle is that many separate keys: one per PC, each can be turned off alone

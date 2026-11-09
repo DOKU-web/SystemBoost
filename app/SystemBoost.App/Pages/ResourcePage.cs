@@ -265,7 +265,7 @@ public sealed class ResourcePage : UserControl
                 {
                     if (lv == ShareLevel.Limit && !License.Allowed(PremiumFeature.CpuLimit))
                     {
-                        _status.Text = "CPU 최대 사용량 제한은 프리미엄 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
+                        _status.Text = "CPU 최대 사용량 제한은 프로 기능이에요. 왼쪽 '★ 플랜'에서 열 수 있어요.";
                         BuildRows();
                         return;
                     }

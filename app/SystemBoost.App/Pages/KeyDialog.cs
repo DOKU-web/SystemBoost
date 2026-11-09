@@ -26,7 +26,7 @@ public sealed class KeyDialog : Window
         var title = Ui.Text("결제가 확인됐어요 ★", "h1");
         title.Foreground = new SolidColorBrush(Color.Parse("#FF7A1A"));
         p.Children.Add(title);
-        var on = PlanStatus.Name == "프리미엄" ? "프리미엄이" : PlanStatus.Name + "가";
+        var on = PlanStatus.Name == "산업" ? "산업이" : PlanStatus.Name + "가";
         p.Children.Add(Ui.Text(note ?? (bundle
             ? $"{on} 이 PC에 켜졌어요(첫 번째 키). 키 {keys.Length}개를 받았어요. 나머지 {keys.Length - 1}개는 다른 PC에 하나씩 등록하세요. 키 하나는 PC 한 대에만 써요."
             : $"{on} 켜졌어요. 아래 키는 다른 PC에 등록하거나 다시 설치할 때 필요하니 따로 보관하세요."), "sub", wrap: true));

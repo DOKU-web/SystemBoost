@@ -106,13 +106,13 @@ public partial class FrameGenPage : UserControl
 
     private bool Locked(string what)
     {
-        _vm.Notice($"{what}은(는) 프리미엄 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.");
+        _vm.Notice($"{what}은(는) 프로 기능이에요. 왼쪽 '★ 플랜'에서 열 수 있어요.");
         return false;
     }
 
     private bool LockedUltra(string what)
     {
-        _vm.Notice($"{what} 울트라 플랜 전용이에요. 왼쪽 '★ 프리미엄'에서 확인하세요.");
+        _vm.Notice($"{what} 울트라 플랜 전용이에요. 왼쪽 '★ 플랜'에서 확인하세요.");
         return false;
     }
 

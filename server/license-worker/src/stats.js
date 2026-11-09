@@ -44,7 +44,7 @@ const koreanDay = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
 /** The ping as stored, or null for anything an app would not send. */
 export function cleanPing(b, country) {
   if (!b || !/^[0-9a-f]{32}$/.test(b.id) || !/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(b.ver) || !["win", "mac"].includes(b.os)
-      || !["free", "premium", "ultra", "pro"].includes(b.plan) || !MULTIPLIERS.includes(b.fg) || ![0, 1].includes(b.boost)) return null;
+      || !["free", "premium", "ultra", "biz"].includes(b.plan) || !MULTIPLIERS.includes(b.fg) || ![0, 1].includes(b.boost)) return null;
   return { id: b.id, ver: b.ver, os: b.os, plan: b.plan, fg: b.fg, boost: b.boost, country: /^[A-Z]{2}$/.test(country || "") ? country : "XX" };
 }
 

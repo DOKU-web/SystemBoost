@@ -1,6 +1,6 @@
-// Free / Premium / Ultra / Pro.
+// Free / Premium / Ultra / Biz.
 // Two ways to own Premium (Ultra = a key whose plan is "ultra": Premium plus what UltraOnly lists;
-// Pro = a key whose plan is "pro": Ultra plus what ProOnly lists, the work and streaming features on Windows):
+// Biz = a key whose plan is "biz": Ultra plus what BizOnly lists, the work and streaming features on Windows):
 //  1) Steam build: the "SystemBoost Premium" DLC (checked through Steamworks;
 //     ISteamOwnership is the hook - wire Steamworks.NET here).
 //  2) Direct downloads (installer / portable / macOS): a license key bought on
@@ -24,9 +24,9 @@ public enum PremiumFeature
     CpuLimit,                // resource sharing: hard CPU cap
     PerGameProfiles,
     Overclock,
-    StreamMode,              // Pro: streaming app first, notifications off while streaming
-    WorkMode,                // Pro: video calls and chosen work apps first
-    StartupApps,             // Pro: turn programs that start with Windows off and on
+    StreamMode,              // Biz: streaming app first, notifications off while streaming
+    WorkMode,                // Biz: video calls and chosen work apps first
+    StartupApps,             // Biz: turn programs that start with Windows off and on
 }
 
 public sealed record LicenseInfo(string Plan, string Email, DateTime? Expires, string Source, string? Sub = null);
@@ -67,17 +67,17 @@ public static class License
             return KeyActive;
         }
     }
-    public static bool IsUltra { get { Load(); return KeyActive && _info!.Plan is "ultra" or "pro"; } }
-    public static bool IsPro { get { Load(); return KeyActive && _info!.Plan == "pro"; } }
+    public static bool IsUltra { get { Load(); return KeyActive && _info!.Plan is "ultra" or "biz"; } }
+    public static bool IsBiz { get { Load(); return KeyActive && _info!.Plan == "biz"; } }
     private static bool KeyActive => _info != null && (_info.Expires == null || _info.Expires > DateTime.UtcNow);
 
     // Which plan opens a feature is decided here and the messages follow. Change the table in PremiumPage with it.
     private static bool UltraOnly(PremiumFeature f) =>
         f is PremiumFeature.UltraMultiplier or PremiumFeature.DualGpu or PremiumFeature.PerGameProfiles or PremiumFeature.Overclock;
-    private static bool ProOnly(PremiumFeature f) =>
+    private static bool BizOnly(PremiumFeature f) =>
         f is PremiumFeature.StreamMode or PremiumFeature.WorkMode or PremiumFeature.StartupApps;
-    public static bool Allowed(PremiumFeature f) => ProOnly(f) ? IsPro : UltraOnly(f) ? IsUltra : IsPremium;
-    public static string PlanOf(PremiumFeature f) => ProOnly(f) ? "프로" : UltraOnly(f) ? "울트라" : "프리미엄";
+    public static bool Allowed(PremiumFeature f) => BizOnly(f) ? IsBiz : UltraOnly(f) ? IsUltra : IsPremium;
+    public static string PlanOf(PremiumFeature f) => BizOnly(f) ? "산업" : UltraOnly(f) ? "울트라" : "프로";
 
     // Activation can happen on a background thread (order watcher, revocation check): UI handlers run on the UI thread.
     private static void RaiseChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => Changed?.Invoke());

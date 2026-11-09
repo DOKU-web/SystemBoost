@@ -89,7 +89,7 @@ public sealed class BoostPage : UserControl
                 if (f.Needs is { } need && sw.IsChecked == true && !License.Allowed(need))
                 {
                     sw.Tag = "loading"; sw.IsChecked = false; sw.Tag = null;
-                    status.Text = $"{f.Title}은(는) {License.PlanOf(need)} 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
+                    status.Text = $"{f.Title}은(는) {License.PlanOf(need)} 기능이에요. 왼쪽 '★ 플랜'에서 열 수 있어요.";
                     return;
                 }
                 sw.IsEnabled = false;

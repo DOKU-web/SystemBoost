@@ -7,10 +7,10 @@ public static class PlanStatus
 {
     private static LicenseInfo? Key => License.Info is { } i && (i.Expires == null || i.Expires > DateTime.UtcNow) ? i : null;
 
-    /// Pro adds only Windows features, so a Mac is offered up to Ultra.
+    /// Biz adds only Windows features, so a Mac is offered up to Ultra.
     public static int TopRank => Platform.IsWindows ? 3 : 2;
-    public static int Rank => License.IsPro ? 3 : License.IsUltra ? 2 : License.IsPremium ? 1 : 0;
-    public static string Name => Rank switch { 3 => "프로", 2 => "울트라", 1 => "프리미엄", _ => "무료" };
+    public static int Rank => License.IsBiz ? 3 : License.IsUltra ? 2 : License.IsPremium ? 1 : 0;
+    public static string Name => Rank switch { 3 => "산업", 2 => "울트라", 1 => "프로", _ => "무료" };
     public static string Multipliers => Rank switch { >= 2 => "자동 · 2 · 3 · 4 · 6 · 8배", 1 => "자동 · 2 · 3 · 4배", _ => "2배" };
 
     /// A key with an end date that does not renew by itself.

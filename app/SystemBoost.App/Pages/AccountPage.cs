@@ -244,7 +244,7 @@ public sealed class AccountPage : UserControl
         p.Children.Add(Ui.Text(m.Id, "h2"));
         p.Children.Add(Ui.Text($"가입일 {m.Created.LocalDateTime:yyyy-MM-dd}", "muted"));
         if (m.TicketPercent is int percent)
-            p.Children.Add(Ui.Text($"할인 티켓 {percent}% · {m.TicketExpires?.LocalDateTime:yyyy-MM-dd}까지 · 프리미엄 화면의 직접 결제에서 쓸 수 있어요", "label", wrap: true));
+            p.Children.Add(Ui.Text($"할인 티켓 {percent}% · {m.TicketExpires?.LocalDateTime:yyyy-MM-dd}까지 · 플랜 화면의 직접 결제에서 쓸 수 있어요", "label", wrap: true));
         p.Children.Add(LogOut());
         return p;
     }
@@ -260,7 +260,7 @@ public sealed class AccountPage : UserControl
     {
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("친구 초대", "h2"));
-        p.Children.Add(Ui.Text($"내 초대 코드로 가입한 사람은 프리미엄 {m.InviteDays}일과 {m.InviteTicket}% 할인 티켓을 받고, 나는 한 명당 {m.RewardEach}일을 받아요. 받을 수 있는 보상은 모두 {m.RewardCap}일까지예요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text($"내 초대 코드로 가입한 사람은 프로 {m.InviteDays}일과 {m.InviteTicket}% 할인 티켓을 받고, 나는 한 명당 {m.RewardEach}일을 받아요. 받을 수 있는 보상은 모두 {m.RewardCap}일까지예요.", "muted", wrap: true));
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         if (m.Code != null) row.Children.Add(new SelectableTextBlock { Text = m.Code, FontSize = 20, VerticalAlignment = VerticalAlignment.Center });
         var msg = Message();

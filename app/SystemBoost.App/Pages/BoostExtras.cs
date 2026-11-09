@@ -1,6 +1,6 @@
 // Controls under the toggles of the Windows boost pages: the game list and the
 // one-click profile, per-game measurement, the standby limit and trim targets,
-// GPU tuning values, the CPU's core layout, and for Pro the work programs and startup programs.
+// GPU tuning values, the CPU's core layout, and for Biz the work programs and startup programs.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -53,7 +53,7 @@ internal static class BoostExtras
                     ? $"이 CPU는 하이브리드예요: P코어 쪽 {c.performance}스레드, E코어 {c.efficient}스레드"
                     : "이 CPU는 E코어가 없어서 'E코어로' 항목은 쓸 수 없어요", "muted", wrap: true));
                 break;
-            case BoostCategory.Pro:
+            case BoostCategory.Biz:
                 yield return Ui.Card(WorkApps(b, status));
                 yield return Ui.Card(Startup(b, status));
                 yield return Ui.Card(Activity(b));
@@ -181,7 +181,7 @@ internal static class BoostExtras
         {
             if (!License.Allowed(PremiumFeature.PerGameProfiles))
             {
-                status.Text = $"게임별 자동 최적화는 {License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요. 왼쪽 '★ 프리미엄'에서 열 수 있어요.";
+                status.Text = $"게임별 자동 최적화는 {License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요. 왼쪽 '★ 플랜'에서 열 수 있어요.";
                 return;
             }
             run.IsEnabled = false;

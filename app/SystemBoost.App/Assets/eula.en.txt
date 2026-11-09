@@ -1,7 +1,7 @@
 Reference translation. The Korean text is the agreement; if the two differ, the Korean text governs.
 Effective date: November 6, 2026
 Revision effective: December 8, 2026 (automatic payment for card subscriptions in Article 3, Paragraph 3. The Seller does not sell card subscriptions before then)
-Revision effective: December 9, 2026 (the Pro plan and bundle keys: Article 2, Paragraph 1; Article 3, Paragraphs 2, 5 and 9; Article 6, Paragraph 1; Article 11, Paragraph 2. The Seller does not sell bundle keys before then)
+Revision effective: December 9, 2026 (the Business plan, bundle keys and plan names: Article 2, Paragraph 1; Article 3, Paragraphs 2, 5, 8 and 9; Article 6, Paragraph 1; Article 11, Paragraph 2. The Premium plan is renamed Pro; its features and prices stay the same. The Seller does not sell bundle keys before then)
 Seller: DOKKU (business name, representative, address and contact details are shown on the sales page)
 
 ## Article 1 (Subject of this agreement)
@@ -14,13 +14,13 @@ This agreement applies between the Seller and the person who installs or uses Sy
 
 ## Article 3 (Plans and license keys)
 1. The Free plan can be used without a key.
-2. The Premium, Ultra and Pro plans are opened with a license key issued by the Seller. The features of each plan are as shown on the sales page.
+2. The Pro, Ultra and Business plans are opened with a license key issued by the Seller. The features of each plan are as shown on the sales page.
 3. With a monthly or yearly key, paid features lock when the stated period ends and the app returns to the Free plan. A key bought by direct payment, such as a bank transfer, is not charged automatically. A key bought as a card subscription is charged the amount shown at purchase automatically every period until the User cancels, and is extended by one period with each payment. The User can cancel at any time through the subscription management link in the payment email; after cancelling, the app returns to the Free plan when the period already paid ends. If a payment does not go through, the key is not extended.
 4. A lifetime key has no limit on its period of use. This does not mean it will work on every future operating system and game.
 ! 5. A key is for the buyer's own use only. It may not be given to others or made public. Bundle keys follow Paragraph 9.
 6. If a key is made public or misused, the Seller may block it. A blocked key returns to the Free plan when the app starts online.
 7. A key received with a referral code or an invite code can be used only for the period shown. The Seller may end a referral code at any time. A key already received stays usable for its period.
-8. Members can create invite codes. Invite rewards are received as Premium keys for the period shown in the app. A member who uses an invite code at sign-up receives the discount ticket shown in the app. A ticket can be used once on a direct payment within the period shown, and cannot be exchanged for cash or given to anyone else. The Seller may cancel rewards obtained by improper means, such as false accounts, and block those accounts.
+8. Members can create invite codes. Invite rewards are received as Pro keys for the period shown in the app. A member who uses an invite code at sign-up receives the discount ticket shown in the app. A ticket can be used once on a direct payment within the period shown, and cannot be exchanged for cash or given to anyone else. The Seller may cancel rewards obtained by improper means, such as false accounts, and block those accounts.
 ! 9. Bundle keys are several yearly keys of the same plan bought at once. One key is used on one computer. The buyer may give the people who use the computers the buyer manages (such as employees or family) the key for that computer, and may not sell, give or make keys public to anyone else. The Seller blocks only a key that was made public or misused; the other keys of the same bundle stay usable. Bundle keys are not charged automatically and cannot take a discount ticket.
 
 ## Article 4 (Prohibited acts)
