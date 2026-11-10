@@ -1,0 +1,37 @@
+The engine beside a GPU-bound game that is the window in front (RTX 3060, Windows 11 26200,
+hardware GPU scheduling off, 2026-11-10).
+
+Why this was measured: all 24 recorded real-game sessions (Star Citizen, Once Human, Wardogs) had
+fewer output frames than source frames, and the four run logs show the screen at 2 to 8 fps for 5 to
+10 s before the automatic stop, with one analysis spanning 45 to 240 ms of GPU time and Present
+waiting 200 to 900 ms. Every earlier stand-in test passed because the stand-in game was never the
+foreground window (--always-active). Windows gives the GPU to the foreground program first.
+
+Method: a stand-in game (one heavy pixel shader in 16 draws per frame, no frame cap, 1920x1080,
+calibrated to 35 fps with the GPU at 100%) takes the keyboard focus; the engine is started as the
+app starts it (--mode auto --max-mul 4 --quality balanced --capture wgc, no --always-active) on a
+60 Hz monitor, 9 s per case. src/out are the engine's counters, game = the stand-in's own count.
+
+engine GPU priority off (the behaviour up to 0.8.10)
+  game alone 34 fps
+   sec    src    out   gen ms  analysis ms  present ms (max)
+   2.7    8.0    4.0     3.3      82.2        4.8 (37.0)
+   3.2    8.0    4.0     2.7     103.8        0.1 ( 0.1)
+   3.2  stopped: output far under the game's rate (new in 0.8.11; before, the step downs ran first)
+   4.2   30.9    0.0   the game shown as it is
+
+engine GPU priority auto (realtime class + GPU thread priority 7)
+  game alone 35 fps, with the engine 31 fps
+   sec    src    out   gen ms  analysis ms  present ms (max)
+   2.7   30.0   59.9     0.2       2.8        0.1 (2.3)
+   5.2   30.0   59.9     0.2       2.9        0.1 (0.8)
+   8.7   30.0   60.0     0.2       2.9        0.1 (0.7)
+  0 output slots left out, no step down, no stop in 9 s
+
+Read: at the default priority the foreground game starves the engine the way the real logs show
+(4 fps on screen against 35 from the game). With its own GPU class raised the engine holds 60 fps
+on the 60 Hz monitor and the game gives up 4 of 35 fps.
+
+Not measured: a real game (Windows Game Mode registers real games and applies its own graphics
+priority to them; the stand-in is only the foreground window), a 144 Hz monitor in this condition,
+hardware GPU scheduling on (the engine then asks for the high class, not realtime), other GPUs.
