@@ -134,6 +134,9 @@ public:
         return same;
     }
 
+    // The image for the last slot was not shown after all: the next one is not a repeat of it.
+    void forgetShown() { lastPos_ = -1; }
+
     // The GPU cannot hold this output rate: lower it by about a quarter. Auto lands on the next
     // vblank divider. False when the output is already close to the source rate.
     bool slowDown() {

@@ -37,6 +37,15 @@ public:
     // Returns the output texture (R8G8B8A8, outW x outH).
     ID3D11Texture2D* Generate(float t);
 
+    // GPU work in flight. A GPU kept busy by the game runs this process's work late; more work queued
+    // behind it reaches the screen later still, and Present ends up waiting for all of it (200 to 400 ms
+    // in recorded runs, with the capture left undrained meanwhile). So the caller marks each piece as
+    // it is issued, an analysis (PushFrame) or an output frame (Generate and its Present), and issues
+    // no more of a kind while too much of it is unfinished.
+    void MarkSubmitted(bool analysis);
+    bool AnalysisPending();
+    int OutputsPending();
+
     // Last measured GPU time of one Generate() call and of the analysis (ms).
     double GenMs() const { return genMs_; }
     double AnalyzeMs() const { return analyzeMs_; }
@@ -95,6 +104,11 @@ private:
     void TimerEnd();
     void TimerPoll();
     double genMs_ = 0, analyzeMs_ = 0;
+
+    struct Fence { ComPtr<ID3D11Query> done; bool pending = false; bool analysis = false; };
+    std::array<Fence, 8> fences_;
+    int fencePos_ = 0;
+    void PollFences();
 };
 
 }  // namespace sbfg

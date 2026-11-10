@@ -14,7 +14,7 @@ add_executable(sb_framegen
     src/FrameGenGpu.cpp src/Overlay.cpp src/Cursor.cpp)
 target_compile_definitions(sb_framegen PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
-target_link_libraries(sb_framegen PRIVATE d3d11 dxgi d3dcompiler dcomp dwmapi user32 gdi32 shell32 ole32)
+target_link_libraries(sb_framegen PRIVATE d3d11 dxgi d3dcompiler dcomp dwmapi user32 gdi32 shell32 ole32 advapi32)
 
 if(MSVC)
     # Windows.Graphics.Capture through C++/WinRT (ships with the Windows SDK)

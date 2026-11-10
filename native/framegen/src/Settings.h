@@ -11,6 +11,7 @@ namespace sbfg {
 enum class Quality { Low, Performance, Balanced, Quality };    // lowest first: steps down by one
 enum class GenGpu { SameAsGame, Integrated, Index, Warp };
 enum class CaptureApi { Wgc, Dxgi };
+constexpr int kGpuPriorityAuto = -2, kGpuPriorityOff = -1;
 
 struct Settings {
     uint64_t hwnd = 0;                 // target game window (required unless listGpus)
@@ -30,6 +31,7 @@ struct Settings {
     bool listWindows = false;
     bool alwaysActive = false;         // tests only: keep generating when the window is not in front
     bool showInCapture = false;        // tests only: let screenshots see the overlay
+    int gpuPriority = kGpuPriorityAuto; // this process's GPU scheduling class: auto, off, or 0..5 (tests)
     std::string shaderDir;             // default: <exe dir>\shaders
 
     // Pipeline parameters derived from quality (mirror ref PARAMS)
@@ -87,6 +89,11 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
             if (*v == "wgc") s.capture = CaptureApi::Wgc;
             else if (*v == "dxgi") s.capture = CaptureApi::Dxgi;
             else return "bad --capture " + *v;
+        } else if (k == "--gpu-priority") {
+            if (*v == "auto") s.gpuPriority = kGpuPriorityAuto;
+            else if (*v == "off") s.gpuPriority = kGpuPriorityOff;
+            else if (v->size() == 1 && (*v)[0] >= '0' && (*v)[0] <= '5') s.gpuPriority = (*v)[0] - '0';
+            else return "bad --gpu-priority " + *v;
         } else if (k == "--stats-ms") s.statsMs = std::max(100, std::atoi(v->c_str()));
         else if (k == "--shader-dir") s.shaderDir = *v;
         else return "unknown option " + k;

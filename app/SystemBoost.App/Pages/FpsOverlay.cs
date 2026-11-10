@@ -149,7 +149,7 @@ public static class FpsOverlay
         if (read is not { } r || (pid != _shownPid && r.Steady < ShowAfterSeconds) || _run == null) { Hide(); return; }
         string big;
         string? small;
-        if (_frameGen is { Running: true } fg && int.TryParse(fg.OutFps, out var output) && output > 0)
+        if (_frameGen is { Running: true, Generating: true } fg && int.TryParse(fg.OutFps, out var output) && output > 0)
         { big = output.ToString(); small = Lang.T($"원본 {r.Fps:0}"); }
         else { big = r.Fps.ToString("0"); small = $"1% {r.Low:0}"; }
         _window?.Show(front, Corner, big, Lower ? small : null);

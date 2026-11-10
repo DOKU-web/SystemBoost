@@ -31,4 +31,16 @@ ComPtr<IDXGIAdapter1> AdapterByIndex(int index);
 ComPtr<IDXGIAdapter1> WarpAdapter();
 void CreateDevice(IDXGIAdapter1* adapter, ComPtr<ID3D11Device>& dev, ComPtr<ID3D11DeviceContext>& ctx);
 
+// The GPU scheduling priority this process holds after RaiseGpuPriority.
+struct GpuPriority {
+    int cls = -1;          // D3DKMT_SCHEDULINGPRIORITYCLASS 0..5, -1 = left as it was
+    bool thread = false;   // the device's GPU thread priority was raised too
+    const char* name() const {
+        static const char* const names[] = {"idle", "below normal", "normal", "above normal", "high", "realtime"};
+        return cls >= 0 && cls <= 5 ? names[cls] : "unchanged";
+    }
+};
+// wanted: kGpuPriorityAuto, kGpuPriorityOff, or a class 0..5 (tests). Changes this process only.
+GpuPriority RaiseGpuPriority(ID3D11Device* dev, int wanted);
+
 }  // namespace sbfg

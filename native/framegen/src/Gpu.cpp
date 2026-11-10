@@ -128,4 +128,44 @@ void CreateDevice(IDXGIAdapter1* adapter, ComPtr<ID3D11Device>& dev, ComPtr<ID3D
     if (SUCCEEDED(dev.As(&dxgi))) dxgi->SetMaximumFrameLatency(1);
 }
 
+// --- GPU scheduling priority --------------------------------------------------
+// Windows gives the GPU to the game in front first. Generation is a few milliseconds of work per
+// frame, but at the default priority it ran only in the gaps a GPU-bound game left: in recorded
+// runs (Star Citizen, Once Human, Wardogs) one generated frame took 50 ms of GPU time from first
+// command to last, Present waited 200 to 400 ms, and the screen showed 5 fps while the game alone
+// made 35 to 135. With its own class raised, that little work runs when it is due and the game
+// keeps the rest. Only this process is changed, never the game's. These are the calls OBS makes for
+// the same reason (libobs-d3d11, set_priority), with its rule: the realtime class has hung GPUs
+// under hardware-accelerated GPU scheduling, so high is used there.
+static bool HardwareGpuScheduling() {
+    DWORD mode = 0, size = sizeof mode;
+    return RegGetValueW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers", L"HwSchMode",
+                        RRF_RT_REG_DWORD, nullptr, &mode, &size) == ERROR_SUCCESS && mode == 2;
+}
+
+GpuPriority RaiseGpuPriority(ID3D11Device* dev, int wanted) {
+    GpuPriority p;
+    if (wanted == kGpuPriorityOff) return p;
+    using SetFn = LONG(WINAPI*)(HANDLE, int);
+    using GetFn = LONG(WINAPI*)(HANDLE, int*);
+    HMODULE gdi = LoadLibraryW(L"gdi32.dll");
+    const auto set = gdi ? reinterpret_cast<SetFn>(GetProcAddress(gdi, "D3DKMTSetProcessSchedulingPriorityClass")) : nullptr;
+    const auto get = gdi ? reinterpret_cast<GetFn>(GetProcAddress(gdi, "D3DKMTGetProcessSchedulingPriorityClass")) : nullptr;
+    constexpr int kNormal = 2, kHigh = 4, kRealtime = 5;
+    const int first = wanted >= 0 ? wanted : HardwareGpuScheduling() ? kHigh : kRealtime;
+    const int last = wanted >= 0 ? wanted : kNormal + 1;    // auto: the highest class Windows grants
+    for (int c = first; set && c >= last; --c) {
+        if (set(GetCurrentProcess(), c) < 0) continue;      // NTSTATUS: negative = refused
+        int got = c;
+        if (get && get(GetCurrentProcess(), &got) >= 0 && got != c) continue;
+        p.cls = c;
+        break;
+    }
+    if (p.cls > kNormal) {
+        ComPtr<IDXGIDevice> dxgi;
+        if (dev && SUCCEEDED(dev->QueryInterface(IID_PPV_ARGS(&dxgi)))) p.thread = SUCCEEDED(dxgi->SetGPUThreadPriority(7));
+    }
+    return p;
+}
+
 }  // namespace sbfg

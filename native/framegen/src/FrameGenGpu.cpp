@@ -57,6 +57,10 @@ FrameGenGpu::FrameGenGpu(ID3D11Device* dev, ID3D11DeviceContext* ctx, const std:
         dev_->CreateQuery(&q, &t.begin);
         dev_->CreateQuery(&q, &t.end);
     }
+    for (auto& f : fences_) {
+        D3D11_QUERY_DESC q{D3D11_QUERY_EVENT, 0};
+        dev_->CreateQuery(&q, &f.done);
+    }
 }
 
 FrameGenGpu::Shader FrameGenGpu::Load(const wchar_t* name) {
@@ -258,6 +262,39 @@ ID3D11Texture2D* FrameGenGpu::Generate(float t) {
     }
     TimerEnd();
     return result;
+}
+
+// --- work in flight ---------------------------------------------------------
+void FrameGenGpu::MarkSubmitted(bool analysis) {
+    auto& f = fences_[fencePos_];
+    fencePos_ = (fencePos_ + 1) % int(fences_.size());
+    if (!f.done) return;
+    // a ring that is full loses its oldest piece: the caller stops well before that
+    ctx_->End(f.done.Get());
+    f.pending = true;
+    f.analysis = analysis;
+    ctx_->Flush();   // an event that is never handed to the GPU never finishes
+}
+
+void FrameGenGpu::PollFences() {
+    for (auto& f : fences_) {
+        if (!f.pending) continue;
+        BOOL done = FALSE;
+        if (ctx_->GetData(f.done.Get(), &done, sizeof done, D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK) f.pending = false;
+    }
+}
+
+bool FrameGenGpu::AnalysisPending() {
+    PollFences();
+    for (auto& f : fences_) if (f.pending && f.analysis) return true;
+    return false;
+}
+
+int FrameGenGpu::OutputsPending() {
+    PollFences();
+    int n = 0;
+    for (auto& f : fences_) if (f.pending && !f.analysis) ++n;
+    return n;
 }
 
 // --- timing -----------------------------------------------------------------

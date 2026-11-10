@@ -92,6 +92,10 @@ void StdinThread() {
 std::atomic<HMONITOR> g_vblankMonitor{nullptr};
 std::atomic<double> g_vblankTime{0};
 constexpr DWORD kVBlankSampleMs = 500;
+// Output frames issued and not finished by the GPU: one more is one too many (FrameGenGpu::MarkSubmitted).
+// Three is past anything a GPU with room shows, also a slow one with an analysis running in front of them.
+constexpr int kMaxOutputsInFlight = 3;
+constexpr double kMultiplying = 1.25;   // Pacer::kMinGain: output this far over the source adds frames
 
 ComPtr<IDXGIOutput> OutputOf(HMONITOR mon) {
     ComPtr<IDXGIFactory1> f;
@@ -248,6 +252,8 @@ int Run(const Settings& s) {
     ComPtr<ID3D11Device> genDev, dispDev;
     ComPtr<ID3D11DeviceContext> genCtx, dispCtx;
     CreateDevice((s.genGpu == GenGpu::Warp ? WarpAdapter() : AdapterByIndex(genIdx)).Get(), genDev, genCtx);
+    // a software adapter has no GPU scheduler to ask
+    const GpuPriority gpuPriority = RaiseGpuPriority(genDev.Get(), s.genGpu == GenGpu::Warp ? kGpuPriorityOff : s.gpuPriority);
 
     CaptureApi api = s.capture;
 #ifndef SBFG_WITH_WGC
@@ -324,10 +330,10 @@ int Run(const Settings& s) {
         std::snprintf(buf, sizeof buf,
                       "{\"type\":\"ready\",\"capture\":\"%s\",\"genGpu\":\"%s\",\"genGpuReason\":\"%s\","
                       "\"displayGpu\":\"%s\",\"refreshHz\":%.3f,\"capture_px\":[%u,%u],\"output_px\":[%u,%u],"
-                      "\"crossAdapterCopy\":%s}",
+                      "\"crossAdapterCopy\":%s,\"gpuPriority\":\"%s\",\"gpuThreadPriority\":%s}",
                       cap->Name(), JsonEscape(nameOf(genIdx)).c_str(), JsonEscape(why).c_str(),
                       JsonEscape(nameOf(dispIdx)).c_str(), disp.hz, layout.capW, layout.capH, layout.outW,
-                      layout.outH, xcopy ? "true" : "false");
+                      layout.outH, xcopy ? "true" : "false", gpuPriority.name(), gpuPriority.thread ? "true" : "false");
         Emit(buf);
     }
 
@@ -340,6 +346,15 @@ int Run(const Settings& s) {
     meter.reset(lastDisplayQuery);
     GpuFit fit;
     GameAlone alone;
+    NearLimit nearLimit;
+    uint64_t gpuBusy = 0;   // output slots left out because earlier frames were unfinished
+    const auto outputLimit = [&] { return pc.targetFps > 0 ? pc.targetFps : disp.hz; };
+    const auto emitIdle = [&](bool on, double fps) {
+        char b[160];
+        std::snprintf(b, sizeof b, "{\"type\":\"fit\",\"idle\":%s,\"srcFps\":%.1f,\"limit\":%.1f}",
+                      on ? "true" : "false", fps, outputLimit());
+        Emit(b);
+    };
     bool readingAlone = false, startedOnce = false;
     UINT lastShown = 0;
     uint64_t totalShown = 0;
@@ -429,14 +444,20 @@ int Run(const Settings& s) {
         }
         holding = holding && f.texture;
         const bool read = alone.reading(now, meter.totalSrc());
-        if (readingAlone && !read) meter.reset(now);    // the output count starts with generation
+        if (readingAlone && !read) {
+            meter.reset(now);    // the output count starts with generation
+            fit.settle(now);
+            // a game already near the limit has nothing to gain: it is shown as it is
+            if (nearLimit.judgeAlone(alone.fps(now), outputLimit())) emitIdle(true, alone.fps(now));
+        }
         readingAlone = read;
-        const bool bypass = (mode == MulMode::Off || readingAlone) && !s.upscale;
+        const bool resting = nearLimit.resting() && mode != MulMode::Off && !s.upscale;
+        const bool bypass = (mode == MulMode::Off || readingAlone || resting) && !s.upscale;
         if (holding && bypass) {  // nothing to add: show the game itself and leave it the GPU
             holding = false;
             cap->Release();
             overlay.Show(false);
-        } else if (holding && (mode == MulMode::Off || pacer.wantsSource())) {
+        } else if (holding && (mode == MulMode::Off || pacer.wantsSource()) && !fg.AnalysisPending()) {
             holding = false;
             const UINT w = f.box.right - f.box.left, h = f.box.bottom - f.box.top;
             if (w == layout.capW && h == layout.capH) {
@@ -448,12 +469,14 @@ int Run(const Settings& s) {
                     fg.PushFrame(f.texture, f.box);
                 }
                 pacer.onSource(f.time > 0 ? f.time : now, (fg.GenMs() + (xcopy ? xcopy->LastMs() : 0)) / 1000.0);
+                fg.MarkSubmitted(true);
             }
             cap->Release();
             if (mode == MulMode::Off && fg.HasPair()) {   // pass-through (upscaling only)
                 ID3D11Texture2D* out = fg.Generate(1.f);
                 overlay.Show(true);
                 overlay.Present(out, layout.offX, layout.offY, s.upscale, false);
+                fg.MarkSubmitted(false);
                 meter.onOutput(false);
             }
         }
@@ -476,12 +499,20 @@ int Run(const Settings& s) {
             if (QpcNow() >= slot.presentAt) {
                 const float t = pacer.tFor(slot.displayAt);
                 const bool repeat = pacer.repeats(t);
-                if (!repeat) {
-                    ID3D11Texture2D* out = fg.Generate(t);
-                    overlay.Show(true);
-                    overlay.Present(out, layout.offX, layout.offY, s.upscale, pacer.passesRefresh());
+                // Frames the GPU has not finished get no more behind them (FrameGenGpu::MarkSubmitted).
+                const bool busy = !repeat && fg.OutputsPending() >= kMaxOutputsInFlight;
+                if (busy) {
+                    ++gpuBusy;
+                    pacer.forgetShown();
+                } else {
+                    if (!repeat) {
+                        ID3D11Texture2D* out = fg.Generate(t);
+                        overlay.Show(true);
+                        overlay.Present(out, layout.offX, layout.offY, s.upscale, pacer.passesRefresh());
+                        fg.MarkSubmitted(false);
+                    }
+                    meter.onOutput(repeat);
                 }
-                meter.onOutput(repeat);
                 pacer.advance(QpcNow());
             } else {
                 // sleep until the next present or a short capture poll interval
@@ -506,7 +537,8 @@ int Run(const Settings& s) {
                           "\"srcFrames\":%llu,\"outFrames\":%llu,\"repeatFrames\":%llu,\"shownFrames\":%llu,"
                           "\"clockSec\":%.4f,\"measuredSec\":%.3f,\"activeSec\":%.3f,\"divider\":%d,"
                           "\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f,"
-                          "\"presents\":%d,\"waitMs\":%.2f,\"presentMs\":%.2f,\"maxPresentMs\":%.2f,\"aloneFps\":%.1f}",
+                          "\"presents\":%d,\"waitMs\":%.2f,\"presentMs\":%.2f,\"maxPresentMs\":%.2f,\"aloneFps\":%.1f,"
+                          "\"idle\":%s,\"gpuBusy\":%llu}",
                           m.srcFps(), m.outFps(), m.multiplier(), int(mode), disp.hz,
                           bypass ? 0.0 : pacer.delayMs(), bypass ? 0.0 : pacer.addedLatencyMs(),
                           bypass ? 0.0 : fg.GenMs(), bypass ? 0.0 : fg.AnalyzeMs(),
@@ -517,7 +549,7 @@ int Run(const Settings& s) {
                           mode == MulMode::Auto ? pacer.divider() : 1, pacer.interval() * 1000.0,
                           pacer.percentile(0.1) * 1000.0, pacer.percentile(0.5) * 1000.0,
                           pacer.percentile(0.9) * 1000.0, pt.count, pt.waitMs, pt.presentMs, pt.maxMs,
-                          alone.fps(t2));
+                          alone.fps(t2), resting ? "true" : "false", (unsigned long long)gpuBusy);
             Emit(buf);
 
             // Fewer frames than the game, and fewer than asked for (a rate under the game's is the user's choice).
@@ -526,9 +558,30 @@ int Run(const Settings& s) {
             if (pc.targetFps > 0) beat = std::min(beat, pc.targetFps * 0.9);
             const bool losing = m.outFps() < beat;
             const double outFloor = std::max(std::min(m.srcFps() * 1.05, pacer.outputFps() * 0.9), beat);
-            const bool under = mode != MulMode::Off && !s.upscale && fit.behind(t2, m.outFps(), outFloor);
-            const bool missing = mode != MulMode::Off && fit.update(t2, pacer.stats.skipped);
-            if (under || missing) {
+            const bool generating = mode != MulMode::Off && !resting;
+            const bool under = generating && !s.upscale && fit.behind(t2, m.outFps(), outFloor);
+            const bool missing = generating && fit.update(t2, pacer.stats.skipped + gpuBusy);
+            // The game's rate: what it made alone while that is known, since a GPU with no time for
+            // generation holds the capture back too and the source then reads as low as the output.
+            // An output well over the source is multiplying, whatever the game did before (a loading screen).
+            const bool multiplying = m.outFps() >= m.srcFps() * kMultiplying;
+            const double gameFps = std::min(std::max(alone.fps(t2), m.srcFps()), outputLimit());
+            const bool collapsed = generating && !s.upscale && fit.collapsed(t2, m.outFps(), multiplying ? 0 : gameFps);
+            if (mode != MulMode::Off && !s.upscale && !readingAlone &&
+                nearLimit.update(t2, m.srcFps(), outputLimit())) {
+                // the game's own rate reached the limit, or fell clear of it
+                pacer.reset();
+                fg.ResetHistory();
+                if (!nearLimit.resting()) {
+                    alone.set(t2, m.srcFps());
+                    meter.reset(t2);
+                    fit.settle(t2);
+                }
+                emitIdle(nearLimit.resting(), m.srcFps());
+            } else if (collapsed) {
+                setMode(MulMode::Off);
+                Emit("{\"type\":\"fit\",\"stopped\":true,\"collapsed\":true}");
+            } else if (under || missing) {
                 if (cur.quality != Quality::Low) {
                     cur.quality = under ? Quality::Low : Quality(int(cur.quality) - 1);
                     fg.Resize(layout.capW, layout.capH, layout.outW, layout.outH, cur);

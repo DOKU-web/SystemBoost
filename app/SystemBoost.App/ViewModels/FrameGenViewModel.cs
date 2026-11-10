@@ -161,6 +161,8 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
 
     private bool _running;
     public bool Running { get => _running; private set { if (Set(ref _running, value)) Raise(nameof(StartText)); } }
+    /// Frames are being made right now: not stopped, not resting near the limit, the game in front.
+    public bool Generating { get; private set; }
     public string StartText => Running ? "중지" : "시작";
     private string _status = "";
     public string Status { get => _status; private set => Set(ref _status, value); }
@@ -207,6 +209,20 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         if (refreshHz <= 0 || srcFps * maxMul <= refreshHz * 1.05) return "";
         double hz = Math.Round(refreshHz);
         return $"모니터가 {hz.ToString("0", Inv)}Hz라 출력은 {hz.ToString("0", Inv)}fps까지 나와요. 더 뽑으려면 '출력 프레임'에서 고르세요";
+    }
+
+    /// The engine rests while the game alone is within a fifth of the limit (the monitor, or the chosen
+    /// output rate): generation could add next to nothing there, and the capture and the overlay cost the
+    /// game frames. It starts by itself under IdleResumeShare of the limit (native/framegen/src/GpuFit.h, NearLimit).
+    public const double IdleResumeShare = 0.72;
+    public static string IdleReasonText(int target, double refreshHz, double srcFps)
+    {
+        double limit = target > 0 ? target : Math.Round(refreshHz);
+        if (limit <= 0) return "";
+        string src = srcFps.ToString("0", Inv), resume = (limit * IdleResumeShare).ToString("0", Inv);
+        return target > 0
+            ? $"게임이 이미 {src}fps로 고른 출력 {target}fps에 가깝게 나와서 프레임 생성을 쉬고 게임 화면을 그대로 보여 주고 있어요. 지금은 더할 프레임이 거의 없어요. 게임이 {resume}fps 아래로 내려가면 자동으로 다시 켜져요"
+            : $"게임이 이미 {src}fps로 모니터 {limit.ToString("0", Inv)}Hz에 가깝게 나와서 프레임 생성을 쉬고 게임 화면을 그대로 보여 주고 있어요. 지금은 더할 프레임이 거의 없어요. 게임이 {resume}fps 아래로 내려가면 자동으로 다시 켜져요";
     }
 
     /// What a chosen rate becomes: the source times the multiplier limits it, and a monitor shows
@@ -320,6 +336,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     {
         if (Environment.TickCount64 - _lastStats < StatsGapMs) return;
         SrcFps = OutFps = Multiplier = Latency = GenMs = AnalyzeMs = Late = Transfer = "—";
+        Generating = false;
         AutoReason = "프레임 생성과 측정은 게임 창이 앞에 있을 때만 돌아가요. 게임으로 돌아가면 이어져요";
     }
 
@@ -344,7 +361,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         {
             EndSession();
             _statsWatch.Stop();
-            Running = false;
+            Running = Generating = false;
             AutoReason = "";
             ResourceManagers.GameProcess = null;
             if (!Status.StartsWith("오류")) Status = "중지됨";
@@ -436,20 +453,23 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     {
         _lastStats = Environment.TickCount64;
         if (_waitNotice && s.SrcFps > 0) { _waitNotice = false; Status = _runLine; }
+        Generating = (s.Mode != 1 && !s.Idle) || Upscale;
         SrcFps = s.SrcFps.ToString("0", Inv);
-        OutFps = s.OutFps.ToString("0", Inv);
-        Multiplier = s.Multiplier.ToString("0.00", Inv);
+        // resting: the game is on screen as it is, so its own frames are what comes out
+        OutFps = (s.Idle ? s.SrcFps : s.OutFps).ToString("0", Inv);
+        Multiplier = s.Idle ? "1.00" : s.Multiplier.ToString("0.00", Inv);
         Latency = s.AddedLatencyMs.ToString("0.0", Inv);
         GenMs = s.GenMs.ToString("0.0", Inv);
         AnalyzeMs = s.AnalyzeMs.ToString("0.0", Inv);
         Late = s.Late.ToString(Inv);
         Transfer = s.TransferMs > 0 ? s.TransferMs.ToString("0.0", Inv) : "—";
-        History.Add((s.SrcFps, s.OutFps));
+        History.Add((s.SrcFps, s.Idle ? s.SrcFps : s.OutFps));
         if (History.Count > 60) History.RemoveAt(0);
         HistoryChanged?.Invoke();
         if (_fitStopped) _aloneFps.Add(s.SrcFps);
         UpdateDlssRest(s.SrcFps);
         var reason = s.Mode == 1 ? (_fitStopped ? (_limitNote != "" ? _limitNote : StoppedReason) : _dlssResting ? DlssRestReason : "")
+            : s.Idle ? IdleReasonText(TargetFps, s.RefreshHz, s.SrcFps)
             : TargetFps > 0 ? TargetReasonText(TargetFps, s.RefreshHz, s.SrcFps, s.Mode, MaxMul)
             : s.Mode != 0 ? CapReasonText(s.RefreshHz, s.SrcFps, s.Mode)
             : s.Divider > 1 ? AutoReasonText(s.RefreshHz, s.Divider) : MonitorReasonText(s.RefreshHz, s.SrcFps, MaxMul);
@@ -460,7 +480,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         {
             double sec = Math.Max(0, s.ActiveSec - _last.ActiveSec);
             _latencyMsSec += s.AddedLatencyMs * sec;
-            if (s.Mode != 1 || Upscale)
+            if ((s.Mode != 1 && !s.Idle) || Upscale)
             {
                 _genSec += sec;
                 _genSrc += s.SrcFrames - _last.SrcFrames;

@@ -222,5 +222,57 @@ int main() {
         p.onArrival(5.1, 3);
         check(p.sourceFps() > 29 && p.sourceFps() < 31, "three frames in 100 ms read as 30 fps");
     }
+    {   // output far under the game's rate: the game is shown at once, not after every step
+        GpuFit fit;
+        check(!fit.collapsed(0.0, 5, 130), "far behind the game: not on the first line");
+        check(fit.collapsed(0.5, 5, 130), "far behind the game: the second line in a row stops it");
+        GpuFit mild;
+        bool any = false;
+        for (double sec = 0; sec < 10; sec += 0.5) any = any || mild.collapsed(sec, 80, 130);
+        check(!any, "0.62 of the game's rate is left to the step downs");
+        GpuFit dip;
+        dip.collapsed(0.0, 5, 130);
+        dip.collapsed(0.5, 120, 130);
+        check(!dip.collapsed(1.0, 5, 130), "one good line in between starts the count again");
+        GpuFit none;
+        check(!none.collapsed(0, 0, 0) && !none.collapsed(0.5, 0, 0), "no game rate, nothing to compare");
+    }
+    {   // a game already near the limit rests; generation starts when it falls clear of it
+        NearLimit n;
+        check(n.judgeAlone(135, 144) && n.resting(), "135 fps alone on 144 Hz rests");
+        check(!NearLimit().judgeAlone(100, 144), "100 fps alone on 144 Hz generates");
+        check(NearLimit().judgeAlone(50, 60), "50 fps alone on 60 Hz rests");
+        check(!NearLimit().judgeAlone(135, 240), "135 fps with 240 chosen generates");
+        bool changed = false;
+        for (double sec = 0; sec < 1.9; sec += 0.5) changed = changed || n.update(sec, 90, 144);
+        check(!changed && n.resting(), "resting: under 2 s below the line changes nothing");
+        check(n.update(2.0, 90, 144) && !n.resting(), "resting: 2 s at 90 fps starts generation");
+        changed = false;
+        for (double sec = 3; sec < 20; sec += 0.5) changed = changed || n.update(sec, 110, 144);
+        check(!changed && !n.resting(), "generating at 110 fps stays generating");
+        for (double sec = 20; sec < 22.9; sec += 0.5) changed = changed || n.update(sec, 120, 144);
+        check(!changed, "generating: under 3 s near the limit changes nothing");
+        check(n.update(23.0, 120, 144) && n.resting(), "generating: 3 s at 120 fps rests");
+        changed = false;
+        for (double sec = 24; sec < 40; sec += 0.5) changed = changed || n.update(sec, 108, 144);
+        check(!changed && n.resting(), "resting at 108 fps stays resting");
+        NearLimit gap;
+        gap.judgeAlone(135, 144);
+        gap.update(0, 90, 144);
+        gap.update(1.0, 130, 144);
+        check(!gap.update(2.5, 90, 144), "a line back over the limit starts the wait again");
+    }
+    {   // GPU priority option, and an output slot that was left out
+        Settings s;
+        check(parseArgs({"--hwnd", "1"}, s).empty() && s.gpuPriority == kGpuPriorityAuto, "GPU priority is auto unless said");
+        check(parseArgs({"--hwnd", "1", "--gpu-priority", "off"}, s).empty() && s.gpuPriority == kGpuPriorityOff,
+              "--gpu-priority off parses");
+        check(parseArgs({"--hwnd", "1", "--gpu-priority", "5"}, s).empty() && s.gpuPriority == 5, "--gpu-priority 5 parses");
+        check(!parseArgs({"--hwnd", "1", "--gpu-priority", "9"}, s).empty(), "--gpu-priority 9 is refused");
+        Pacer p = fed(MulMode::X2, 144, 60);
+        const bool first = p.repeats(0.5f), again = p.repeats(0.5f);
+        p.forgetShown();
+        check(!first && again && !p.repeats(0.5f), "an image left out is not counted as shown");
+    }
     return failures ? 1 : 0;
 }
