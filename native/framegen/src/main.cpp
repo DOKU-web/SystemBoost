@@ -95,7 +95,6 @@ constexpr DWORD kVBlankSampleMs = 500;
 // Output frames issued and not finished by the GPU: one more is one too many (FrameGenGpu::MarkSubmitted).
 // Three is past anything a GPU with room shows, also a slow one with an analysis running in front of them.
 constexpr int kMaxOutputsInFlight = 3;
-constexpr double kMultiplying = 1.25;   // Pacer::kMinGain: output this far over the source adds frames
 
 ComPtr<IDXGIOutput> OutputOf(HMONITOR mon) {
     ComPtr<IDXGIFactory1> f;
@@ -194,6 +193,15 @@ Layout ComputeLayout(HWND game, bool upscale) {
     L.offX = (mw - L.outW) / 2;
     L.offY = (mh - L.outH) / 2;
     return L;
+}
+
+// While the game is shown as it is the capture is only counted: no precision, no spinning.
+void CoarseWait(HANDLE timer, double seconds) {
+    if (!timer) { Sleep(DWORD(seconds * 1000)); return; }
+    LARGE_INTEGER due;
+    due.QuadPart = -LONGLONG(seconds * 1e7);  // relative, 100 ns
+    SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE);
+    WaitForSingleObject(timer, 50);
 }
 
 void PreciseWaitUntil(HANDLE timer, double t) {
@@ -348,12 +356,32 @@ int Run(const Settings& s) {
     GameAlone alone;
     NearLimit nearLimit;
     uint64_t gpuBusy = 0;   // output slots left out because earlier frames were unfinished
+    // Generated frames go to the screen. False = a trial run: frames are generated and counted while the
+    // game stays on screen as it is, so a result under the game's own rate is never seen (kShowGain).
+    // Upscaling has no game picture to fall back to and always shows.
+    bool showing = s.upscale;
     const auto outputLimit = [&] { return pc.targetFps > 0 ? pc.targetFps : disp.hz; };
     const auto emitIdle = [&](bool on, double fps) {
         char b[160];
         std::snprintf(b, sizeof b, "{\"type\":\"fit\",\"idle\":%s,\"srcFps\":%.1f,\"limit\":%.1f}",
                       on ? "true" : "false", fps, outputLimit());
         Emit(b);
+    };
+    // A trial or a shown run fell short: once more at the cheapest quality, unseen, or the game keeps the
+    // screen. reread: the game's own rate is no longer fresh (frames were on screen), so it is read again first.
+    const auto lowerOrStop = [&](double t, bool reread) {
+        if (cur.quality != Quality::Low) {
+            cur.quality = Quality::Low;
+            fg.Resize(layout.capW, layout.capH, layout.outW, layout.outH, cur);
+            pacer.reset();
+            meter.reset(t);
+            fit.settle(t);
+            if (reread) alone.start(t, meter.totalSrc());
+            Emit("{\"type\":\"fit\",\"quality\":\"low\",\"trial\":true}");
+        } else {
+            setMode(MulMode::Off);
+            Emit("{\"type\":\"fit\",\"stopped\":true,\"nogain\":true}");
+        }
     };
     bool readingAlone = false, startedOnce = false;
     UINT lastShown = 0;
@@ -447,6 +475,7 @@ int Run(const Settings& s) {
         if (readingAlone && !read) {
             meter.reset(now);    // the output count starts with generation
             fit.settle(now);
+            showing = s.upscale; // and with a trial run
             // a game already near the limit has nothing to gain: it is shown as it is
             if (nearLimit.judgeAlone(alone.fps(now), outputLimit())) emitIdle(true, alone.fps(now));
         }
@@ -507,8 +536,10 @@ int Run(const Settings& s) {
                 } else {
                     if (!repeat) {
                         ID3D11Texture2D* out = fg.Generate(t);
-                        overlay.Show(true);
-                        overlay.Present(out, layout.offX, layout.offY, s.upscale, pacer.passesRefresh());
+                        if (showing) {
+                            overlay.Show(true);
+                            overlay.Present(out, layout.offX, layout.offY, s.upscale, pacer.passesRefresh());
+                        }
                         fg.MarkSubmitted(false);
                     }
                     meter.onOutput(repeat);
@@ -518,6 +549,8 @@ int Run(const Settings& s) {
                 // sleep until the next present or a short capture poll interval
                 PreciseWaitUntil(timer, std::min(slot.presentAt, QpcNow() + 0.001));
             }
+        } else if (bypass) {
+            CoarseWait(timer, 0.002);
         } else {
             PreciseWaitUntil(timer, QpcNow() + 0.001);
         }
@@ -529,6 +562,7 @@ int Run(const Settings& s) {
             UINT shown = 0;
             if (overlay.ShownCount(shown)) { totalShown += shown - lastShown; lastShown = shown; }
             const Overlay::Timing pt = overlay.TakeTiming();
+            const bool trial = mode != MulMode::Off && !bypass && !showing;
             char buf[1024];
             std::snprintf(buf, sizeof buf,
                           "{\"type\":\"stats\",\"srcFps\":%.1f,\"outFps\":%.1f,\"multiplier\":%.2f,"
@@ -538,9 +572,9 @@ int Run(const Settings& s) {
                           "\"clockSec\":%.4f,\"measuredSec\":%.3f,\"activeSec\":%.3f,\"divider\":%d,"
                           "\"intervalMs\":%.3f,\"p10Ms\":%.3f,\"p50Ms\":%.3f,\"p90Ms\":%.3f,"
                           "\"presents\":%d,\"waitMs\":%.2f,\"presentMs\":%.2f,\"maxPresentMs\":%.2f,\"aloneFps\":%.1f,"
-                          "\"idle\":%s,\"gpuBusy\":%llu}",
+                          "\"idle\":%s,\"gpuBusy\":%llu,\"trial\":%s}",
                           m.srcFps(), m.outFps(), m.multiplier(), int(mode), disp.hz,
-                          bypass ? 0.0 : pacer.delayMs(), bypass ? 0.0 : pacer.addedLatencyMs(),
+                          bypass || trial ? 0.0 : pacer.delayMs(), bypass || trial ? 0.0 : pacer.addedLatencyMs(),
                           bypass ? 0.0 : fg.GenMs(), bypass ? 0.0 : fg.AnalyzeMs(),
                           xcopy ? xcopy->LastMs() : 0.0, (unsigned long long)pacer.stats.late,
                           (unsigned long long)pacer.stats.skipped, (unsigned long long)meter.totalSrc(),
@@ -549,7 +583,8 @@ int Run(const Settings& s) {
                           mode == MulMode::Auto ? pacer.divider() : 1, pacer.interval() * 1000.0,
                           pacer.percentile(0.1) * 1000.0, pacer.percentile(0.5) * 1000.0,
                           pacer.percentile(0.9) * 1000.0, pt.count, pt.waitMs, pt.presentMs, pt.maxMs,
-                          alone.fps(t2), resting ? "true" : "false", (unsigned long long)gpuBusy);
+                          alone.fps(t2), resting ? "true" : "false", (unsigned long long)gpuBusy,
+                          trial ? "true" : "false");
             Emit(buf);
 
             // Fewer frames than the game, and fewer than asked for (a rate under the game's is the user's choice).
@@ -558,15 +593,10 @@ int Run(const Settings& s) {
             if (pc.targetFps > 0) beat = std::min(beat, pc.targetFps * 0.9);
             const bool losing = m.outFps() < beat;
             const double outFloor = std::max(std::min(m.srcFps() * 1.05, pacer.outputFps() * 0.9), beat);
-            const bool generating = mode != MulMode::Off && !resting;
-            const bool under = generating && !s.upscale && fit.behind(t2, m.outFps(), outFloor);
-            const bool missing = generating && fit.update(t2, pacer.stats.skipped + gpuBusy);
-            // The game's rate: what it made alone while that is known, since a GPU with no time for
-            // generation holds the capture back too and the source then reads as low as the output.
-            // An output well over the source is multiplying, whatever the game did before (a loading screen).
-            const bool multiplying = m.outFps() >= m.srcFps() * kMultiplying;
-            const double gameFps = std::min(std::max(alone.fps(t2), m.srcFps()), outputLimit());
-            const bool collapsed = generating && !s.upscale && fit.collapsed(t2, m.outFps(), multiplying ? 0 : gameFps);
+            const bool generating = mode != MulMode::Off && !resting && !readingAlone;
+            const bool onScreen = generating && showing;
+            const bool under = onScreen && !s.upscale && fit.behind(t2, m.outFps(), outFloor);
+            const bool missing = onScreen && fit.update(t2, pacer.stats.skipped + gpuBusy);
             if (mode != MulMode::Off && !s.upscale && !readingAlone &&
                 nearLimit.update(t2, m.srcFps(), outputLimit())) {
                 // the game's own rate reached the limit, or fell clear of it
@@ -576,11 +606,30 @@ int Run(const Settings& s) {
                     alone.set(t2, m.srcFps());
                     meter.reset(t2);
                     fit.settle(t2);
+                    showing = s.upscale;    // generation starts with a trial run
                 }
                 emitIdle(nearLimit.resting(), m.srcFps());
-            } else if (collapsed) {
-                setMode(MulMode::Off);
-                Emit("{\"type\":\"fit\",\"stopped\":true,\"collapsed\":true}");
+            } else if (generating && !showing) {
+                // The trial run's first full second, against what the game made alone a moment ago.
+                // A game that stands still has no verdict yet.
+                if (TrialPasses(m.outFps(), m.srcFps(), alone.fps(t2))) {
+                    showing = true;
+                    fit.settle(t2);
+                    Emit("{\"type\":\"fit\",\"shown\":true}");
+                } else if (m.srcFps() >= 1) {
+                    lowerOrStop(t2, false);
+                }
+            } else if (onScreen && !s.upscale && fit.dropped(t2, m.outFps(), ShownFloor(m.srcFps(), outputLimit()))) {
+                // No longer more frames than the game shows by itself: the overlay goes at once.
+                showing = false;
+                overlay.Show(false);
+                if (nearLimit.restNow(m.srcFps(), outputLimit())) {   // the game caught up with the limit
+                    pacer.reset();
+                    fg.ResetHistory();
+                    emitIdle(true, m.srcFps());
+                } else {
+                    lowerOrStop(t2, true);
+                }
             } else if (under || missing) {
                 if (cur.quality != Quality::Low) {
                     cur.quality = under ? Quality::Low : Quality(int(cur.quality) - 1);

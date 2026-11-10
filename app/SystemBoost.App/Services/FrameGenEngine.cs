@@ -32,7 +32,8 @@ public sealed record FrameGenOptions(string Mode, int MaxMultiplier, string Qual
 public sealed record FrameGenStats(double SrcFps, double OutFps, double Multiplier, double RefreshHz,
                                    double DelayMs, double AddedLatencyMs, double GenMs, double AnalyzeMs,
                                    double TransferMs, long Late, long Skipped, int Mode, int Divider,
-                                   long SrcFrames, long OutFrames, double ActiveSec, bool Idle = false);
+                                   long SrcFrames, long OutFrames, double ActiveSec, bool Idle = false,
+                                   bool Trial = false);
 
 public static class Platform
 {
@@ -187,7 +188,8 @@ public sealed class FrameGenEngine : IDisposable
                     case "stats": Stats?.Invoke(ParseStats(r)); break;
                     case "ready": Ready?.Invoke(r); break;
                     case "fit":
-                        if (r.TryGetProperty("idle", out _)) break;   // resting near the limit: the stats lines say so
+                        // resting near the limit, or a trial run that passed: the stats lines say so
+                        if (r.TryGetProperty("idle", out _) || r.TryGetProperty("shown", out _)) break;
                         Message?.Invoke("warning", FitText(r));
                         if (r.TryGetProperty("stopped", out _)) FitStopped?.Invoke();
                         break;
@@ -202,7 +204,8 @@ public sealed class FrameGenEngine : IDisposable
 
     private static string FitText(JsonElement r)
     {
-        if (r.TryGetProperty("collapsed", out _)) return "만든 프레임이 게임 프레임보다 훨씬 적게 나와서 프레임 생성을 바로 멈췄어요. 게임 화면을 그대로 보여 줘요.";
+        if (r.TryGetProperty("nogain", out _)) return "프레임 생성이 게임 혼자일 때보다 프레임을 더 내지 못해서 멈췄어요. 게임 화면을 그대로 보여 줘요.";
+        if (r.TryGetProperty("trial", out _)) return "게임 혼자일 때보다 프레임이 늘지 않아서 품질을 '저사양' 단계로 낮춰 다시 재 보고 있어요. 그동안 게임 화면을 그대로 보여 줘요.";
         if (r.TryGetProperty("stopped", out _)) return "GPU 여유가 없어 프레임 생성을 멈췄어요. 게임 화면을 그대로 보여 줘요.";
         if (r.TryGetProperty("maxOut", out _)) return "출력이 계속 밀려서 출력 프레임 수를 낮췄어요.";
         var quality = r.TryGetProperty("quality", out var q) ? q.GetString() : null;
@@ -216,7 +219,8 @@ public sealed class FrameGenEngine : IDisposable
         D(r, "addedLatencyMs"), D(r, "genMs"), D(r, "analyzeMs"), D(r, "transferMs"),
         (long)D(r, "late"), (long)D(r, "skipped"), (int)D(r, "mode"), (int)D(r, "divider"),
         (long)D(r, "srcFrames"), (long)D(r, "outFrames"), D(r, "activeSec"),
-        r.TryGetProperty("idle", out var idle) && idle.ValueKind == JsonValueKind.True);
+        r.TryGetProperty("idle", out var idle) && idle.ValueKind == JsonValueKind.True,
+        r.TryGetProperty("trial", out var trial) && trial.ValueKind == JsonValueKind.True);
 
     // ---- one-shot queries ---------------------------------------------------
     private static async Task<JsonElement?> QueryAsync(string arg)

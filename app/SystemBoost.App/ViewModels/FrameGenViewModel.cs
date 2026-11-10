@@ -211,19 +211,22 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         return $"모니터가 {hz.ToString("0", Inv)}Hz라 출력은 {hz.ToString("0", Inv)}fps까지 나와요. 더 뽑으려면 '출력 프레임'에서 고르세요";
     }
 
-    /// The engine rests while the game alone is within a fifth of the limit (the monitor, or the chosen
-    /// output rate): generation could add next to nothing there, and the capture and the overlay cost the
-    /// game frames. It starts by itself under IdleResumeShare of the limit (native/framegen/src/GpuFit.h, NearLimit).
-    public const double IdleResumeShare = 0.72;
+    /// The engine rests while the game alone is within 13% of the limit (the monitor, or the chosen output
+    /// rate): generated frames go on screen only when they are 15% more than the game's own, and there
+    /// they cannot be. It starts by itself under IdleResumeShare of the limit (native/framegen/src/GpuFit.h, NearLimit).
+    public const double IdleResumeShare = 0.80;
     public static string IdleReasonText(int target, double refreshHz, double srcFps)
     {
         double limit = target > 0 ? target : Math.Round(refreshHz);
         if (limit <= 0) return "";
         string src = srcFps.ToString("0", Inv), resume = (limit * IdleResumeShare).ToString("0", Inv);
         return target > 0
-            ? $"게임이 이미 {src}fps로 고른 출력 {target}fps에 가깝게 나와서 프레임 생성을 쉬고 게임 화면을 그대로 보여 주고 있어요. 지금은 더할 프레임이 거의 없어요. 게임이 {resume}fps 아래로 내려가면 자동으로 다시 켜져요"
-            : $"게임이 이미 {src}fps로 모니터 {limit.ToString("0", Inv)}Hz에 가깝게 나와서 프레임 생성을 쉬고 게임 화면을 그대로 보여 주고 있어요. 지금은 더할 프레임이 거의 없어요. 게임이 {resume}fps 아래로 내려가면 자동으로 다시 켜져요";
+            ? $"게임이 이미 {src}fps로 나와요. 고른 출력 {target}fps까지 더할 프레임이 거의 없어서 프레임 생성을 쉬고 게임 화면을 그대로 보여 주고 있어요. 게임이 {resume}fps 아래로 내려가면 자동으로 다시 켜져요"
+            : $"게임이 이미 {src}fps로 나와요. 모니터 {limit.ToString("0", Inv)}Hz까지 더할 프레임이 거의 없어서 프레임 생성을 쉬고 게임 화면을 그대로 보여 주고 있어요. 게임이 {resume}fps 아래로 내려가면 자동으로 다시 켜져요";
     }
+
+    /// A trial run: the engine generates without showing and counts, and shows only what beats the game alone.
+    public const string TrialReason = "프레임 생성이 게임 혼자일 때보다 프레임을 더 내는지 화면에 내보내지 않고 재고 있어요. 더 낼 때만 화면에 내보내요";
 
     /// What a chosen rate becomes: the source times the multiplier limits it, and a monitor shows
     /// only its refresh rate however many frames are made.
@@ -453,23 +456,24 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     {
         _lastStats = Environment.TickCount64;
         if (_waitNotice && s.SrcFps > 0) { _waitNotice = false; Status = _runLine; }
-        Generating = (s.Mode != 1 && !s.Idle) || Upscale;
+        bool own = s.Idle || s.Trial;   // resting or a trial run: the game is on screen as it is
+        Generating = (s.Mode != 1 && !own) || Upscale;
         SrcFps = s.SrcFps.ToString("0", Inv);
-        // resting: the game is on screen as it is, so its own frames are what comes out
-        OutFps = (s.Idle ? s.SrcFps : s.OutFps).ToString("0", Inv);
-        Multiplier = s.Idle ? "1.00" : s.Multiplier.ToString("0.00", Inv);
+        OutFps = (own ? s.SrcFps : s.OutFps).ToString("0", Inv);   // its own frames are what comes out
+        Multiplier = own ? "1.00" : s.Multiplier.ToString("0.00", Inv);
         Latency = s.AddedLatencyMs.ToString("0.0", Inv);
         GenMs = s.GenMs.ToString("0.0", Inv);
         AnalyzeMs = s.AnalyzeMs.ToString("0.0", Inv);
         Late = s.Late.ToString(Inv);
         Transfer = s.TransferMs > 0 ? s.TransferMs.ToString("0.0", Inv) : "—";
-        History.Add((s.SrcFps, s.Idle ? s.SrcFps : s.OutFps));
+        History.Add((s.SrcFps, own ? s.SrcFps : s.OutFps));
         if (History.Count > 60) History.RemoveAt(0);
         HistoryChanged?.Invoke();
         if (_fitStopped) _aloneFps.Add(s.SrcFps);
         UpdateDlssRest(s.SrcFps);
         var reason = s.Mode == 1 ? (_fitStopped ? (_limitNote != "" ? _limitNote : StoppedReason) : _dlssResting ? DlssRestReason : "")
             : s.Idle ? IdleReasonText(TargetFps, s.RefreshHz, s.SrcFps)
+            : s.Trial ? TrialReason
             : TargetFps > 0 ? TargetReasonText(TargetFps, s.RefreshHz, s.SrcFps, s.Mode, MaxMul)
             : s.Mode != 0 ? CapReasonText(s.RefreshHz, s.SrcFps, s.Mode)
             : s.Divider > 1 ? AutoReasonText(s.RefreshHz, s.Divider) : MonitorReasonText(s.RefreshHz, s.SrcFps, MaxMul);
@@ -480,7 +484,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
         {
             double sec = Math.Max(0, s.ActiveSec - _last.ActiveSec);
             _latencyMsSec += s.AddedLatencyMs * sec;
-            if ((s.Mode != 1 && !s.Idle) || Upscale)
+            if ((s.Mode != 1 && !own) || Upscale)
             {
                 _genSec += sec;
                 _genSrc += s.SrcFrames - _last.SrcFrames;

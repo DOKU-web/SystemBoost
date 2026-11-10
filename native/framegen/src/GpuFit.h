@@ -5,9 +5,27 @@
 // load lowers its clocks, and the same analysis read about 5 ms at any window size on an
 // RTX 3060, close to a whole interval of a 144 fps game with nothing wrong.
 #pragma once
+#include <algorithm>
 #include <cstdint>
 
 namespace sbfg {
+
+// Generated frames are on screen only while they are more frames than the game shows by itself.
+// To go on screen: kShowGain times the rate the game made alone a moment before, counted in a trial
+// run nobody sees (TrialPasses). To stay there: kShowGain times the frames the game is making now,
+// or a full screen (ShownFloor). Both are counted frames. GPU timings are no measure for this: a GPU
+// under light load lowers its clocks and the same analysis reads twice as long.
+constexpr double kShowGain = 1.15;
+constexpr double kFullScreen = 0.95;   // this close to the limit the screen has every frame it can show
+
+// aloneFps: the game with nothing generated, read just before (0 = not known: the source rate stands in).
+inline bool TrialPasses(double outFps, double srcFps, double aloneFps) {
+    return srcFps >= 1 && outFps >= std::max(aloneFps, srcFps) * kShowGain;
+}
+// The fewest frames on screen that still beat showing the game as it is.
+inline double ShownFloor(double srcFps, double limit) {
+    return std::min(srcFps * kShowGain, limit * kFullScreen);
+}
 
 class GpuFit {
 public:
@@ -38,22 +56,23 @@ public:
         return true;
     }
 
-    // Call at every stats line with the game's rate (never more than the screen can show). True = the
-    // output stayed far under it for kCollapseSec. The overlay covers the game, so the screen shows a
-    // fraction of the frames the game makes, and no step down repairs a gap like that: the game is
-    // shown at once. Recorded runs sat through 6 to 10 s of 5 fps before the steps ran out.
-    bool collapsed(double now, double outFps, double gameFps) {
-        if (gameFps <= 0 || outFps >= gameFps * kCollapseShare) { collapseSince_ = -1; return false; }
-        if (collapseSince_ < 0) { collapseSince_ = now; return false; }
-        if (now - collapseSince_ < kCollapseSec) return false;
-        collapseSince_ = -1;
+    // Call at every stats line while generated frames are on screen, with the fewest frames that still
+    // beat the game shown as it is. True = the output stayed under that for kDropSec. The overlay covers
+    // the game, so this is the screen showing fewer frames than without frame generation: the caller
+    // takes the overlay away at once. Recorded runs sat through 5 to 10 s of 2 to 8 fps while the old
+    // step downs ran out.
+    bool dropped(double now, double outFps, double floorFps) {
+        if (floorFps <= 0 || outFps >= floorFps) { dropSince_ = -1; return false; }
+        if (dropSince_ < 0) { dropSince_ = now; return false; }
+        if (now - dropSince_ < kDropSec) return false;
+        dropSince_ = -1;
         return true;
     }
 
     // Generation starts (again): what was counted before says nothing about it.
     void settle(double now) {
         stepped(now, kSettleHeavySec);
-        collapseSince_ = -1;
+        dropSince_ = -1;
     }
 
 private:
@@ -70,15 +89,14 @@ private:
     static constexpr double kHoldHeavySec = 1.5;
     static constexpr double kSettleHeavySec = 1.0;
     static constexpr double kBehindSec = 2.5;
-    static constexpr double kCollapseShare = 0.6;
-    static constexpr double kCollapseSec = 0.4;  // two stats lines in a row
+    static constexpr double kDropSec = 0.4;      // two stats lines in a row
 
     double lastNow_ = -1;
     uint64_t lastSkipped_ = 0;
     double overSince_ = -1;
     double settleUntil_ = 0;
     double behindSince_ = -1;
-    double collapseSince_ = -1;
+    double dropSince_ = -1;
 };
 
 // How fast the game runs with nothing taken from it, read just before generation starts. A GPU with
@@ -120,9 +138,10 @@ private:
 };
 
 // Generation can only add what the game leaves under the limit: the monitor's refresh rate, or the
-// output rate the user chose. A game within kRestShare of it gains next to nothing (Pacer::kMinGain)
-// and pays for the capture, the overlay and the GPU time: a game at 135 fps on a 144 Hz monitor can
-// only lose. Such a game is shown as it is, and generation starts when its rate falls clear of the limit.
+// output rate the user chose. A game within kRestShare of it cannot reach kShowGain however well
+// generation runs, and pays for the capture, the overlay and the GPU time: a game at 135 fps on a
+// 144 Hz monitor can only lose. Such a game is shown as it is, without a trial run, and generation
+// starts when its rate falls clear of the limit.
 class NearLimit {
 public:
     // The game's rate read with nothing generated, just before generation would start. True = rest.
@@ -142,10 +161,17 @@ public:
         return true;
     }
     bool resting() const { return resting_; }
+    // The same judgement on the source rate at this moment, without the wait.
+    bool restNow(double srcFps, double limit) {
+        if (limit <= 0 || srcFps < limit * kRestShare) return false;
+        resting_ = true;
+        since_ = -1;
+        return true;
+    }
 
 private:
-    static constexpr double kRestShare = 0.80;    // 1 / Pacer::kMinGain
-    static constexpr double kResumeShare = 0.72;  // apart, so a game hovering at one line does not flip
+    static constexpr double kRestShare = 1.0 / kShowGain;  // 0.87
+    static constexpr double kResumeShare = 0.80;  // apart, so a game hovering at one line does not flip
     static constexpr double kRestSec = 3.0;       // while generating the source rate is lower than the game alone
     static constexpr double kResumeSec = 2.0;
 

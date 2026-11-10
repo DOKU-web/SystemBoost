@@ -222,26 +222,52 @@ int main() {
         p.onArrival(5.1, 3);
         check(p.sourceFps() > 29 && p.sourceFps() < 31, "three frames in 100 ms read as 30 fps");
     }
-    {   // output far under the game's rate: the game is shown at once, not after every step
+    {   // fewer frames on screen than the game alone: the overlay goes on the second stats line
         GpuFit fit;
-        check(!fit.collapsed(0.0, 5, 130), "far behind the game: not on the first line");
-        check(fit.collapsed(0.5, 5, 130), "far behind the game: the second line in a row stops it");
-        GpuFit mild;
+        check(!fit.dropped(0.0, 5, 130), "under the game's rate: not on the first line");
+        check(fit.dropped(0.5, 5, 130), "under the game's rate: the second line in a row takes the overlay away");
+        GpuFit ok;
         bool any = false;
-        for (double sec = 0; sec < 10; sec += 0.5) any = any || mild.collapsed(sec, 80, 130);
-        check(!any, "0.62 of the game's rate is left to the step downs");
+        for (double sec = 0; sec < 10; sec += 0.5) any = any || ok.dropped(sec, 130, 130);
+        check(!any, "at the floor is not under it");
         GpuFit dip;
-        dip.collapsed(0.0, 5, 130);
-        dip.collapsed(0.5, 120, 130);
-        check(!dip.collapsed(1.0, 5, 130), "one good line in between starts the count again");
+        dip.dropped(0.0, 5, 130);
+        dip.dropped(0.5, 140, 130);
+        check(!dip.dropped(1.0, 5, 130), "one good line in between starts the count again");
         GpuFit none;
-        check(!none.collapsed(0, 0, 0) && !none.collapsed(0.5, 0, 0), "no game rate, nothing to compare");
+        check(!none.dropped(0, 0, 0) && !none.dropped(0.5, 0, 0), "no game rate, nothing to compare");
+        GpuFit again;
+        again.dropped(0.0, 5, 130);
+        again.settle(0.2);
+        check(!again.dropped(0.5, 5, 130), "a new start forgets the line before it");
+    }
+    {   // the trial run nobody sees, and what keeps generated frames on screen (measured rates only)
+        // beside a foreground game filling the GPU: alone 35; with the engine source 30, output 60
+        check(TrialPasses(60, 30, 35), "60 against 35 alone goes on screen");
+        // the same game with the engine starved of GPU time: source read as 8, output 4
+        check(!TrialPasses(4, 8, 35), "4 against 35 alone stays unseen");
+        check(!TrialPasses(38, 31, 35), "38 against 35 alone is not enough of a gain");
+        // a light game held at 100 fps by its own limit, 144 Hz
+        check(TrialPasses(144, 100, 100), "144 against a game capped at 100 goes on screen");
+        // generation that costs more than it adds: alone 50, 2x of the 20 fps left
+        check(!TrialPasses(40, 20, 50), "40 from a game that made 50 alone stays unseen");
+        check(!TrialPasses(0, 0, 60), "a game standing still has no verdict");
+        check(TrialPasses(60, 30, 0) && !TrialPasses(33, 30, 0), "alone not known: the source rate stands in");
+        const auto about = [](double a, double b) { return std::abs(a - b) < 0.01; };
+        check(about(ShownFloor(30, 60), 34.5), "30 fps on 60 Hz: 34.5 on screen or the overlay goes");
+        check(about(ShownFloor(100, 144), 115), "100 fps on 144 Hz: 115");
+        check(about(ShownFloor(130, 144), 136.8), "130 fps on 144 Hz: a full screen is enough (136.8)");
+        NearLimit n;
+        check(!n.restNow(100, 144) && !n.resting(), "100 fps on 144 Hz is not at the limit");
+        check(n.restNow(130, 144) && n.resting(), "130 fps on 144 Hz rests at once when asked");
     }
     {   // a game already near the limit rests; generation starts when it falls clear of it
         NearLimit n;
         check(n.judgeAlone(135, 144) && n.resting(), "135 fps alone on 144 Hz rests");
         check(!NearLimit().judgeAlone(100, 144), "100 fps alone on 144 Hz generates");
-        check(NearLimit().judgeAlone(50, 60), "50 fps alone on 60 Hz rests");
+        check(NearLimit().judgeAlone(55, 60), "55 fps alone on 60 Hz rests");
+        check(!NearLimit().judgeAlone(50, 60), "50 fps alone on 60 Hz generates (60 is 1.2 times it)");
+        check(NearLimit().judgeAlone(100, 60), "a game faster than the rate chosen rests");
         check(!NearLimit().judgeAlone(135, 240), "135 fps with 240 chosen generates");
         bool changed = false;
         for (double sec = 0; sec < 1.9; sec += 0.5) changed = changed || n.update(sec, 90, 144);
@@ -250,12 +276,12 @@ int main() {
         changed = false;
         for (double sec = 3; sec < 20; sec += 0.5) changed = changed || n.update(sec, 110, 144);
         check(!changed && !n.resting(), "generating at 110 fps stays generating");
-        for (double sec = 20; sec < 22.9; sec += 0.5) changed = changed || n.update(sec, 120, 144);
+        for (double sec = 20; sec < 22.9; sec += 0.5) changed = changed || n.update(sec, 130, 144);
         check(!changed, "generating: under 3 s near the limit changes nothing");
-        check(n.update(23.0, 120, 144) && n.resting(), "generating: 3 s at 120 fps rests");
+        check(n.update(23.0, 130, 144) && n.resting(), "generating: 3 s at 130 fps rests");
         changed = false;
-        for (double sec = 24; sec < 40; sec += 0.5) changed = changed || n.update(sec, 108, 144);
-        check(!changed && n.resting(), "resting at 108 fps stays resting");
+        for (double sec = 24; sec < 40; sec += 0.5) changed = changed || n.update(sec, 120, 144);
+        check(!changed && n.resting(), "resting at 120 fps stays resting");
         NearLimit gap;
         gap.judgeAlone(135, 144);
         gap.update(0, 90, 144);

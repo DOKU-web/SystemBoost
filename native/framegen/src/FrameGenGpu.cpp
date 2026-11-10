@@ -134,6 +134,9 @@ void FrameGenGpu::Resize(UINT capW, UINT capH, UINT outW, UINT outH, const Setti
         out_ = {};
     }
     frames_ = 0;
+    // timings of the old size or quality say nothing about the new one
+    genMs_ = analyzeMs_ = 0;
+    for (auto& t : timers_) t.pending = false;
 }
 
 FgConstants FrameGenGpu::Base() const {
