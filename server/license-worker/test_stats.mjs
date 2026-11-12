@@ -187,4 +187,70 @@ assert.equal(s.one("SELECT COUNT(*) AS n FROM support_events").n, 1, "and the ti
 clock += FEED.keepDays * DAY + 1;
 await call("/event", { kind: "card", ticket: T(7), cat: "refund" });
 assert.deepEqual(s.sql.exec("SELECT seq, kind FROM support_events").toArray().map(r => [r.seq, r.kind]), [[1352, "card"]], "a new row prunes too; seq keeps counting");
+
+// ---- counters (support budget, per-address limits), the admin gate and access log, the audit record
+{
+  const take = items => call("/take", { items });
+  assert.deepEqual(await take([{ name: "x:a", ttl: 60, max: 2 }]), { ok: true, n: { "x:a": 1 } });
+  await take([{ name: "x:a", ttl: 60, max: 2 }]);
+  assert.deepEqual(await take([{ name: "x:b", ttl: 60, max: 5 }, { name: "x:a", ttl: 60, max: 2 }]), { ok: false, over: "x:a", n: { "x:b": 0, "x:a": 2 } }, "all or none");
+  assert.deepEqual(await call("/peek", { names: ["x:a", "x:b"] }), { n: { "x:a": 2, "x:b": 0 } }, "x:b was not counted");
+  assert.deepEqual(await take([{ name: "x:c", ttl: 60, by: 3 }]), { ok: true, n: { "x:c": 3 } });
+  for (const bad of [[], [{ name: "bad name", ttl: 60 }], [{ name: "x:d", ttl: 0 }], [{ name: "x:d", ttl: 401 * 86400 }], [{ name: "x:d", ttl: 60, by: 0 }],
+                     [{ name: "x:d", ttl: 60, by: 1001 }], [{ name: "x:d", ttl: 60, max: -1 }], Array(9).fill({ name: "x:e", ttl: 60 })])
+    assert.deepEqual(await take(bad), { error: "bad items" });
+  assert.deepEqual(await call("/peek", { names: ["has space"] }), { error: "bad names" });
+  clock += 61e3;   // past its end time a count is 0 again, and the tick deletes it
+  assert.deepEqual(await call("/peek", { names: ["x:a"] }), { n: { "x:a": 0 } });
+  assert.deepEqual(await take([{ name: "x:a", ttl: 60, max: 2 }]), { ok: true, n: { "x:a": 1 } }, "starts again");
+  clock += 61e3;
+  await s.tick();
+  assert.equal(s.one("SELECT COUNT(*) AS n FROM counters WHERE name LIKE 'x:%'").n, 0);
+
+  // the admin gate: 5 misses lock an address for 15 minutes from its last miss, 20 an hour lock everyone
+  const ip = "0123456789abcdef", H = "2026-12-01T05";
+  let hour = H;
+  const gate = (extra, who = ip) => call("/gate", { ip: who, hour, ipMax: 5, allMax: 20, ...extra });
+  for (let i = 1; i <= 5; i++) assert.deepEqual(await gate({ fail: true }), { ip: i, all: i });
+  assert.deepEqual(await gate({ route: "GET /keys", action: "키 목록", target: "all" }), { locked: true, ip: 5, all: 5 });
+  assert.equal(s.one("SELECT COUNT(*) AS n FROM admin_access").n, 0, "a refused call writes no row");
+  clock += 15 * MIN + 1;
+  assert.deepEqual(await gate({ route: "GET /keys", action: "키 목록", target: "all" }), { ok: true, login: true });
+  assert.deepEqual(await gate({ route: "GET /summary" }), { ok: true, login: false });
+  assert.deepEqual(s.sql.exec("SELECT ip, action, target FROM admin_access ORDER BY seq").toArray().map(r => [r.ip, r.action, r.target]),
+                   [[ip, "login", ""], [ip, "키 목록", "all"]], "a login, then what was shown; the summary shows no personal data");
+  for (let i = 0; i < 15; i++) await gate({ fail: true }, (i + 1).toString(16).padStart(16, "a"));
+  assert.deepEqual(await gate({ route: "GET /summary" }), { locked: true, ip: 0, all: 20 }, "20 misses in the hour: the right password too");
+  hour = "2026-12-01T06";
+  assert.deepEqual(await gate({ route: "GET /summary" }), { ok: true, login: false }, "the next hour");
+  for (const bad of [{ ip: "x", hour: H, ipMax: 5, allMax: 20 }, { ip, hour: "2026-12-01", ipMax: 5, allMax: 20 }, { ip, hour: H, ipMax: "5", allMax: 20 }])
+    assert.deepEqual(await call("/gate", bad), { error: "bad gate" });
+  // a session lasts 30 quiet minutes
+  clock += 31 * MIN;
+  assert.deepEqual(await gate({ route: "GET /orders", action: "주문 목록", target: "open" }), { ok: true, login: true });
+  // the log in pages of 100, newest first
+  for (let i = 0; i < 120; i++) await gate({ route: "GET /key", action: "키 원문", target: i.toString(16).padStart(16, "0") });
+  const p1 = await call("/access/read", {});
+  assert.deepEqual([p1.rows.length, p1.more, p1.keepDays, p1.rows[0].target], [100, true, 366, (119).toString(16).padStart(16, "0")]);
+  const p2 = await call("/access/read", { before: Math.min(...p1.rows.map(r => r.seq)) });
+  assert.equal(p2.rows.length, s.one("SELECT COUNT(*) AS n FROM admin_access").n - 100);
+  assert.equal(p2.more, false);
+  // kept 366 days: older rows are not shown, and go with the next row or tick
+  clock += 365 * DAY;
+  assert.ok((await call("/access/read", {})).rows.length === 100);
+  clock += 2 * DAY;
+  assert.equal((await call("/access/read", {})).rows.length, 0, "older than a year and a day: not shown");
+  await gate({ route: "GET /keys", action: "키 목록", target: "all" });
+  assert.equal(s.one("SELECT COUNT(*) AS n FROM admin_access").n, 2, "and deleted: only the new login and view are left");
+  assert.deepEqual(await call("/access", { ip: "nope" }), { error: "bad access" });
+
+  // the audit record: 180 days
+  assert.deepEqual(await call("/audit", { who: "admin", action: "키 발급", detail: "0123456789abcdef · 코드 없음" }), { ok: true });
+  assert.deepEqual(await call("/audit", { who: "admin" }), { error: "bad audit" });
+  assert.deepEqual((await call("/audit/read", {})).log.map(l => [l.who, l.action, l.detail]), [["admin", "키 발급", "0123456789abcdef · 코드 없음"]]);
+  clock += 181 * DAY;
+  assert.deepEqual((await call("/audit/read", {})).log, [], "older than 180 days: not shown");
+  await s.tick();
+  assert.equal(s.one("SELECT COUNT(*) AS n FROM audit_log").n, 0, "and the tick deletes it");
+}
 console.log("ok");

@@ -3,8 +3,10 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import worker from "./src/index.js";
+import { fakeStats } from "./fake_stats.mjs";
 
 const kv = new Map(), md = new Map();
+const stats = fakeStats();   // the dashboard's 기록 lives in the Stats object
 const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const env = {
   LICENSES: {
@@ -16,6 +18,7 @@ const env = {
   },
   LICENSE_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }),
   ADMIN_TOKEN: "T".repeat(32),
+  STATS: stats.binding,
 };
 const call = (path, init) => worker.fetch(new Request("https://lic.example" + path, init), env);
 const adm = async (path, body) => {
@@ -54,7 +57,8 @@ assert.ok(days > 2.99 && days < 3.01, String(days));
 const [data, sig] = r.key.split(".");
 assert.ok(verify("sha256", Buffer.from(data, "base64url"), { key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(sig, "base64url")));
 assert.equal((await adm("/referrals")).refs.find(x => x.code === "FRIEND3").used, 1);
-const issued = (await adm("/keys?q=" + encodeURIComponent("추천 코드 FRIEND3"))).keys;
+const issued = (await adm("/keys", { q: "추천 코드 FRIEND3" })).keys;   // a search goes in the body
+assert.equal((await adm("/keys?q=" + encodeURIComponent("추천 코드 FRIEND3"))).status, 400, "not in the address");
 assert.equal(issued.length, 1);
 assert.equal((await call("/check?id=" + issued[0].id)).status, 200);
 
@@ -96,4 +100,16 @@ assert.equal((await use("LATER", 9)).error, "busy");
 const log = JSON.stringify(await adm("/log"));
 assert.ok(log.includes("추천 코드 사용") && log.includes("추천 코드 생성"));
 assert.ok(!log.includes(device(1)));
+// a code's label says who it was given to: the record keeps its first character only
+const made = (await adm("/log")).log.find(l => l.action === "추천 코드 생성" && l.detail.startsWith("FRIEND3"));
+assert.equal(made.detail, "FRIEND3 · 3일 · 2회 · 친**");
+// the record is in the Stats object, not KV, and an app's line never goes to KV, even with the object down
+assert.equal([...kv.keys()].filter(k => k.startsWith("log:")).length, 0);
+kv.delete("count:ref:" + new Date().toISOString().slice(0, 10));   // the ceiling test above filled today
+stats.down = true;
+await adm("/referrals", { code: "DOWN1", days: 1, max: 5 });
+assert.equal((await use("DOWN1", 10)).status, 200, "a gift does not need the record");
+const kvLog = [...kv.keys()].filter(k => k.startsWith("log:")).map(k => JSON.parse(kv.get(k)));
+assert.deepEqual(kvLog.map(l => l.action), ["추천 코드 생성"], "the seller's line goes to KV while the object is down; the app's does not");
+stats.down = false;
 console.log("referral tests passed");

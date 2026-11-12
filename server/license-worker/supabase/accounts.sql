@@ -44,6 +44,12 @@ create table if not exists public.account_hits (
   n integer not null,
   primary key (k, hour)
 );
+-- Ids of members who left, as a one-way value the Worker makes with its pepper (the id itself is not kept), so a
+-- left id cannot be signed up again by somebody else (privacy review 2026-11-12, L7).
+create table if not exists public.account_gone (
+  h text primary key,
+  at timestamptz not null default now()
+);
 
 -- Every function names its schema in full and runs with a fixed search_path (security audit 2026-11-12).
 create or replace function public.account_fail(_status integer, _error text) returns jsonb
@@ -140,6 +146,11 @@ begin
       perform account_count('taken:' || (b->>'ip'));
       return account_fail(409, 'taken');
     end if;
+    -- an id whose member left is not handed to somebody else (an older Worker sends no "gone": not checked then)
+    if b->>'gone' is not null and exists (select 1 from account_gone where h = b->>'gone') then
+      perform account_count('taken:' || (b->>'ip'));
+      return account_fail(409, 'taken');
+    end if;
     if invite <> '' then
       select * into inviter from accounts where invite_code = invite and not blocked for update;
       if inviter.id is null then return account_fail(404, 'unknown'); end if;
@@ -209,6 +220,7 @@ begin
       update accounts set recovery = b->>'proof', fails = 0, locked_until = null where id = b->>'id';
     else
       delete from accounts where id = b->>'id';
+      if b->>'gone' is not null then insert into account_gone (h) values (b->>'gone') on conflict (h) do nothing; end if;
     end if;
     return jsonb_build_object('ok', true);
   end if;
@@ -274,6 +286,7 @@ begin
       return jsonb_build_object('id', a.id);
     end if;
     delete from accounts where id = a.id;
+    if b->>'gone' is not null then insert into account_gone (h) values (b->>'gone') on conflict (h) do nothing; end if;
     return jsonb_build_object('ok', true);
   end if;
 
@@ -284,8 +297,9 @@ end $$;
 alter table public.accounts enable row level security;
 alter table public.account_sessions enable row level security;
 alter table public.account_hits enable row level security;
-revoke all on public.accounts, public.account_sessions, public.account_hits from public, anon, authenticated;
-grant select, insert, update, delete on public.accounts, public.account_sessions, public.account_hits to service_role;
+alter table public.account_gone enable row level security;
+revoke all on public.accounts, public.account_sessions, public.account_hits, public.account_gone from public, anon, authenticated;
+grant select, insert, update, delete on public.accounts, public.account_sessions, public.account_hits, public.account_gone to service_role;
 grant usage on schema extensions to service_role;
 
 do $$
@@ -307,7 +321,7 @@ declare
   t regclass;
   f regprocedure;
 begin
-  foreach t in array array['public.accounts', 'public.account_sessions', 'public.account_hits']::regclass[] loop
+  foreach t in array array['public.accounts', 'public.account_sessions', 'public.account_hits', 'public.account_gone']::regclass[] loop
     if has_table_privilege('anon', t, 'select,insert,update,delete,truncate,references,trigger')
        or has_table_privilege('authenticated', t, 'select,insert,update,delete,truncate,references,trigger')
        or not (select relrowsecurity from pg_class where oid = t)

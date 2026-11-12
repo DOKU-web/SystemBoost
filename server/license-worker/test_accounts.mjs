@@ -197,8 +197,10 @@ assert.ok(list.summary.total >= 10);
 assert.equal(list.summary.invited >= 3, true);
 const seen = JSON.stringify(list);
 for (const word of ["salt", "hash", "recovery", "token", "consent"]) assert.ok(!seen.includes('"' + word + '"'), word);
-assert.equal((await adm("/members?q=frie")).members.every(m => m.id.includes("frie")), true);
-assert.equal((await adm("/members?q=" + c2.toLowerCase())).members[0].id, "alice_1");
+// a search goes in the body, never the address (logs, history)
+assert.equal((await adm("/members", { q: "frie" })).members.every(m => m.id.includes("frie")), true);
+assert.equal((await adm("/members", { q: c2.toLowerCase() })).members[0].id, "alice_1");
+assert.equal((await adm("/members?q=frie")).status, 400);
 
 // blocking: the session ends and login stops; unblocking brings login back
 await adm("/members/block", { id: "carol", on: true });
@@ -252,10 +254,24 @@ assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_sessions WHER
 assert.equal((await rows("SELECT invited_by FROM public.accounts WHERE id = 'friend1'"))[0].invited_by, null);
 assert.equal((await send("/account/login", { id: "alice_1", password: "password123" })).error, "wrong");
 assert.equal((await send("/account/signup", okUser("friend9", { invite: c2, device: device(110) }))).error, "unknown");
+// a left id is not handed to somebody else (privacy L7): only a one-way value of it stays, never the id
+assert.equal((await send("/account/signup", okUser("alice_1"))).error, "taken");
+assert.equal((await send("/account/signup", okUser("ALICE_1 "))).error, "taken", "the same id written another way");
+assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_gone"), 1);
+assert.ok(!JSON.stringify(await rows("SELECT * FROM public.account_gone")).includes("alice"));
+// a wrong session still says "session", and nothing is marked gone
+assert.equal((await send("/account/delete", { password: "password123" }, "ef".repeat(32))).error, "session");
+assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_gone"), 1);
 
 // the dashboard removes a member too, and keeps a log of who did what without a password or code
 await adm("/members/delete", { id: "friend1" });
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.accounts WHERE id = 'friend1'"), 0);
+assert.equal((await send("/account/signup", okUser("friend1"))).error, "taken", "an id the seller deleted is not handed out again either");
+assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_gone"), 2);
+// an older Worker sends no "gone": the database signs up and deletes as before
+assert.equal((await pg.query("SELECT public.account_call('signup', $1::jsonb) AS r", [JSON.stringify({ id: "oldworker1", pw: "x", proof: "y", session: "z".repeat(64), ip: "i", consent: "c", signupsPerIp: 99, signupsPerHour: 99, takenPerIp: 99, sessionDays: 1, sessionsKept: 1 })])).rows[0].r.id, "oldworker1");
+assert.deepEqual((await pg.query("SELECT public.account_call('admin/delete', $1::jsonb) AS r", [JSON.stringify({ id: "oldworker1" })])).rows[0].r, { ok: true });
+assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_gone"), 2);
 const log = JSON.stringify(await adm("/log"));
 assert.ok(log.includes("회원 차단") && log.includes("회원 삭제") && !log.includes(fresh));
 

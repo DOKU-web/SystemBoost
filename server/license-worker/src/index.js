@@ -2,7 +2,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
-import { helpPage, privacyPage, support, supportAdmin, supportCounts, webhookRefund } from "./support.js";
+import { helpPage, ipBucket, privacyPage, support, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
@@ -192,7 +192,12 @@ const GRACE_DAYS = 3;                   // subscription key stays valid a bit pa
 
 // What src/support.js uses from here (passed in, so the two files do not import each other).
 // events: the support feed in the Stats Durable Object (stats.js), so the dashboard sees what buyers do.
-const SUPPORT = { getOrder, putOrder, revoke, audit, accounts, verifySig, unb64url, allRecords, state, keyId, events: (env, path, body) => stats(env, path, body) };
+// stats: the same object's counters (per-address limits, the support write budget, the portal cap).
+// canonicalKey / heldKey: one spelling per key, and "a key this server issued and still honours" (see keyId).
+// revokeSub: every key of a card subscription. cancelSubscription (cancels it in Lemon Squeezy) is added where the
+// order and webhook code lives; support.js calls it only when it is there.
+const SUPPORT = { getOrder, putOrder, revoke, revokeSub, audit, accounts, verifySig, unb64url, allRecords, state, keyId, canonicalKey, heldKey,
+                  events: (env, path, body) => stats(env, path, body), stats: (env, path, body) => stats(env, path, body) };
 
 export default {
   async fetch(req, env, ctx) {
@@ -430,6 +435,53 @@ async function keyId(key) {
   const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key.trim())));
   return [...h.slice(0, 8)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
+// One signed key can be written many ways that all verify: base64 with padding, spaces or other values in a part's
+// unused low bits, and the ECDSA twin (r, n - s) of its signature. Each way has its own id, so a route that names a
+// key by the text it was given must first bring the text to one spelling, as the app does (License.Canonical):
+// canonical base64url, no padding, no spaces. The twin stays a different text; heldKey() checks revocation for both.
+// "" when the text cannot be a key at all.
+function canonicalKey(text) {
+  text = String(text ?? "").replace(/\s+/g, "");
+  if (!text || text.length > 4096) return "";
+  const parts = text.split(".");
+  if (parts.length !== 2 || !parts.every(p => /^[A-Za-z0-9_\-+/]+={0,2}$/.test(p))) return "";
+  try { return parts.map(p => b64url(unb64url(p.replace(/=+$/, "")))).join("."); } catch { return ""; }
+}
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+function twinKey(key) {   // the same key with the other valid signature (r, n - s); "" when the signature is not 64 bytes
+  const [p, s] = key.split(".");
+  let sig;
+  try { sig = unb64url(s); } catch { return ""; }
+  if (sig.length !== 64) return "";
+  let v = 0n;
+  for (const b of sig.subarray(32)) v = (v << 8n) | BigInt(b);
+  if (v === 0n || v >= P256_N) return "";
+  let t = P256_N - v;
+  const out = new Uint8Array(64);
+  out.set(sig.subarray(0, 32));
+  for (let i = 63; i >= 32; i--) { out[i] = Number(t & 0xffn); t >>= 8n; }
+  return p + "." + b64url(out);
+}
+// A key this server issued and still honours, checked the way /renew checks one: its canonical spelling is the text
+// registered under its id (so the twin and every other spelling of it are refused), it is not revoked under either
+// signature's id, and it has not run out. -> { key, id, payload, meta } or null.
+async function heldKey(env, text) {
+  const key = canonicalKey(text);
+  if (!key) return null;
+  const [p, s] = key.split(".");
+  if (!(await verifySig(env, p, s))) return null;
+  const id = await keyId(key);
+  const r = await env.LICENSES.getWithMetadata("lic:" + id);
+  if (r?.value !== key || !r.metadata || r.metadata.revoked) return null;
+  let payload;
+  try { payload = JSON.parse(new TextDecoder().decode(unb64url(p))); } catch { return null; }
+  if (!payload || typeof payload !== "object") return null;
+  const twin = twinKey(key);
+  for (const x of [id, twin && (await keyId(twin))]) if (x && (await env.LICENSES.get("revoked:" + x)) !== null) return null;
+  const ends = payload.expires || r.metadata.expires;
+  if (ends && !(Date.parse(ends) > Date.now())) return null;
+  return { key, id, payload, meta: r.metadata };
+}
 function meta(p, src, note, revoked = "") {
   return { plan: p.plan, email: (p.email || "").slice(0, 120), issued: p.issued, expires: p.expires || "", test: !!p.test,
            sub: p.sub || "", order: p.order || "", src, note: note.slice(0, 200), revoked: revoked.slice(0, 200) };
@@ -459,72 +511,221 @@ async function addSubKey(env, sub, id) {
   if (!ids.includes(id)) ids.push(id);
   await env.LICENSES.put("subkeys:" + sub, JSON.stringify(ids.slice(-200)));
 }
-async function revokeSub(env, sub, reason) {
-  if (!/^\d{1,20}$/.test(sub)) return;
+// who: "webhook" (Lemon Squeezy's refund events) or "admin" (the seller's 환불 완료 in support.js). A webhook refund also
+// closes the open refund request that names any key of the subscription (support.js webhookRefundSub): the refund
+// webhook finds the request by the current key only while sub:<id> exists, and a cancellation deletes it first.
+async function revokeSub(env, sub, reason, who = "webhook") {
+  if (!/^\d{1,20}$/.test(sub)) return [];
   const ids = new Set();
   try { for (const id of JSON.parse((await env.LICENSES.get("subkeys:" + sub)) || "[]")) if (/^[0-9a-f]{16}$/.test(id)) ids.add(id); } catch {}
   const current = await env.LICENSES.get("sub:" + sub);
   if (current) ids.add(await keyId(current));
   for (const m of await allRecords(env)) if (String(m.sub || "") === sub) ids.add(m.id);   // keys from before "subkeys:" was kept
+  const done = [];
   for (const id of ids) {
     const m = (await env.LICENSES.getWithMetadata("lic:" + id))?.metadata || {};
     if (m.revoked || (await env.LICENSES.get("revoked:" + id)) !== null) continue;
     if (m.expires && Date.parse(m.expires) < Date.now()) continue;   // ran out already
-    await revoke(env, id, reason, "webhook");
+    await revoke(env, id, reason, who);
+    done.push(id);
   }
   await env.LICENSES.delete("sub:" + sub);   // no more renewals for that subscription
+  if (who === "webhook" && reason === "환불") await webhookRefundSub(env, sub, SUPPORT, [...ids]);
+  return done;
 }
 async function check(url, env) {
   const id = url.searchParams.get("id") || "";
   if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "bad id" }, 400);
   return json({ revoked: (await env.LICENSES.get("revoked:" + id)) !== null });
 }
+// The dashboard's 기록: what was done, kept 180 days in the Stats Durable Object (stats.js audit_log), not KV, which
+// allows 1,000 writes a day. Only when the object cannot be reached does a line go to KV ("log:", as before); a line
+// from the app's own requests (referral and invite gifts: anyone can cause those) is then left out instead, so it
+// cannot spend KV writes. A failing record never fails what it records.
+// The detail keeps what tells what was done (key ids, order codes, ticket numbers, member ids, days, amounts), not
+// who paid: e-mail addresses are masked, and the free text that can hold a payer's name or payment memo is cut to its
+// first character (minimise).
 async function audit(env, who, action, detail) {
+  const row = { who, action, detail: minimise(action, String(detail)).slice(0, 300) };
+  try { await stats(env, "/audit", row); return; } catch { /* the object is down: KV below */ }
+  if (who === "app") return;
   const inv = String(9999999999999 - Date.now()).padStart(13, "0");   // newest first in KV order
-  await env.LICENSES.put("log:" + inv + Math.random().toString(36).slice(2, 6), JSON.stringify({ at: now(), who, action, detail: String(detail).slice(0, 300) }),
-                         { expirationTtl: 60 * 60 * 24 * 180 });
+  try { await env.LICENSES.put("log:" + inv + Math.random().toString(36).slice(2, 6), JSON.stringify({ at: now(), ...row }), { expirationTtl: 60 * 60 * 24 * 180 }); }
+  catch { /* KV cannot write either */ }
+}
+const EMAIL_RE = /[^\s@·,;:<>()"']+@[^\s@·,;:<>()"']+\.[A-Za-z]{2,}/g;
+function maskEmail(e) {
+  const [local, domain] = e.split("@"), dot = domain.lastIndexOf(".");
+  return [...local][0] + "***@" + [...domain][0] + "***" + domain.slice(dot);
+}
+const maskText = s => { const c = [...s.trim()]; return c.length ? c[0] + "**" : ""; };
+// Pieces of a detail that are never personal: key ids and lists of them, order and ticket codes, counts and dates.
+const SAFE_PIECE = /^(?:[0-9a-f]{16}(?:, [0-9a-f]{16})*|SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}|T-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}|\d+대 묶음(?: \d+\/\d+)?|\d+일|\d+회|평생|코드 없음|메일 없음|프로|울트라|산업|[\d,]+원)$/;
+function minimise(action, detail) {
+  detail = detail.replace(EMAIL_RE, maskEmail);
+  // a key's note (the payer's name and payment memo when the seller approves an order) and a referral code's label
+  // (who it was given to) are free text: those pieces are masked. A referral code's first piece is the code itself.
+  if (action === "키 발급")
+    detail = detail.split(" · ").map(p => SAFE_PIECE.test(p.trim()) || /\*\*\*@/.test(p) ? p : maskText(p)).join(" · ");
+  if (action === "추천 코드 생성")
+    detail = detail.split(" · ").map((p, i) => i < 3 ? p : maskText(p)).join(" · ");
+  return detail;
 }
 
 // ---------------------------------------------------------------- admin dashboard
+// The page: one <script>, allowed by a nonce made for each load (no inline handlers in admin.html). Styles stay
+// 'unsafe-inline' (the page builds rows with style attributes, which a nonce cannot cover). img-src stays https:
+// because the Discord announcement preview shows the image address the seller types, from any https host.
+function adminPage() {
+  const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  return new Response(ADMIN_HTML.replace("/*SB_SERVED*/false", "true").replaceAll("__NONCE__", nonce), { headers: {
+    "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+    "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self' https://api.github.com; img-src data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    "x-frame-options": "DENY", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });
+}
+
+// Wrong-password lockout: 5 misses per address per 15 minutes, 20 misses in all per hour. A short PIN is only safe
+// because of this (20 guesses an hour vs 1,000,000 six-digit PINs). The counts live in the Stats Durable Object, one
+// atomic step per try (stats.js gate), so tries sent at once are counted one by one and no KV write is spent. When the
+// object cannot be reached, an address's misses are counted in this isolate's memory and the hour's misses in KV
+// ("fail:all:<hour>", one write a miss and none once locked: at most 21 an hour), in memory too when KV cannot write
+// (its daily writes used up): whatever fails, a wrong password gets 401 or 429 after the delay, never a 500.
+// The address is kept only as a salted hash (IPv6 per /64, like the support limits).
+const LOCK = { ip: 5, all: 20, delay: 400 };
+const lockMem = new Map(), sessMem = new Map();   // name -> end time (ms) / count; the fallbacks only
+const lockedReply = () => json({ error: "비밀번호를 여러 번 틀려서 잠시 잠겼어요. 15분~1시간 뒤 다시 시도하세요." }, 429, false);
+const pause = ms => new Promise(r => setTimeout(r, ms));
+const sha256hex = async s => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, "0")).join("");
+let admSalt = null, admSaltOf = null;
+async function adminTag(env, ip) {
+  const k = env.LICENSE_PRIVATE_KEY || "";
+  if (admSaltOf !== k) { admSalt = k ? await sha256hex("systemboost-admin-ip|" + k) : ""; admSaltOf = k; }
+  return (await sha256hex(admSalt + "|" + ipBucket(ip) + "|sb-admin")).slice(0, 16);
+}
+function memCount(name) { const m = lockMem.get(name); return m && m.exp > Date.now() ? m.n : 0; }
+function memBump(name, seconds) {   // synchronous, so tries at once in this isolate are counted one by one
+  const t = Date.now(), n = memCount(name) + 1;
+  if (lockMem.size > 5000) for (const [k, m] of lockMem) if (m.exp <= t) lockMem.delete(k);
+  lockMem.set(name, { n, exp: t + seconds * 1000 });
+  return n;
+}
+async function kvCount(env, name) { try { return Number((await env.LICENSES.get(name)) || 0) || 0; } catch { return 0; } }
+async function fallbackFails(env, tag, hour) {
+  const ipName = "fail:ip:" + tag, allName = "fail:all:" + hour, kvAll = await kvCount(env, allName);
+  return { ipName, allName, kvAll, ip: memCount(ipName), all: kvAll + memCount(allName) };
+}
+// A wrong password: count it, -> the counts after it.
+async function lockFail(env, tag, hour) {
+  try {
+    const r = await stats(env, "/gate", { ip: tag, hour, ipMax: LOCK.ip, allMax: LOCK.all, fail: true });
+    if (Number.isInteger(r.ip) && Number.isInteger(r.all)) return r;
+  } catch { /* KV and memory below */ }
+  const f = await fallbackFails(env, tag, hour);
+  const ip = memBump(f.ipName, 15 * 60), all = f.kvAll + memCount(f.allName) + 1;
+  if (ip <= LOCK.ip && all <= LOCK.all) {   // once locked, nothing more is written
+    try { await env.LICENSES.put(f.allName, String(f.kvAll + 1), { expirationTtl: 2 * 3600 }); }
+    catch { memBump(f.allName, 2 * 3600); }
+  }
+  return { ip, all };
+}
+// The right password: refused while either count is at its limit; else the access is recorded (see adminAccess).
+async function lockPass(env, tag, hour, route, view) {
+  try {
+    const r = await stats(env, "/gate", { ip: tag, hour, ipMax: LOCK.ip, allMax: LOCK.all, route, action: view?.action || "", target: view?.target || "" });
+    if (r.locked) return false;
+    if (r.ok) return true;
+  } catch { /* KV and memory below */ }
+  const f = await fallbackFails(env, tag, hour);
+  if (f.ip >= LOCK.ip || f.all >= LOCK.all) return false;
+  await accessKv(env, tag, route, view);
+  return true;
+}
+
+// Admin access log (privacy: who saw personal data): every login (the first successful call from an address after
+// 30 quiet minutes) and every call that shows personal data, with the time, the salted address hash, the route, what
+// it showed and which item (a key or ticket id, a list's filter; never a search's words). Kept one year in the Stats
+// Durable Object (stats.js admin_access), written in the same call as the lockout check. Only while the object is down
+// does a row go to KV ("acc:", one write a row, kept as long).
+const ADMIN_VIEWS = {
+  "GET /keys": "키 목록", "POST /keys": "키 검색", "GET /key": "키 원문", "POST /lookup": "키 확인", "GET /orders": "주문 목록",
+  "GET /members": "회원 목록", "POST /members": "회원 검색", "GET /support": "문의 목록", "POST /support": "문의 검색",
+  "GET /support/ticket": "문의 열람", "GET /log": "작업 기록",
+};
+function viewOf(route, url, body) {
+  const action = ADMIN_VIEWS[route];
+  if (!action) return null;
+  const p = url.searchParams;
+  const target = route.startsWith("POST ") && route !== "POST /lookup" ? (String(body.q || "").trim() ? "검색" : String(body.status || ""))
+               : p.get("id") || p.get("status") || "";
+  return { action, target: String(target).slice(0, 40) };
+}
+async function accessKv(env, tag, route, view) {
+  const t = Date.now(), login = !((sessMem.get(tag) || 0) > t);
+  sessMem.set(tag, t + 30 * 60e3);
+  if (sessMem.size > 1000) for (const [k, e] of sessMem) if (e <= t) sessMem.delete(k);
+  const rows = [...(login ? [{ action: "login", target: "" }] : []), ...(view ? [view] : [])];
+  for (const r of rows) {
+    const inv = String(9999999999999 - t).padStart(13, "0");
+    try { await env.LICENSES.put("acc:" + inv + Math.random().toString(36).slice(2, 6), JSON.stringify({ at: t, ip: tag, route, ...r }), { expirationTtl: 60 * 60 * 24 * 366 }); }
+    catch { /* nowhere to write it */ }
+  }
+}
+async function listAccess(env, before) {
+  let r = { rows: [], more: false, keepDays: 366 }, down = false;
+  try { r = await stats(env, "/access/read", before ? { before } : {}); } catch { down = true; }
+  const rows = (r.rows || []).map(x => ({ ...x, at: new Date(x.at).toISOString().replace(/\.\d+Z$/, "Z") }));
+  if (!before) {   // the KV rows (written while the object was down) come with the first page
+    const k = await env.LICENSES.list({ prefix: "acc:", limit: 100 });
+    for (const x of k.keys) {
+      let v = null;
+      try { v = JSON.parse((await env.LICENSES.get(x.name)) || "null"); } catch {}
+      if (v) rows.push({ at: new Date(v.at).toISOString().replace(/\.\d+Z$/, "Z"), ip: v.ip, route: v.route, action: v.action, target: v.target || "", kv: true });
+    }
+    rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  }
+  return { rows, more: !!r.more, keepDays: r.keepDays || 366, ...(down ? { down: true } : {}) };
+}
+
 async function admin(req, url, env) {
   if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 6) return json({ error: "not found" }, 404);   // off unless configured
-  if (url.pathname === "/admin" && req.method === "GET")
-    return new Response(ADMIN_HTML.replace("/*SB_SERVED*/false", "true"), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
-      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://api.github.com; img-src data: https:; frame-ancestors 'none'",
-      "x-frame-options": "DENY", "referrer-policy": "no-referrer" } });
-  // Wrong-password lockout: 5 misses per IP per 15 min, 20 misses in total per hour.
-  // A short PIN is only safe because of this (20 guesses an hour vs 1,000,000 six-digit PINs).
-  const ip = req.headers.get("CF-Connecting-IP") || "unknown";
+  if (url.pathname === "/admin" && req.method === "GET") return adminPage();
+  const tag = await adminTag(env, req.headers.get("CF-Connecting-IP") || "unknown");
   const hour = now().slice(0, 13);
-  const ipFails = Number((await env.LICENSES.get("fail:ip:" + ip)) || 0);
-  const allFails = Number((await env.LICENSES.get("fail:all:" + hour)) || 0);
-  if (ipFails >= 5 || allFails >= 20)
-    return json({ error: "비밀번호를 여러 번 틀려서 잠시 잠겼어요. 15분~1시간 뒤 다시 시도하세요." }, 429, false);
   if (!(await tokenOk(req.headers.get("Authorization") || "", env.ADMIN_TOKEN))) {
-    await env.LICENSES.put("fail:ip:" + ip, String(ipFails + 1), { expirationTtl: 15 * 60 });
-    await env.LICENSES.put("fail:all:" + hour, String(allFails + 1), { expirationTtl: 2 * 60 * 60 });
-    await new Promise(r => setTimeout(r, 400));
-    return json({ error: "unauthorized" }, 401, false);
+    await pause(LOCK.delay);
+    const n = await lockFail(env, tag, hour);
+    return n.ip > LOCK.ip || n.all > LOCK.all ? lockedReply() : json({ error: "unauthorized" }, 401, false);
   }
   const route = req.method + " " + url.pathname.slice("/admin/api".length);
   const body = req.method === "POST" ? await readJson(req) : {};
+  if (!(await lockPass(env, tag, hour, route, viewOf(route, url, body)))) { await pause(LOCK.delay); return lockedReply(); }
+  // searches go in a POST body: words in an address end up in logs and browser history
+  if (req.method === "GET" && url.searchParams.get("q") && ["GET /keys", "GET /members", "GET /support"].includes(route))
+    return json({ error: "검색어는 POST 본문으로 보내요" }, 400, false);
   if (route === "GET /announce" || route.startsWith("POST /announce/")) {
     const r = await announce(env, route, body, (action, detail) => audit(env, "admin", action, detail));
     return json(r, r.status || 200, false);
   }
-  if (route === "GET /support" || route.startsWith("GET /support/") || route.startsWith("POST /support/")) {
+  if (route === "GET /support" || route === "POST /support" || route.startsWith("GET /support/") || route.startsWith("POST /support/")) {
     const { status = 200, ...r } = await supportAdmin(env, route, body, url, SUPPORT);
     return json(r, status, false);
   }
   switch (route) {
     case "GET /summary": return json(await summary(env), 200, false);
-    case "GET /keys": return json(await listKeys(env, url.searchParams.get("q") || "", url.searchParams.get("status") || "all"), 200, false);
+    case "GET /keys": return json(await listKeys(env, "", url.searchParams.get("status") || "all"), 200, false);
+    case "POST /keys": return json(await listKeys(env, String(body.q || ""), String(body.status || "all")), 200, false);
     case "GET /log": return json(await listLog(env), 200, false);
+    case "GET /access": {
+      const b = url.searchParams.get("before");
+      if (b !== null && !/^\d{1,15}$/.test(b)) return json({ error: "before는 숫자예요" }, 400, false);
+      return json(await listAccess(env, b === null ? 0 : Number(b)), 200, false);
+    }
     case "GET /stats": return json(await stats(env, "/read"), 200, false);
     case "POST /downloads": return json(await stats(env, "/downloads", body.releases), 200, false);
     case "POST /issue": { const { status = 200, ...r } = await adminIssue(env, body); return json(r, status, false); }
-    case "GET /members": {
-      const r = await accounts(env, "admin/list", { q: url.searchParams.get("q") || "" });
+    case "GET /members":
+    case "POST /members": {
+      const r = await accounts(env, "admin/list", { q: route === "POST /members" ? String(body.q || "") : "" });
       if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
       return json(r, 200, false);
     }
@@ -579,16 +780,16 @@ async function admin(req, url, env) {
     case "GET /orders": {
       const want = url.searchParams.get("status") || "open";
       const all = [];
-      let cursor;
+      let cursor, truncated = true;
       for (let i = 0; i < 10; i++) {
         const r = await env.LICENSES.list({ prefix: "ord:", cursor, limit: 1000 });
         for (const k of r.keys) all.push({ code: k.name.slice(4), ...(k.metadata || {}) });
-        if (r.list_complete) break; cursor = r.cursor;
+        if (r.list_complete) { truncated = false; break; } cursor = r.cursor;
       }
       const count = Object.fromEntries(ORDER_STATES.map(st => [st, all.filter(o => o.status === st).length]));
       const list = all.filter(o => want === "all" || (want === "open" ? ["requested", "paid"].includes(o.status) : o.status === want))
                       .sort((a, b) => (b.status === "paid") - (a.status === "paid") || String(b.updated || b.at).localeCompare(String(a.updated || a.at)));
-      return json({ orders: list.slice(0, 300), count }, 200, false);
+      return json({ orders: list.slice(0, 300), count, ...(list.length > 300 ? { more: true } : {}), ...(truncated ? { truncated: true } : {}) }, 200, false);
     }
     case "POST /orders/approve": {
       const o = CODE_RE.test(body.code || "") ? await getOrder(env, body.code) : null;
@@ -678,10 +879,11 @@ async function tokenOk(header, token) {
 
 async function allRecords(env) {
   const out = []; let cursor;
+  out.truncated = true;   // said on the dashboard when there are more than 20k keys
   for (let page = 0; page < 20; page++) {          // up to 20k keys; more than enough for an indie shop
     const r = await env.LICENSES.list({ prefix: "lic:", cursor, limit: 1000 });
     for (const k of r.keys) out.push({ id: k.name.slice(4), ...(k.metadata || {}) });
-    if (r.list_complete) break;
+    if (r.list_complete) { out.truncated = false; break; }
     cursor = r.cursor;
   }
   return out;
@@ -702,24 +904,35 @@ async function summary(env) {
   const op = await env.LICENSES.list({ prefix: "ord:", limit: 1000 });
   c.ordersOpen = op.keys.filter(k => ["requested", "paid"].includes(k.metadata?.status)).length;
   c.ordersPaid = op.keys.filter(k => k.metadata?.status === "paid").length;
-  Object.assign(c, await supportCounts(env));   // ticketsOpen, refundsOpen
+  if (!op.list_complete) c.ordersMore = true;     // counted from the first 1,000 orders only
+  if (all.truncated) c.keysMore = true;           // counted from the first 20,000 keys only
+  Object.assign(c, await supportCounts(env));   // ticketsOpen, refundsOpen (ticketsMore: from the first 1,000)
   return { sales: await salesMode(env), autoReady: await cardPlans(env), cardLiveOpen: cardLiveOpen(env),
            salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c };
 }
 async function listKeys(env, q, status) {
   q = q.trim().toLowerCase();
   let all = await allRecords(env);
+  const truncated = all.truncated;
   for (const m of all) m.state = state(m);
   if (status !== "all") all = all.filter(m => m.state === status);
   if (q) all = all.filter(m => [m.id, m.email, m.note, m.order, m.sub].some(v => String(v || "").toLowerCase().includes(q)));
   all.sort((a, b) => String(b.issued).localeCompare(String(a.issued)));
-  return { keys: all.slice(0, 500), more: all.length > 500 };
+  return { keys: all.slice(0, 500), more: all.length > 500, ...(truncated ? { truncated: true } : {}) };
 }
+// The Durable Object's newest 100 lines, and the KV lines (from before the move, or written while the object was
+// down), newest first; KV lines are shown cut down the same way (they were written before minimise() existed).
 async function listLog(env) {
+  let rows = [], down = false;
+  try { rows = (await stats(env, "/audit/read")).log || []; } catch { down = true; }
   const r = await env.LICENSES.list({ prefix: "log:", limit: 100 });
-  const out = [];
-  for (const k of r.keys) { const v = await env.LICENSES.get(k.name); if (v) out.push(JSON.parse(v)); }
-  return { log: out };
+  for (const k of r.keys) {
+    let v = null;
+    try { v = JSON.parse((await env.LICENSES.get(k.name)) || "null"); } catch {}
+    if (v) rows.push({ ...v, detail: minimise(String(v.action || ""), String(v.detail ?? "")) });
+  }
+  rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { log: rows.slice(0, 100), ...(down ? { down: true } : {}) };
 }
 // ---------------------------------------------------------------- referral codes
 // Whoever enters a code gets a short key, once per device. The person who shared the code is

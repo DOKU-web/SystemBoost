@@ -47,9 +47,12 @@ const adm = async (path, body) => {
 const post = (title, extra = {}) => ({ embeds: [{ title, color: 1 }], ...extra });
 
 // the password guards all of it
+// (from addresses of their own: the misses count towards the lockout, and without the Stats object an address's
+// misses are counted in memory, which no test can clear)
+let missIp = 0;
 for (const [m, p] of [["GET", "/announce"], ["POST", "/announce/hooks"], ["POST", "/announce/send"], ["POST", "/announce/edit"], ["POST", "/announce/delete"]])
-  assert.equal((await call("/admin/api" + p, { method: m, body: m === "POST" ? "{}" : undefined })).status, 401, p);
-for (const k of [...kv.keys()]) if (k.startsWith("fail:")) kv.delete(k);   // those misses count towards the lockout
+  assert.equal((await call("/admin/api" + p, { method: m, body: m === "POST" ? "{}" : undefined, headers: { "CF-Connecting-IP": "10.44.0." + ++missIp } })).status, 401, p);
+for (const k of [...kv.keys()]) if (k.startsWith("fail:")) kv.delete(k);   // the hour's count, in KV without the Stats object
 
 // nothing connected yet
 let s = await adm("/announce");

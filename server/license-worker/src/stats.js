@@ -13,6 +13,15 @@
 // refund request, reply, reopen, close) and per card refund the webhook finished, so the dashboard sees it without
 // a reload. A row holds the time, the kind, the ticket number and its category, never what the buyer wrote; the
 // dashboard takes the subject from its own ticket list. Kept 30 days and at most the newest 1,000 rows.
+//
+// And the worker's guard, which changes on nearly every request that counts, so it cannot be KV (1,000 writes a day):
+//   counters      named counts with an end time: the admin lockout, per-address limits, the support write budget, the
+//                 subscription-portal cap. One object answers them all one at a time, so a check and its count are one
+//                 step (KV could not do that: tries sent at once all passed). Names hold a salted address hash at most.
+//   audit_log     what the seller and the webhooks did (the dashboard's 기록), kept GUARD.auditDays.
+//   admin_access  who opened the dashboard and which personal data it showed: time, salted address hash, route,
+//                 action, target (a key id, ticket number or member id; "검색" for a search, never the search text),
+//                 kept GUARD.accessDays (one year and a day).
 
 const REPO = "DOKU-web/SystemBoost";
 const MINUTE = 60e3, DAY = 864e5;
@@ -26,6 +35,10 @@ const MULTIPLIERS = [0, 2, 3, 4, 6, 8];
 export const FEED = { keepDays: 30, keepRows: 1000, page: 100, recent: 20 };
 export const FEED_KINDS = ["ticket", "refund", "reply", "reopen", "close", "card"];
 const TICKET_RE = /^T-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;   // as in support.js
+// sessionMinutes: an address with no successful admin call for this long logs in again (a "login" row)
+export const GUARD = { auditDays: 180, accessDays: 366, page: 100, sessionMinutes: 30, maxItems: 8 };
+const NAME_RE = /^[A-Za-z0-9:._\/-]{1,160}$/;
+const str = (v, n) => String(v ?? "").slice(0, n);
 
 // The free plan stops the whole worker at 100,000 requests a day, license checks and orders included, and
 // SQLite at 100,000 rows written; a ping writes 3 rows. So the more people use the app today, the less often
@@ -49,6 +62,16 @@ CREATE TABLE IF NOT EXISTS support_events (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, kind TEXT NOT NULL, ticket TEXT NOT NULL, cat TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS support_events_ticket ON support_events(ticket);
+CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, n INTEGER NOT NULL, exp INTEGER NOT NULL) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS counters_exp ON counters(exp);
+CREATE TABLE IF NOT EXISTS audit_log (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, who TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS audit_log_at ON audit_log(at);
+CREATE TABLE IF NOT EXISTS admin_access (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, ip TEXT NOT NULL, route TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS admin_access_at ON admin_access(at);
 `;
 
 const koreanDay = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
@@ -114,6 +137,13 @@ export class Stats {
     if (path === "/event") { const r = this.event(body); return reply(r, r.error ? 400 : 200); }
     if (path === "/feed") return reply(this.feed(body));
     if (path === "/forget") { this.sql.exec("DELETE FROM support_events WHERE ticket = ?", String(body?.ticket || "")); return reply({ ok: true }); }
+    if (path === "/take") { const r = this.take(body); return reply(r, r.error ? 400 : 200); }
+    if (path === "/peek") { const r = this.peek(body); return reply(r, r.error ? 400 : 200); }
+    if (path === "/gate") { const r = this.gate(body); return reply(r, r.error ? 400 : 200); }
+    if (path === "/audit") { const r = this.audit(body); return reply(r, r.error ? 400 : 200); }
+    if (path === "/audit/read") return reply(this.auditRead());
+    if (path === "/access") { const r = this.access(body, Date.now()); return reply(r, r.error ? 400 : 200); }
+    if (path === "/access/read") return reply(this.accessRead(body));
     return reply({ error: "not found" }, 404);
   }
 
@@ -206,6 +236,103 @@ export class Stats {
     await this.askGitHub();
     this.sql.exec("DELETE FROM installs WHERE last_seen < ?", Date.now() - KEEP_DAYS * DAY);
     this.pruneFeed();
+    this.pruneGuard();
+  }
+  pruneGuard(t = Date.now()) {
+    this.sql.exec("DELETE FROM counters WHERE exp <= ?", t);
+    this.sql.exec("DELETE FROM audit_log WHERE at < ?", t - GUARD.auditDays * DAY);
+    this.sql.exec("DELETE FROM admin_access WHERE at < ?", t - GUARD.accessDays * DAY);
+  }
+
+  // ---- counters
+  // A count that has passed its end time is 0. Every change sets the end time to now + ttl (so a 15-minute
+  // lockout runs from the last miss); a name that carries its hour or day ends with that window anyway.
+  value(name, t) {
+    const r = this.one("SELECT n, exp FROM counters WHERE name = ?", name);
+    return r && r.exp > t ? r.n : 0;
+  }
+  bump(name, ttl, by, t) {
+    this.sql.exec(`INSERT INTO counters (name, n, exp) VALUES (?, ?, ?)
+                   ON CONFLICT(name) DO UPDATE SET n = CASE WHEN counters.exp > ? THEN counters.n + excluded.n ELSE excluded.n END, exp = excluded.exp`,
+                  name, by, t + ttl * 1000, t);
+  }
+  // items: [{name, ttl (seconds), max?, by?}]. All of them or none: when one would pass its max, nothing is counted
+  // and the answer names it. n: the counts after (or, refused, before) this call.
+  take(b) {
+    const items = Array.isArray(b?.items) ? b.items : null;
+    if (!items || !items.length || items.length > GUARD.maxItems) return { error: "bad items" };
+    for (const it of items) {
+      if (!it || !NAME_RE.test(it.name) || !Number.isInteger(it.ttl) || it.ttl < 1 || it.ttl > 400 * 86400
+          || (it.max != null && !(Number.isInteger(it.max) && it.max >= 0)) || (it.by != null && !(Number.isInteger(it.by) && it.by >= 1 && it.by <= 1000)))
+        return { error: "bad items" };
+    }
+    const t = Date.now(), n = {};
+    for (const it of items) n[it.name] = this.value(it.name, t);
+    for (const it of items) if (it.max != null && n[it.name] + (it.by || 1) > it.max) return { ok: false, over: it.name, n };
+    for (const it of items) { this.bump(it.name, it.ttl, it.by || 1, t); n[it.name] += it.by || 1; }
+    return { ok: true, n };
+  }
+  peek(b) {
+    const names = Array.isArray(b?.names) ? b.names : null;
+    if (!names || !names.length || names.length > GUARD.maxItems || !names.every(x => NAME_RE.test(x))) return { error: "bad names" };
+    const t = Date.now(), n = {};
+    for (const x of names) n[x] = this.value(x, t);
+    return { n };
+  }
+
+  // ---- the admin lockout and access log in one call per admin request (src/index.js admin()).
+  // {ip, hour, ipMax, allMax, fail: true}: a wrong password; both counts go up, the new counts come back.
+  // {ip, hour, ipMax, allMax, route, action, target}: the right password; refused (locked) while either count is at
+  // its max, else the access is written: a "login" row when this address had no successful call for
+  // GUARD.sessionMinutes, and a row for the personal data the route shows (action, when given).
+  gate(b) {
+    if (!b || !/^[0-9a-f]{16}$/.test(b.ip) || !/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(b.hour) || !Number.isInteger(b.ipMax) || !Number.isInteger(b.allMax))
+      return { error: "bad gate" };
+    const t = Date.now(), ipName = "adm:ip:" + b.ip, allName = "adm:all:" + b.hour;
+    if (b.fail === true) {
+      this.bump(ipName, 15 * 60, 1, t);
+      this.bump(allName, 2 * 3600, 1, t);
+      return { ip: this.value(ipName, t), all: this.value(allName, t) };
+    }
+    const ip = this.value(ipName, t), all = this.value(allName, t);
+    if (ip >= b.ipMax || all >= b.allMax) return { locked: true, ip, all };
+    return { ok: true, ...this.access(b, t) };
+  }
+  access(b, t) {
+    if (!b || !/^[0-9a-f]{16}$/.test(b.ip)) return { error: "bad access" };
+    const route = str(b.route, 80), sess = "sess:" + b.ip;
+    let login = false;
+    const left = this.one("SELECT exp FROM counters WHERE name = ?", sess)?.exp || 0;
+    if (left <= t) {
+      login = true;
+      this.sql.exec("INSERT INTO admin_access (at, ip, route, action, target) VALUES (?, ?, ?, 'login', '')", t, b.ip, route);
+    }
+    // the session's end moves on at most every 5 minutes, so a busy dashboard does not write a row a request
+    if (left - t < (GUARD.sessionMinutes - 5) * 60e3) this.bump(sess, GUARD.sessionMinutes * 60, 1, t);
+    if (b.action) this.sql.exec("INSERT INTO admin_access (at, ip, route, action, target) VALUES (?, ?, ?, ?, ?)", t, b.ip, route, str(b.action, 40), str(b.target, 80));
+    if (login || b.action) this.sql.exec("DELETE FROM admin_access WHERE at < ?", t - GUARD.accessDays * DAY);
+    return { login };
+  }
+  accessRead(b) {
+    const before = Number.isSafeInteger(b?.before) && b.before > 0 ? b.before : Number.MAX_SAFE_INTEGER;
+    const rows = this.sql.exec("SELECT seq, at, ip, route, action, target FROM admin_access WHERE seq < ? AND at >= ? ORDER BY seq DESC LIMIT ?",
+                               before, Date.now() - GUARD.accessDays * DAY, GUARD.page + 1).toArray();
+    return { rows: rows.slice(0, GUARD.page).map(r => ({ seq: r.seq, at: r.at, ip: r.ip, route: r.route, action: r.action, target: r.target })),
+             more: rows.length > GUARD.page, keepDays: GUARD.accessDays };
+  }
+
+  // ---- the dashboard's 기록 (src/index.js audit(); the detail is already cut down to what the record needs)
+  audit(b) {
+    if (!b || typeof b.action !== "string" || !b.action) return { error: "bad audit" };
+    const t = Date.now();
+    this.sql.exec("INSERT INTO audit_log (at, who, action, detail) VALUES (?, ?, ?, ?)", t, str(b.who, 20), str(b.action, 80), str(b.detail, 300));
+    this.sql.exec("DELETE FROM audit_log WHERE at < ?", t - GUARD.auditDays * DAY);
+    return { ok: true };
+  }
+  auditRead() {
+    const rows = this.sql.exec("SELECT at, who, action, detail FROM audit_log WHERE at >= ? ORDER BY seq DESC LIMIT ?",
+                               Date.now() - GUARD.auditDays * DAY, GUARD.page).toArray();
+    return { log: rows.map(r => ({ at: new Date(r.at).toISOString().replace(/\.\d+Z$/, "Z"), who: r.who, action: r.action, detail: r.detail })) };
   }
 
   // ---- support feed
