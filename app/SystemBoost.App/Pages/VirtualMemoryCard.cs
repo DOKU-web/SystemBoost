@@ -74,13 +74,20 @@ public sealed class VirtualMemoryCard : UserControl
         var apply = Ui.Button("적용", "primary");
         apply.Click += async (_, _) =>
         {
-            var entries = Planned(out var warn);
-            if (entries != null && entries.Any(e => e.MaximumMB < 1024)) { _msg.Text = warn ?? "크기가 너무 작아요"; return; }
-            _msg.Text = "관리자 확인 창에서 '예'를 누르세요…";
+            var entries = Planned(out _);
+            // no drive, a drive that is gone, or more than the drive can hold: nothing is written
+            var problem = VirtualMemory.Problem(entries);
+            if (problem != null) { _msg.Text = problem; return; }
+            _msg.Text = BoostHelper.Admin.Running ? "저장하는 중…" : "관리자 확인 창에서 '예'를 누르세요…";
             _msg.Text = await VirtualMemory.ApplyAsync(entries);
             Refresh();
         };
-        _revert.Click += async (_, _) => { _msg.Text = await VirtualMemory.RevertAsync(); Refresh(); };
+        _revert.Click += async (_, _) =>
+        {
+            _msg.Text = BoostHelper.Admin.Running ? "되돌리는 중…" : "관리자 확인 창에서 '예'를 누르세요…";
+            _msg.Text = await VirtualMemory.RevertAsync();
+            Refresh();
+        };
         _restart.Click += (_, _) =>
         {
             // two clicks: unsaved work in other apps would be lost
@@ -128,8 +135,9 @@ public sealed class VirtualMemoryCard : UserControl
             return new() { new PagefileEntry(d.Drive, i, m) };
         }
         int init = (int)Math.Round(_init.Value) * 1024, max = (int)Math.Round(_max.Value) * 1024;
-        if (max > d.FreeMB + VirtualMemory.ActualSizeMB(d.Drive) - 10 * 1024) warning = "이 드라이브의 남은 공간보다 커요. 크기를 줄이세요.";
-        return new() { new PagefileEntry(d.Drive, init, max) };
+        var list = new List<PagefileEntry> { new(d.Drive, init, max) };
+        warning = VirtualMemory.Problem(list);   // the same check "적용" makes, which then writes nothing
+        return list;
     }
 
     private void UpdatePlan()

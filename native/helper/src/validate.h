@@ -98,6 +98,55 @@ inline bool isTempLimit(const std::string& s) { return isInt(s, 40, 87); }
 inline bool isPowerWatts(const std::string& s) { return isInt(s, 10, 1000); }
 inline bool isFrameLimit(const std::string& s) { return isInt(s, 10, 300); }
 
+/// A page file size in MB: 1 to 8 digits, at most 16 TB. No sign.
+inline bool isPagefileSize(const std::string& s, long long& v) {
+    if (s.empty() || s.size() > 8) return false;
+    v = 0;
+    for (unsigned char c : s) {
+        if (!std::isdigit(c)) return false;
+        v = v * 10 + (c - '0');
+    }
+    return v <= 16777216;
+}
+
+/// One line of PagingFiles: "?:\pagefile.sys" (Windows manages every drive), or "C:\pagefile.sys" on one drive,
+/// optionally followed by " initial maximum" in MB ("0 0" = Windows sizes it there). The app checks the same rule
+/// (RestoreRules.IsPagefileLine).
+inline bool isPagefileLine(const std::string& s) {
+    if (s.size() < 15) return false;
+    unsigned char d = (unsigned char)s[0];
+    bool any = d == '?';
+    if (!any && !((d >= 'A' && d <= 'Z') || (d >= 'a' && d <= 'z'))) return false;
+    if (lower(s.substr(1, 14)) != ":\\pagefile.sys") return false;
+    std::string rest = s.substr(15);
+    if (rest.empty()) return true;
+    if (any || rest[0] != ' ') return false;
+    size_t sp = rest.find(' ', 1);
+    if (sp == std::string::npos) return false;
+    long long a, b;
+    if (!isPagefileSize(rest.substr(1, sp - 1), a) || !isPagefileSize(rest.substr(sp + 1), b)) return false;
+    return (a == 0 && b == 0) || (a > 0 && a <= b);
+}
+
+/// The whole PagingFiles value of a pf.set request, from field `from` on: one line per drive, at most 26,
+/// "?:" only on its own. "none" alone stands for an empty list (only putting such an original back sends it).
+inline bool isPagefileList(const std::vector<std::string>& f, size_t from) {
+    if (f.size() <= from) return false;
+    size_t n = f.size() - from;
+    if (n == 1 && f[from] == "none") return true;
+    if (n > 26) return false;
+    bool seen[27] = {};
+    for (size_t i = from; i < f.size(); i++) {
+        if (!isPagefileLine(f[i])) return false;
+        char d = (char)std::toupper((unsigned char)f[i][0]);
+        if (d == '?' && n > 1) return false;
+        int slot = d == '?' ? 26 : d - 'A';
+        if (seen[slot]) return false;
+        seen[slot] = true;
+    }
+    return true;
+}
+
 /// Value that was in the driver profile before: "none" or a decimal number.
 inline bool isOldValue(const std::string& s) {
     if (s == "none") return true;

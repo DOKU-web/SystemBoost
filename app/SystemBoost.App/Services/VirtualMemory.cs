@@ -7,6 +7,10 @@
 // Takes effect after a restart. A page file does not make RAM faster or add
 // real RAM; it lets games that need more memory than installed keep running
 // instead of crashing with "out of memory".
+// The value is written by the elevated helper (native/helper, "pf.set"), which takes only lines of the
+// forms above, so there is no script and nothing else it could be made to write. A setting that would leave
+// no page file at all, names a drive that is not there, or is bigger than the drive can hold is refused here
+// first (RestoreRules.PagefileProblem); only putting back an original that had none writes an empty list.
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -97,19 +101,35 @@ public static class VirtualMemory
     }
 
     // ------------------------------------------------------------ apply / undo
-    /// entries == null -> Windows automatic. Saves the current setting first. One UAC prompt.
+    /// Why this setting must not be applied, or null when it may. entries null = Windows automatic, always fine.
+    public static string? Problem(List<PagefileEntry>? entries)
+    {
+        if (entries == null) return null;
+        var budget = Drives().ToDictionary(d => d.Drive, d => d.FreeMB + ActualSizeMB(d.Drive) - RestoreRules.PagefileKeepFreeMB,
+                                           StringComparer.OrdinalIgnoreCase);
+        return RestoreRules.PagefileProblem(entries.Select(e => (e.Drive, e.InitialMB, e.MaximumMB)).ToList(), budget);
+    }
+
+    /// entries == null -> Windows automatic. Saves the current setting first. One UAC prompt, none when the
+    /// helper is already up for the boost features.
     public static async Task<string> ApplyAsync(List<PagefileEntry>? entries)
     {
         if (!OperatingSystem.IsWindows()) return "Windows에서만 바꿀 수 있어요";
+        var problem = Problem(entries);
+        if (problem != null) return problem;
+        string[] value = entries == null
+            ? new[] { @"?:\pagefile.sys" }
+            : entries.Select(e => $@"{e.Drive}\pagefile.sys {e.InitialMB} {e.MaximumMB}").ToArray();
+        var request = RestoreRules.PagefileRequest(value);
+        if (request == null || request.Length < 2 || request[1] == "none") return "이 설정은 저장할 수 없어요 (바뀐 것 없음)";
+        var ready = await BoostHelper.Admin.EnsureAsync();
+        if (ready != null) return ready;
         if (!File.Exists(BackupFile))   // keep the very first original
         {
             using var k = Registry.LocalMachine.OpenSubKey(KeyPath);
             File.WriteAllText(BackupFile, JsonSerializer.Serialize(k?.GetValue("PagingFiles") as string[] ?? Array.Empty<string>()));
         }
-        string[] value = entries == null
-            ? new[] { @"?:\pagefile.sys" }
-            : entries.Select(e => $@"{e.Drive}\pagefile.sys {e.InitialMB} {e.MaximumMB}").ToArray();
-        var err = await WriteElevatedAsync(value, entries == null);
+        var err = await WriteAsync(request);
         return err ?? "저장했어요. 다시 시작하면 적용돼요.";
     }
 
@@ -119,37 +139,22 @@ public static class VirtualMemory
     {
         if (!File.Exists(BackupFile)) return "되돌릴 기록이 없어요";
         var orig = JsonSerializer.Deserialize<string[]>(File.ReadAllText(BackupFile)) ?? Array.Empty<string>();
-        var err = await WriteElevatedAsync(orig, orig.Any(s => s.TrimStart().StartsWith("?:")));
+        var request = RestoreRules.PagefileRequest(orig);
+        if (request == null)
+            return "원래 설정은 SystemBoost가 다시 쓸 수 없는 형식이에요. 시스템 속성 > 고급 > 성능 설정 > 가상 메모리에서 직접 바꿔 주세요 (바뀐 것 없음)";
+        var ready = await BoostHelper.Admin.EnsureAsync();
+        if (ready != null) return ready;
+        var err = await WriteAsync(request);
         if (err != null) return err;
         File.Delete(BackupFile);
         return "원래 설정으로 돌렸어요. 다시 시작하면 적용돼요.";
     }
 
-    /// Writes PagingFiles (and the automatic flag) through an elevated PowerShell
-    /// (one UAC prompt). Values travel as Base64 JSON (only A-Z a-z 0-9 + / =),
-    /// so nothing in them can be read as script.
-    private static async Task<string?> WriteElevatedAsync(string[] value, bool automatic)
+    /// Writes PagingFiles through the elevated helper, which checks every line again.
+    private static async Task<string?> WriteAsync(string[] request)
     {
-        var payload = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value)));
-        var script =
-            "$ErrorActionPreference = 'Stop'; " +
-            $"$v = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{payload}')) | ConvertFrom-Json; " +
-            "$cs = Get-CimInstance Win32_ComputerSystem; " +
-            $"Set-CimInstance -InputObject $cs -Property @{{AutomaticManagedPagefile = ${(automatic ? "true" : "false")}}}; " +
-            $"Set-ItemProperty -Path 'HKLM:\\{KeyPath}' -Name PagingFiles -Type MultiString -Value ([string[]]$v)";
-        var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
-        var psi = new ProcessStartInfo("powershell.exe",
-            $"-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand {encoded}")
-        { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden };
-        try
-        {
-            using var p = Process.Start(psi);
-            if (p == null) return "실행하지 못했어요";
-            await p.WaitForExitAsync();
-            return p.ExitCode == 0 ? null : $"저장하지 못했어요 (코드 {p.ExitCode})";
-        }
-        catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223) { return "취소했어요 (바뀐 것 없음)"; }   // UAC declined
-        catch (System.ComponentModel.Win32Exception) { return "실행하지 못했어요 (바뀐 것 없음)"; }
+        var (ok, data) = await BoostHelper.Admin.CallAsync(request);
+        return ok ? null : $"저장하지 못했어요 ({data})";
     }
 
     public static void Restart()
