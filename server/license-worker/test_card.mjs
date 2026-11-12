@@ -2,7 +2,7 @@
 // worker's real routes. Global fetch is replaced first, so nothing here reaches Lemon Squeezy.
 //   node test_card.mjs
 import assert from "node:assert/strict";
-import { createHmac, generateKeyPairSync, verify } from "node:crypto";
+import { createHash, createHmac, generateKeyPairSync, verify } from "node:crypto";
 import worker from "./src/index.js";
 
 const kv = new Map(), md = new Map();
@@ -44,6 +44,9 @@ const hook = async (event, data, { test = false, custom = {}, secret = SECRET } 
 const payload = key => JSON.parse(Buffer.from(key.split(".")[0], "base64url"));
 const signed = key => { const [d, s] = key.split("."); return verify("sha256", Buffer.from(d, "base64url"), { key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(s, "base64url")); };
 const days = iso => (Date.parse(iso) - Date.now()) / 864e5;
+// the app proves it holds a key of the subscription by sending that key (POST body)
+const kid = key => createHash("sha256").update(key).digest("hex").slice(0, 16);
+const renew = (subId, key) => j("/renew", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: String(subId), key }) });
 const order = async plan => j(`/order?plan=${plan}&method=card`, { method: "POST" });
 const V = { monthly: "101", yearly: "102", ultra_monthly: "201", ultra_yearly: "202" };
 const sub = (id, variant, extra = {}) => ({ type: "subscriptions", id: String(id), attributes: { status: "active", variant_id: Number(variant), order_id: 9000 + id, user_email: `b${id}@example.com`, renews_at: "2026-12-30T10:00:00.000000Z", ...extra } });
@@ -140,7 +143,7 @@ assert.equal(p.sub, "10");
 assert.equal(p.expires.slice(0, 10), "2027-01-02", "renews_at + 3 days");
 let ord = (await adm("/orders?status=all")).orders.find(x => x.code === o.code);
 assert.equal(ord.status, "approved"); assert.equal(ord.method, "card"); assert.equal(ord.plan, "monthly");
-assert.equal((await j("/renew?sub=10")).key, c.key);
+assert.equal((await renew(10, c.key)).key, c.key);
 assert.ok((await (await call("/thanks?session=" + o.code)).text()).includes("결제가 완료"));
 
 // a buyer who adds plan=ultra_yearly to the checkout address still gets what the product is
@@ -157,7 +160,7 @@ let first = (await j("/claim?session=" + o.code)).key;
 assert.equal(payload(first).plan, "ultra");
 assert.equal(payload(first).expires.slice(0, 10), "2027-11-11");
 await hook("subscription_payment_success", invoice(12, "renewal"), { custom: { session: o.code } });
-const renewed = (await j("/renew?sub=12")).key;
+const renewed = (await renew(12, first)).key;
 assert.notEqual(renewed, first);
 assert.equal(payload(renewed).plan, "ultra");
 assert.ok(days(payload(renewed).expires) > 368 && days(payload(renewed).expires) < 370);
@@ -166,13 +169,13 @@ assert.ok((await adm("/log")).log.some(l => l.action === "자동 갱신"));
 
 // plan change in the customer portal: monthly -> Ultra monthly gives an Ultra key
 await hook("subscription_updated", sub(10, V.ultra_monthly));
-assert.equal(payload((await j("/renew?sub=10")).key).plan, "ultra");
+assert.equal(payload((await renew(10, c.key)).key).plan, "ultra");
 
 // updated before created: no key until created arrives
 await hook("subscription_updated", sub(13, V.monthly));
-assert.equal((await j("/renew?sub=13")).status, "inactive");
+assert.equal(kv.get("sub:13"), undefined);
 await hook("subscription_created", sub(13, V.monthly));
-assert.equal((await j("/renew?sub=13")).status, "ready");
+assert.equal((await renew(13, kv.get("sub:13"))).status, "ready");
 
 // a product that is not one of ours: no key, and the log says why
 o = await order("monthly");
@@ -186,7 +189,7 @@ assert.match((await hook("subscription_created", sub(16, V.monthly, { status: "u
 
 // cancelled: the key runs out, no renewals
 await hook("subscription_updated", sub(12, V.ultra_yearly, { status: "cancelled" }));
-assert.equal((await j("/renew?sub=12")).status, "inactive");
+assert.equal((await renew(12, first)).status, "inactive");
 
 // refunds revoke, in every mode
 await adm("/sales-mode", { mode: "off" });
@@ -202,11 +205,13 @@ const id20 = (await adm("/lookup", { key: k20 })).id;
 assert.equal((await j("/check?id=" + id20)).revoked, true, "refund of the first payment");
 await adm("/sales-mode", { mode: "live" });
 await hook("subscription_created", sub(21, V.monthly));
+const k21first = kv.get("sub:21");
 await hook("subscription_payment_success", invoice(21, "renewal"));
-const k21 = (await j("/renew?sub=21")).key;
+const k21 = (await renew(21, k21first)).key;
 await hook("subscription_payment_refunded", { type: "subscription-invoices", id: "1", attributes: { subscription_id: 21 } });
 assert.equal((await j("/check?id=" + (await adm("/lookup", { key: k21 })).id)).revoked, true, "refund of a renewal");
-assert.equal((await j("/renew?sub=21")).status, "inactive");
+assert.equal((await renew(21, k21)).status, "inactive");
+assert.equal((await j("/check?id=" + kid(k21first))).revoked, true, "a refund turns off every key of the subscription");
 
 // the dashboard's key list shows what each key came from
 const listed = (await adm("/keys?status=all")).keys.filter(k => k.src === "subscription");

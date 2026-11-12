@@ -5,6 +5,10 @@
 -- key reaches nothing: the end of this file checks that and stops with an error if it is not so.
 -- The Worker sends passwords and recovery codes already mixed with a value only it has, and IP addresses
 -- only as a one-way value. Limits come from src/accounts.js, so changing them needs no change here.
+--
+-- A database made from an older copy of this file is brought up to date by running this file again, or by
+-- supabase/migrations/20261112_lockdown.sql, which changes only what the 2026-11-12 security audit changed.
+-- NEEDS OWNER APPROVAL to apply in Supabase (security audit 2026-11-12); not applied by the audit.
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -41,28 +45,29 @@ create table if not exists public.account_hits (
   primary key (k, hour)
 );
 
+-- Every function names its schema in full and runs with a fixed search_path (security audit 2026-11-12).
 create or replace function public.account_fail(_status integer, _error text) returns jsonb
-language sql immutable as $$ select jsonb_build_object('status', _status, 'error', _error) $$;
+language sql immutable set search_path = '' as $$ select jsonb_build_object('status', _status, 'error', _error) $$;
 
 create or replace function public.account_ms(_at timestamptz) returns bigint
-language sql immutable as $$ select (extract(epoch from _at) * 1000)::bigint $$;
+language sql immutable set search_path = '' as $$ select (extract(epoch from _at) * 1000)::bigint $$;
 
 create or replace function public.account_hour() returns bigint
-language sql stable as $$ select floor(extract(epoch from now()) / 3600)::bigint $$;
+language sql stable set search_path = '' as $$ select floor(extract(epoch from now()) / 3600)::bigint $$;
 
 create or replace function public.account_over(_key text, _limit integer) returns boolean
-language sql stable as $$
+language sql stable set search_path = '' as $$
   select coalesce((select n from public.account_hits where k = _key and hour = public.account_hour()), 0) >= _limit
 $$;
 
 create or replace function public.account_count(_key text) returns void
-language sql as $$
+language sql set search_path = '' as $$
   insert into public.account_hits (k, hour, n) values (_key, public.account_hour(), 1)
   on conflict (k, hour) do update set n = public.account_hits.n + 1
 $$;
 
 create or replace function public.account_session(_id text, _token text, b jsonb) returns void
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   insert into public.account_sessions (token, account, expires)
     values (_token, _id, now() + make_interval(days => (b->>'sessionDays')::integer));
@@ -81,12 +86,13 @@ begin
   perform public.account_session(_id, b->>'session', b);
 end $$;
 
+-- A wrong password or recovery code: counted for the address and the account. Five lock the account.
 create or replace function public.account_missed(a public.accounts, b jsonb) returns jsonb
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 declare
   lock boolean := a.fails + 1 >= (b->>'loginTries')::integer;
 begin
-  perform public.account_count('fail:' || (b->>'ip'));
+  if b->>'ip' is not null then perform public.account_count('fail:' || (b->>'ip')); end if;
   update public.accounts set fails = case when lock then 0 else a.fails + 1 end,
     locked_until = case when lock then now() + make_interval(mins => (b->>'lockMin')::integer) end
     where id = a.id;
@@ -94,7 +100,7 @@ begin
 end $$;
 
 create or replace function public.account_member(_token text) returns setof public.accounts
-language sql stable as $$
+language sql stable set search_path = '' as $$
   select a.* from public.account_sessions s join public.accounts a on a.id = s.account
   where s.token = _token and s.expires > now() and not a.blocked
 $$;
@@ -125,10 +131,15 @@ begin
 
   if action = 'signup' then
     if account_over('signup:' || (b->>'ip'), (b->>'signupsPerIp')::integer)
-       or account_over('signup:all', (b->>'signupsPerHour')::integer) then
+       or account_over('signup:all', (b->>'signupsPerHour')::integer)
+       or account_over('taken:' || (b->>'ip'), (b->>'takenPerIp')::integer) then
       return account_fail(429, 'busy');
     end if;
-    if exists (select 1 from accounts where id = b->>'id') then return account_fail(409, 'taken'); end if;
+    -- "taken" tells whether an id exists, so one address hears it a limited number of times an hour
+    if exists (select 1 from accounts where id = b->>'id') then
+      perform account_count('taken:' || (b->>'ip'));
+      return account_fail(409, 'taken');
+    end if;
     if invite <> '' then
       select * into inviter from accounts where invite_code = invite and not blocked for update;
       if inviter.id is null then return account_fail(404, 'unknown'); end if;
@@ -155,6 +166,8 @@ begin
     if account_over('fail:' || (b->>'ip'), (b->>'failsPerIp')::integer) then return account_fail(429, 'busy'); end if;
     select * into a from accounts where id = b->>'id' for update;
     if a.id is null then
+      -- the same bcrypt work as a wrong password, so the time taken does not tell which ids exist
+      if action = 'login' then perform crypt(b->>'pw', gen_salt('bf', 10)); end if;
       perform account_count('fail:' || (b->>'ip'));
       return account_fail(401, 'wrong');
     end if;
@@ -250,8 +263,12 @@ begin
     return jsonb_build_object('ok', true);
   end if;
 
+  -- the password again: the same limits and lock as a login, so a session cannot guess it (or run bcrypt) without end
   if action = 'password' or action = 'delete' then
-    if a.hash <> crypt(b->>'pw', a.hash) then return account_fail(401, 'wrong'); end if;
+    if account_over('fail:' || (b->>'ip'), (b->>'failsPerIp')::integer) then return account_fail(429, 'busy'); end if;
+    select * into a from accounts where id = a.id for update;
+    if a.locked_until > now() then return account_fail(429, 'locked'); end if;
+    if a.hash <> crypt(b->>'pw', a.hash) then return account_missed(a, b); end if;
     if action = 'password' then
       perform account_set_password(a.id, b);
       return jsonb_build_object('id', a.id);
@@ -282,16 +299,32 @@ begin
   end loop;
 end $$;
 
+-- Checked for every table and every account_ function, not only the main ones: anon (the publishable key) and
+-- authenticated (anyone signed in to Supabase Auth with it) reach nothing, RLS is on with no policy, and no
+-- function runs as its owner.
 do $$
+declare
+  t regclass;
+  f regprocedure;
 begin
-  if has_table_privilege('anon', 'public.accounts', 'select')
-     or has_table_privilege('authenticated', 'public.accounts', 'select')
-     or has_function_privilege('anon', 'public.account_call(text, jsonb)', 'execute')
-     or has_function_privilege('authenticated', 'public.account_call(text, jsonb)', 'execute')
-     or not has_function_privilege('service_role', 'public.account_call(text, jsonb)', 'execute')
-     or not (select relrowsecurity from pg_class where oid = 'public.accounts'::regclass) then
-    raise exception 'SystemBoost: access rights are not as expected, stop here';
-  end if;
+  foreach t in array array['public.accounts', 'public.account_sessions', 'public.account_hits']::regclass[] loop
+    if has_table_privilege('anon', t, 'select,insert,update,delete,truncate,references,trigger')
+       or has_table_privilege('authenticated', t, 'select,insert,update,delete,truncate,references,trigger')
+       or not (select relrowsecurity from pg_class where oid = t)
+       or exists (select 1 from pg_policy where polrelid = t) then
+      raise exception 'SystemBoost: access rights on % are not as expected, stop here', t;
+    end if;
+  end loop;
+  for f in select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname like 'account\_%' loop
+    if has_function_privilege('public', f, 'execute')
+       or has_function_privilege('anon', f, 'execute')
+       or has_function_privilege('authenticated', f, 'execute')
+       or not has_function_privilege('service_role', f, 'execute')
+       or (select prosecdef from pg_proc where oid = f) then
+      raise exception 'SystemBoost: access rights on % are not as expected, stop here', f;
+    end if;
+  end loop;
 end $$;
 
 notify pgrst, 'reload schema';

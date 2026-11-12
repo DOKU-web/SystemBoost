@@ -8,7 +8,9 @@
 //     Only the PUBLIC key is in the app; keys are signed on the shop's server.
 // Nothing here talks to a payment provider; the seller's payment page is opened in the browser.
 using System;
+using System.Globalization;
 using System.IO;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -94,9 +96,10 @@ public static class License
     /// Checks and stores a key. Returns null on success, else a message.
     public static string? Activate(string key, string how = "key")
     {
-        var info = Verify(key.Trim(), out var error);
+        key = Canonical(key);   // the server's spelling, so the revocation check asks about the key that was issued
+        var info = Verify(key, out var error);
         if (info == null) return error;
-        File.WriteAllText(KeyFile, key.Trim());
+        File.WriteAllText(KeyFile, key);
         try { File.WriteAllText(HowFile, how); }
         catch (Exception) { }   // only the wording on the account page depends on it
         _info = info; _loaded = true;
@@ -230,8 +233,12 @@ public static class License
         if (Pending is not PendingOrder o) return "주문이 없어요";
         try
         {
-            var body = new System.Net.Http.StringContent(JsonSerializer.Serialize(new { payer, msg = memo }), Encoding.UTF8, "application/json");
-            var r = await Http.PostAsync($"{ServerUrl}/order/paid?code={Uri.EscapeDataString(o.Code)}", body);
+            var r = await PostJsonAsync("/order/paid", new { code = o.Code, payer, msg = memo });
+            if (r.StatusCode == System.Net.HttpStatusCode.BadRequest)   // a worker from before 2026-11-12 reads the code from the address only
+            {
+                var body = new System.Net.Http.StringContent(JsonSerializer.Serialize(new { payer, msg = memo }), Encoding.UTF8, "application/json");
+                r = await Http.PostAsync($"{ServerUrl}/order/paid?code={Uri.EscapeDataString(o.Code)}", body);
+            }
             if (!r.IsSuccessStatusCode) return "알리지 못했어요. 잠시 뒤 다시 시도하세요.";
             SavePending(o with { Status = "paid" });
             return null;
@@ -285,7 +292,12 @@ public static class License
                 {
                     try
                     {
-                        using var doc = JsonDocument.Parse(await Http.GetStringAsync($"{ServerUrl}/claim?session={Uri.EscapeDataString(o.Code)}"));
+                        string text;
+                        using (var r = await PostJsonAsync("/claim", new { session = o.Code }))
+                            text = r.StatusCode == System.Net.HttpStatusCode.NotFound   // a worker from before 2026-11-12: address form only
+                                ? await Http.GetStringAsync($"{ServerUrl}/claim?session={Uri.EscapeDataString(o.Code)}")
+                                : await r.EnsureSuccessStatusCode().Content.ReadAsStringAsync();
+                        using var doc = JsonDocument.Parse(text);
                         var st = doc.RootElement.GetProperty("status").GetString();
                         if (st == "ready" && doc.RootElement.GetProperty("key").GetString() is string key)
                         {
@@ -324,28 +336,36 @@ public static class License
     public static async System.Threading.Tasks.Task RenewIfNeededAsync()
     {
         if (!ServerConfigured) return;
+        string? current = null;
         try
         {
             if (File.Exists(KeyFile))
             {
-                var raw = File.ReadAllText(KeyFile).Trim();
-                var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)), 0, 8).ToLowerInvariant();
-                using var doc = JsonDocument.Parse(await Http.GetStringAsync($"{ServerUrl}/check?id={id}"));
-                if (doc.RootElement.TryGetProperty("revoked", out var rv) && rv.ValueKind == JsonValueKind.True)
+                current = Canonical(File.ReadAllText(KeyFile));
+                foreach (var id in KeyIds(current))   // the key as issued, then the same key with its twin signature
                 {
-                    Notice = "이 기기의 라이선스 키가 판매자에 의해 해제됐어요(환불 또는 키 공유). 문의가 필요하면 결제한 곳으로 연락하세요.";
-                    Deactivate();
-                    return;
+                    using var doc = JsonDocument.Parse(await Http.GetStringAsync($"{ServerUrl}/check?id={id}"));
+                    if (doc.RootElement.TryGetProperty("revoked", out var rv) && rv.ValueKind == JsonValueKind.True)
+                    {
+                        Notice = "이 기기의 라이선스 키가 판매자에 의해 해제됐어요(환불 또는 키 공유). 문의가 필요하면 결제한 곳으로 연락하세요.";
+                        Deactivate();
+                        return;
+                    }
                 }
             }
         }
         catch (Exception) { }
 
         var info = Info;
-        if (info?.Sub == null || info.Expires is not DateTime e || e - DateTime.UtcNow > TimeSpan.FromDays(7)) return;
+        if (info?.Sub == null || current == null || info.Expires is not DateTime e || e - DateTime.UtcNow > TimeSpan.FromDays(7)) return;
         try
         {
-            var j = await Http.GetStringAsync($"{ServerUrl}/renew?sub={Uri.EscapeDataString(info.Sub)}");
+            // the server hands a subscription's next key only to whoever shows a key of that subscription
+            string j;
+            using (var r = await PostJsonAsync("/renew", new { sub = info.Sub, key = current }))
+                j = r.StatusCode == System.Net.HttpStatusCode.NotFound   // a worker from before 2026-11-12 renews by the number alone
+                    ? await Http.GetStringAsync($"{ServerUrl}/renew?sub={Uri.EscapeDataString(info.Sub)}")
+                    : await r.EnsureSuccessStatusCode().Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(j);
             if (doc.RootElement.GetProperty("status").GetString() == "ready")
             {
@@ -357,9 +377,55 @@ public static class License
         catch (Exception) { }
     }
 
+    // An order code claims its key and the key in hand renews a subscription, so both travel in a POST body,
+    // which addresses (and request logs) do not carry. The fallbacks above are for a license worker from before
+    // 2026-11-12, which knows only the address forms; drop them once that worker is replaced.
+    private static System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> PostJsonAsync(string path, object body) =>
+        Http.PostAsync($"{ServerUrl}{path}", new System.Net.Http.StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
+
     private static byte[] B64Url(string s)
     {
         s = s.Replace('-', '+').Replace('_', '/');
         return Convert.FromBase64String(s.PadRight(s.Length + (4 - s.Length % 4) % 4, '='));
+    }
+    private static string B64UrlEncode(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    // The revocation list (/check) and the server's key registry name a key by the first 16 hex of SHA-256 of
+    // its text as the server wrote it. One signed key can be written in other ways that verify just as well:
+    // base64 with padding, spaces or stray low bits, and an ECDSA signature (r, s) is as valid as (r, n - s).
+    // So a key is kept in the server's spelling (canonical base64url, no padding), and the revocation check
+    // asks about both signatures. Keys the server issued are already in that spelling: their ids do not change.
+    private static readonly BigInteger P256Order =
+        BigInteger.Parse("00FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551", NumberStyles.HexNumber);
+
+    internal static string Canonical(string key)
+    {
+        key = key.Trim();
+        var parts = key.Split('.');
+        if (parts.Length != 2) return key;
+        try { return B64UrlEncode(B64Url(parts[0])) + "." + B64UrlEncode(B64Url(parts[1])); }
+        catch (FormatException) { return key; }
+    }
+
+    internal static string KeyId(string key) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)), 0, 8).ToLowerInvariant();
+
+    /// The key's id, then the id of the same key with the other valid signature (r, n - s).
+    internal static string[] KeyIds(string key)
+    {
+        key = Canonical(key);
+        var id = KeyId(key);
+        var parts = key.Split('.');
+        if (parts.Length != 2) return new[] { id };
+        byte[] sig;
+        try { sig = B64Url(parts[1]); }
+        catch (FormatException) { return new[] { id }; }
+        if (sig.Length != 64) return new[] { id };
+        var s = new BigInteger(sig.AsSpan(32), isUnsigned: true, isBigEndian: true);
+        if (s.IsZero || s >= P256Order) return new[] { id };
+        var t = (P256Order - s).ToByteArray(isUnsigned: true, isBigEndian: true);
+        var twin = new byte[64];
+        Array.Copy(sig, twin, 32);
+        Array.Copy(t, 0, twin, 64 - t.Length, t.Length);
+        return new[] { id, KeyId(parts[0] + "." + B64UrlEncode(twin)) };
     }
 }
