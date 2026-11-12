@@ -205,6 +205,13 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 사용권 계약 제9조나 앱 메뉴 이름을 바꾸면 `src/support.js`의 `ARTICLE_9`, `DEFAULT_FAQ`도 함께 고칩니다.
 - 테스트: `node test_support.mjs`(새 소식은 `node test_stats.mjs`에도)
 
+## 개인정보 처리방침 (`/privacy`)
+`https://<서버 주소>/privacy`가 한국어 개인정보 처리방침입니다. 이것이 방침이고, `?lang=en`은 영어 요약입니다. 앱의 '설정'(저작권과 오픈소스 고지)과 '고객센터'의 동의 칸, /help에서 이 페이지를 엽니다.
+- 원문은 `privacy/privacy.ko.md`, `privacy/privacy.en.md`입니다. 고쳤다면 `node build_privacy.mjs`로 `src/privacy_page.js`를 다시 만듭니다. 서버는 Markdown을 읽지 않고 만든 HTML만 씁니다. `test_support.mjs`가 두 파일이 맞는지 봅니다.
+- 빈칸 네 개는 요청마다 `config:support`에서 채웁니다: 보호책임자(판매자 정보의 대표자, 없으면 상호), 메일(판매자 정보의 메일), 회원 DB 위치, 시행일. 마지막 두 개는 대시보드 '고객센터' → 설정의 '개인정보 처리방침' 칸입니다(회원 DB 위치는 Supabase 프로젝트의 지역). 비어 있으면 페이지에 '판매자가 아직 입력하지 않았어요'가 나오고, 대시보드 설정에 경고가 뜹니다.
+- 값은 모두 HTML로 이스케이프하고, 페이지는 /help처럼 요청마다 nonce를 쓰는 CSP로 보내며 스크립트와 외부 자원이 없습니다.
+- 방침의 내용은 코드를 읽고 쓴 것입니다. 저장하는 항목, 보관 기간, 국외 이전을 바꾸면 방침과 사용권 계약 제8조를 함께 고치고 `Eula.Version`을 올립니다.
+
 ## 설치
 1. `npm i -g wrangler` → `wrangler login`
 2. `wrangler kv namespace create LICENSES` → `wrangler.toml`의 id 교체
@@ -214,7 +221,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 4. `wrangler deploy` → 나온 주소를 `wrangler.toml`의 `PUBLIC_URL`과 앱 `License.cs`의 `ServerUrl`에 넣고 앱을 빌드
 5. `https://<주소>/admin`에 들어가 결제 링크를 넣으면 앱의 '결제하기'가 열립니다.
 
-대시보드를 고쳤다면 `node build_admin.mjs`로 `src/admin_page.js`를 다시 만듭니다.
+대시보드를 고쳤다면 `node build_admin.mjs`로 `src/admin_page.js`를 다시 만듭니다. 개인정보 처리방침을 고쳤다면 `node build_privacy.mjs`로 `src/privacy_page.js`를 다시 만듭니다.
 `admin/admin.html`을 파일로 바로 열면 가짜 데이터로 움직이는 시연 모드가 됩니다.
 
 ## 카드 자동 결제 — Lemon Squeezy

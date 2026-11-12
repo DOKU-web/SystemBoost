@@ -7,8 +7,10 @@ import assert from "node:assert/strict";
 import { createHash, createHmac, generateKeyPairSync } from "node:crypto";
 import worker from "./src/index.js";
 import { DatabaseSync } from "node:sqlite";
-import { DEFAULT_FAQ, LIMITS, _forgetMemory, ipBucket, listRow } from "./src/support.js";
+import { readFileSync } from "node:fs";
+import { ARTICLE_9, DEFAULT_FAQ, LIMITS, PRIVACY_EMPTY, _forgetMemory, ipBucket, listRow } from "./src/support.js";
 import { FEED, FEED_KINDS, Stats } from "./src/stats.js";
+import { build as buildPrivacy, markdownToHtml } from "./build_privacy.mjs";
 
 const kv = new Map(), md = new Map(), ttl = new Map(), bigMeta = [];
 let writes = 0, reads = 0, lists = 0;
@@ -127,6 +129,22 @@ assert.ok(info.categories.every(c => c.ko && c.en) && info.refundReasons.every(c
 assert.deepEqual(Object.values(info.seller), ["", "", "", "", "", "", "", ""], "no business registration yet: empty seller fields");
 assert.match(info.policy.title, /제9조/);
 assert.equal(info.policy.items.length, 5);
+// ARTICLE_9 is Article 9 of the licence agreement word for word: the heading, and each numbered item with its
+// continuation lines joined by a space ("! " only marks a bold line in the app)
+for (const [lang, file] of [["ko", "eula.txt"], ["en", "eula.en.txt"]]) {
+  const lines = readFileSync(new URL("../../app/SystemBoost.App/Assets/" + file, import.meta.url), "utf8").split(/\r?\n/);
+  const at = lines.findIndex(l => /^## (제9조|Article 9 )/.test(l)), items = [];
+  assert.ok(at > 0, file + ": Article 9");
+  for (let i = at + 1; i < lines.length && !lines[i].startsWith("## "); i++) {
+    const l = lines[i].replace(/^! /, "").trim();
+    if (!l) continue;
+    if (/^\d+\. /.test(l)) items.push(l); else items[items.length - 1] += " " + l;
+  }
+  assert.equal(ARTICLE_9[lang].title, lines[at].slice(3), file + ": the title");
+  assert.deepEqual(ARTICLE_9[lang].items, items, file + ": ARTICLE_9 matches Article 9 word for word");
+  assert.ok(!/시험 키|trial key/.test(items.join(" ")), file + ": no trial key the seller does not offer");
+}
+assert.deepEqual((await j("/support/info?lang=en")).policy, ARTICLE_9.en);
 assert.deepEqual((await j("/support/info?lang=en")).faq, DEFAULT_FAQ.en);
 assert.equal(DEFAULT_FAQ.ko.length, DEFAULT_FAQ.en.length);
 for (const f of [...DEFAULT_FAQ.ko, ...DEFAULT_FAQ.en]) assert.ok(f.q.length <= LIMITS.faqQ && f.a.length <= LIMITS.faqA && DEFAULT_FAQ.ko.length <= LIMITS.faq);
@@ -884,18 +902,22 @@ assert.equal((await reply(lastT.id, lastT.token, "다음 날")).http, 200, "a ne
 
 // ---------------------------------------------------------------- config (dashboard)
 let cfg = await adm("/support/config");
-assert.deepEqual(cfg.config, { seller: { name: "", rep: "", address: "", bizNo: "", mailOrderNo: "", email: "", phone: "", hours: "" }, notice: "", refundDays: 7, faq: [], open: true });
+assert.deepEqual(cfg.config, { seller: { name: "", rep: "", address: "", bizNo: "", mailOrderNo: "", email: "", phone: "", hours: "" },
+                               privacy: { dbRegion: "", effectiveDate: "" }, notice: "", refundDays: 7, faq: [], open: true });
 const badCfg = [
   { seller: { name: "x".repeat(121) } }, { notice: "n".repeat(501) }, { refundDays: 31 }, { refundDays: -1 }, { refundDays: "abc" }, { refundDays: 1.5 },
   { faq: "nope" }, { faq: Array.from({ length: 31 }, (_, i) => ({ q: "q" + i, a: "a" })) }, { faq: [{ q: "q".repeat(121), a: "a" }] },
   { faq: [{ q: "q", a: "a".repeat(1501) }] }, { faq: [{ q: "질문만" }] },
+  { privacy: { dbRegion: "x".repeat(121) } }, { privacy: { effectiveDate: "2026-13-01" } }, { privacy: { effectiveDate: "2026-02-30" } },
+  { privacy: { effectiveDate: "2026-12-14T00:00:00Z" } }, { privacy: { effectiveDate: "내일" } },
 ];
 for (const b of badCfg) assert.equal((await adm("/support/config", b)).http, 400, JSON.stringify(b).slice(0, 60));
 assert.equal(kv.has("config:support"), false, "nothing saved from a refused form");
 cfg = await adm("/support/config", { seller: { name: " DOKKU ", email: "help@example.com", unknown: "x" }, notice: "설 연휴에는 답이 늦어요", refundDays: "7",
                                     faq: [{ q: "질문", a: "답\n둘째 줄" }, { q: "", a: "" }], open: true, extra: 1 });
 assert.deepEqual(cfg.config, { seller: { name: "DOKKU", rep: "", address: "", bizNo: "", mailOrderNo: "", email: "help@example.com", phone: "", hours: "" },
-                               notice: "설 연휴에는 답이 늦어요", refundDays: 7, faq: [{ q: "질문", a: "답\n둘째 줄" }], open: true });
+                               privacy: { dbRegion: "", effectiveDate: "" }, notice: "설 연휴에는 답이 늦어요", refundDays: 7, faq: [{ q: "질문", a: "답\n둘째 줄" }], open: true });
+assert.equal((await j("/support/info")).privacy, undefined, "the policy's blanks are not part of /support/info");
 assert.ok(await logHas("고객센터 설정"));
 info = await j("/support/info?lang=en");
 assert.deepEqual([info.faq, info.faqDefault, info.seller.name, info.notice], [[{ q: "질문", a: "답\n둘째 줄" }], false, "DOKKU", "설 연휴에는 답이 늦어요"]);
@@ -968,6 +990,67 @@ assert.match(html, /<noscript><div class="box warn"><p>이 페이지는 JavaScri
 assert.ok(script.includes('r.scope === "day" ? TX.err.busyDay : TX.err.busy') && script.includes("한국 시간 오전 9시에 다시 열려요") && script.includes("9:00 Korean time (00:00 UTC)"));
 assert.ok(script.includes("동의하지 않으면 문의를 보낼 수 없어요. 앱은 그대로 쓸 수 있어요.") && script.includes("마지막으로 바뀐 날부터") && !/되돌릴 수 없|one-way/.test(html + JSON.stringify(DEFAULT_FAQ)),
           "consent: refusing is possible, retention from the last change, no claim that the IP hash cannot be reversed");
+assert.ok(html.includes('<a id="privacyNav" href="/privacy" data-t="privacy"></a>') && html.includes('<a id="privacyLink" href="/privacy" data-t="privacyMore"></a>') &&
+          script.includes('privacyMore: "자세한 내용은 개인정보 처리방침에서 볼 수 있어요"') && script.includes('L === "en" ? "/privacy?lang=en" : "/privacy"'),
+          "/help links the privacy policy next to the consent and in the menu");
+
+// ---------------------------------------------------------------- /privacy
+{
+  const saved = (await adm("/support/config")).config;
+  const page = async (q = "") => { const r = await call("/privacy" + q); return { r, html: await r.text() }; };
+  assert.equal(buildPrivacy(), readFileSync(new URL("./src/privacy_page.js", import.meta.url), "utf8").replace(/\r\n/g, "\n"),
+               "src/privacy_page.js is up to date with privacy/*.md (run node build_privacy.mjs)");
+  for (const bad of ["# a\n\nsome {{OTHER}}", "# a\n\n| x |\n| y |", "# a\n\n1. numbered", "no title"])
+    assert.throws(() => markdownToHtml(bad), Error, "the build stops on what it does not understand: " + bad);
+
+  // nothing filled in yet: each blank says so; the page is static, styled by its nonce, and loads nothing
+  await adm("/support/config", { ...saved, seller: { ...saved.seller, name: "", rep: "", email: "" }, privacy: { dbRegion: "", effectiveDate: "" } });
+  const p1 = await page(), p2 = await page();
+  assert.equal(p1.r.status, 200);
+  assert.match(p1.r.headers.get("content-type"), /^text\/html; charset=utf-8/);
+  const pcsp = p1.r.headers.get("content-security-policy"), pn = /'nonce-([A-Za-z0-9+/=]+)'/.exec(pcsp)[1];
+  assert.ok(pcsp.startsWith("default-src 'none'; style-src 'nonce-" + pn + "'") && pcsp.includes("frame-ancestors 'none'") && pcsp.includes("base-uri 'none'") &&
+            !pcsp.includes("script-src") && !pcsp.includes("unsafe-inline"), pcsp);
+  assert.deepEqual([p1.r.headers.get("x-frame-options"), p1.r.headers.get("referrer-policy"), p1.r.headers.get("x-content-type-options"), p1.r.headers.get("cache-control")],
+                   ["DENY", "no-referrer", "nosniff", "no-store"]);
+  assert.equal([...p1.html.matchAll(/<style nonce="([^"]+)">/g)].map(m => m[1]).join(), pn, "one style, with this request's nonce");
+  assert.notEqual(/'nonce-([^']+)'/.exec(p2.r.headers.get("content-security-policy"))[1], pn, "a new nonce every time");
+  assert.ok(!p1.html.includes("__NONCE__") && !/<script|<link|<img|<iframe|\bsrc=|\son\w+=/i.test(p1.html), "no script, no external resources");
+  assert.match(p1.html, /^<!DOCTYPE html>\s*<html lang="ko">/);
+  assert.ok(p1.html.includes("<h1>SystemBoost 개인정보 처리방침</h1>") && p1.html.includes('<h2 id="s2">제1조 처리하는 개인정보와 목적</h2>') && p1.html.includes('<a href="#s2">'));
+  assert.ok(!p1.html.includes("{{"), "every blank is filled");
+  const empty = '<span class="blank">' + PRIVACY_EMPTY.ko + "</span>";
+  assert.equal(p1.html.split(empty).length - 1, 5, "name, email, database location and the effective date (twice): 판매자가 아직 입력하지 않았어요");
+  assert.ok(p1.html.includes("개인정보 보호책임자: " + empty) && p1.html.includes("메일: " + empty) && p1.html.includes("<td>" + empty + "</td>") && p1.html.includes("시행일: " + empty));
+  // what the policy says about the code (src/index.js, src/support.js, src/stats.js, supabase/accounts.sql)
+  for (const fact of ["마지막으로 틀린 뒤 15분", "보관 기간을 정하지 않았어요 — 판매자가 지울 때까지", "결제와 환불 문의는 3년, 그 밖의 문의는 1년", "마지막 연결 뒤 90일",
+                      "마지막 요청 뒤 1시간까지", "<td>판매자 작업 기록</td><td>180일</td>", "주문이 마지막으로 바뀐 날부터 90일", "카드 결제 7일, 직접 결제 30일", "IP 주소를 저장하지 않아요"])
+    assert.ok(p1.html.includes(fact), "the policy says: " + fact);
+  assert.ok(!/3일 시험 키|시험 키를 제공/.test(p1.html));
+
+  // filled from the dashboard, escaped, in one pass (a value that looks like a blank stays as it is)
+  await adm("/support/config", { ...saved, seller: { ...saved.seller, name: "DOKKU", rep: "<b>홍길동</b> & \"Co\"", email: "o'brien@example.com" },
+                                 privacy: { dbRegion: "{{OWNER_EMAIL}} <서울> (ap-northeast-2)", effectiveDate: "2026-12-14" } });
+  const p3 = (await page()).html;
+  assert.ok(p3.includes("개인정보 보호책임자: &lt;b&gt;홍길동&lt;/b&gt; &amp; &quot;Co&quot;") && !p3.includes("<b>홍길동"), "the representative, escaped");
+  assert.ok(p3.includes("메일: o&#39;brien@example.com"), "the email, escaped");
+  assert.ok(p3.includes("<td>{{OWNER_EMAIL}} &lt;서울&gt; (ap-northeast-2)</td>"), "the database location, escaped and not filled in again");
+  assert.ok(p3.includes("시행일: 2026년 12월 14일") && !p3.includes(PRIVACY_EMPTY.ko));
+  await adm("/support/config", { ...saved, seller: { ...saved.seller, name: "DOKKU", rep: "", email: "help@example.com" }, privacy: { dbRegion: "대한민국", effectiveDate: "2026-12-14" } });
+  assert.ok((await page()).html.includes("개인정보 보호책임자: DOKKU"), "no representative: the business name");
+
+  // ?lang=en: an English summary that says the Korean text is the policy, with the same blanks
+  const pe = await page("?lang=en");
+  assert.equal(pe.r.status, 200);
+  assert.match(pe.html, /^<!DOCTYPE html>\s*<html lang="en">/);
+  assert.ok(pe.html.includes("The Korean text is the policy") && pe.html.includes('<a href="/privacy" hreflang="ko">') && pe.html.includes('<a href="/help?lang=en">'));
+  assert.ok(pe.html.includes("Effective date: December 14, 2026") && pe.html.includes("Privacy officer: DOKKU") && pe.html.includes("Email: help@example.com") && pe.html.includes("Database location: 대한민국"));
+  assert.ok(p1.html.includes('<a href="/privacy?lang=en" hreflang="en">English summary</a>'));
+  await adm("/support/config", { ...saved, privacy: { dbRegion: "", effectiveDate: "" } });
+  assert.ok((await page("?lang=en")).html.includes("Effective date: <span class=\"blank\">" + PRIVACY_EMPTY.en + "</span>"));
+  assert.equal((await call("/privacy", { method: "POST" })).status, 404, "GET only");
+  await adm("/support/config", saved);
+}
 
 // ---------------------------------------------------------------- the dashboard's feed (Stats Durable Object): buyer actions only, no text, no KV
 {

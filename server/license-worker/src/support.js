@@ -18,6 +18,8 @@
 //   429 "busy" says why in "scope": "ip" (this address, this hour; or a counter write to retry) or "day" (the day's
 //   budget, until 00:00 UTC), with Retry-After in seconds.
 //   GET  /help                            the same for people without the app (help_page.js)
+//   GET  /privacy                         the privacy policy (Korean; ?lang=en an English summary): privacy_page.js, made by
+//                                         build_privacy.mjs from privacy/*.md; its four blanks come from config:support
 //   /admin/api/support*                   dashboard: list, read, reply, status, refund decisions, delete, config,
 //                                         feed (GET /admin/api/support/feed?after=<seq> -> {events, last, more}: the
 //                                         "새 소식" rows after that seq, at most 100; no after = the newest 20)
@@ -44,14 +46,16 @@
 //                           support never takes more than LIMITS.writesPerDay + LIMITS.vWritesPerDay of the day's
 //                           writes. Orders, keys, webhooks and the dashboard never look at it. (Clearing the unread
 //                           flag is not counted: only a seller reply sets it.)
-//   config:support          seller info, notice, refund days, FAQ, open (the dashboard edits it)
+//   config:support          seller info, the privacy policy's blanks, notice, refund days, FAQ, open (the dashboard edits it)
 // Per-IP limits, the portal link cache and the "unread mark seen" notes never write KV: they live in the Cache API
 // (per data center) and in the isolate's memory, both approximate. Cloudflare promises working Cache API calls only on
 // custom domains, so on *.workers.dev the memory copy is what holds; the daily KV budget is the backstop either way.
-// An IP address is used only as the first 16 hex of SHA-256(address + "sb-support"), in the name of an hour's counter
-// (Cache API max-age 1 hour; memory: swept within a minute of its hour). IPv6 counts per /64. It is a hash, not a
-// secret: anyone can hash every IPv4 address, so it is not called irreversible anywhere.
+// An IP address is used only as the first 16 hex of SHA-256(salt + "|" + address + "sb-support"), in the name of an
+// hour's counter (Cache API max-age 1 hour; memory: swept within a minute of its hour). IPv6 counts per /64. The salt is
+// SHA-256 of a fixed label and the server's LICENSE_PRIVATE_KEY secret, so without that secret nobody can hash every
+// IPv4 address back to the counter names. Without the secret (local tests only) the salt is empty.
 import { HELP_HTML } from "./help_page.js";
+import { PRIVACY_HTML } from "./privacy_page.js";
 
 const DAY = 86400;
 export const LIMITS = {
@@ -89,22 +93,23 @@ export const REFUND_REASONS = [
   { id: "other", ko: "기타", en: "Other" },
 ];
 
-// Article 9 of the licence agreement, word for word (app/SystemBoost.App/Assets/eula.txt, eula.en.txt).
-// When the agreement changes, change this too.
+// Article 9 of the licence agreement, word for word (app/SystemBoost.App/Assets/eula.txt, eula.en.txt; an item that
+// runs over two lines there is one string here, joined with a space). When the agreement changes, change this too:
+// test_support.mjs compares the two.
 export const ARTICLE_9 = {
   ko: { title: "제9조 (구매와 청약철회)", items: [
     "1. 사용자는 키를 받은 날부터 7일 이내에 청약을 철회할 수 있습니다.",
-    "2. 키를 등록해 유료 기능을 쓰기 시작하면 디지털콘텐츠의 제공이 시작된 것으로 보아 청약철회가 제한될 수 있습니다. 판매자는 구매 전에 쓸 수 있는 3일 시험 키를 제공합니다.",
+    "2. 키를 등록해 유료 기능을 쓰기 시작하면 디지털콘텐츠의 제공이 시작된 것으로 보아 청약철회가 제한될 수 있습니다. 판매자는 구매 전에 쓸 수 있는 무료 플랜을 제공합니다. 유료 플랜에만 있는 기능은 구매 전에 써 볼 수 없습니다.",
     "3. 프로그램이 표시나 광고의 내용과 다르거나 계약과 다르게 제공된 경우, 사용자는 받은 날부터 3개월 이내, 그 사실을 안 날 또는 알 수 있었던 날부터 30일 이내에 청약을 철회할 수 있습니다.",
     "4. 환불이 끝나면 판매자는 해당 키를 막습니다.",
-    "5. 청약철회와 환불 문의는 판매 페이지에 표시한 연락처로 보냅니다.",
+    "5. 청약철회와 환불 문의는 앱이나 도움말 페이지의 고객센터, 또는 판매 페이지에 표시한 연락처로 보냅니다.",
   ] },
   en: { title: "Article 9 (Purchase and withdrawal)", items: [
     "1. The User may withdraw from the purchase within 7 days of receiving the key.",
-    "2. Once the User registers a key and starts using paid features, the digital content is treated as provided and withdrawal may be limited. The Seller offers a 3-day trial key that can be used before purchase.",
+    "2. Once the User registers a key and starts using paid features, the digital content is treated as provided and withdrawal may be limited. The Seller offers a free plan that can be used before purchase. Features found only in paid plans cannot be tried before purchase.",
     "3. If the Program differs from what was displayed or advertised, or is provided differently from the contract, the User may withdraw within 3 months of receiving it, or within 30 days of the day the User learned or could have learned of this.",
     "4. When a refund is complete, the Seller blocks the key.",
-    "5. Questions about withdrawal and refunds go to the contact shown on the sales page.",
+    "5. Questions about withdrawal and refunds go to the support center in the app or on the help page, or to the contact shown on the sales page.",
   ] },
 };
 
@@ -133,7 +138,7 @@ export const DEFAULT_FAQ = {
     { q: "회원 비밀번호를 잊었어요.",
       a: "회원 가입에는 메일을 받지 않아서, 가입할 때 받은 복구 코드로 비밀번호를 바꿔요. 앱의 '◈ 계정' 화면에서 '비밀번호 찾기'를 누르세요. 복구 코드도 잃었다면 문의 종류 '기타'로 문의해 주세요." },
     { q: "문의 내용은 얼마나 보관하나요?",
-      a: "문의 종류, 제목, 내용과 답변, 적은 연락처, 주문 코드와 키 식별 번호, '앱 정보 함께 보내기'를 고른 경우 그 앱 정보를 답변과 기록을 위해 보관해요. 회원으로 로그인한 앱에서 보내면 아이디도 함께 남아요. 환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명)도 붙어요. 키 전체를 보내도 키는 주인 확인에만 쓰고 저장하지 않아요. 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년이 지나면 지워져요. IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요." },
+      a: "문의 종류, 제목, 내용과 답변, 적은 연락처, 주문 코드와 키 식별 번호, '앱 정보 함께 보내기'를 고른 경우 그 앱 정보를 답변과 기록을 위해 보관해요. 회원으로 로그인한 앱에서 보내면 아이디도 함께 남아요. 환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명 등)도 붙어요. 키 전체를 보내도 키는 주인 확인에만 쓰고 저장하지 않아요. 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년이 지나면 지워져요. IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요." },
   ],
   en: [
     { q: "Where do I enter my license key?",
@@ -157,7 +162,7 @@ export const DEFAULT_FAQ = {
     { q: "I forgot my member password.",
       a: "Sign-up takes no email address, so the password is changed with the recovery code you got at sign-up. Open '◈ Account' in the app and press 'Forgot password'. If you lost the recovery code too, send a request with the category 'Other'." },
     { q: "How long are support requests kept?",
-      a: "The category, subject, message and replies, the contact you wrote, the order code and key ID, and, if you chose to send it, the app information are kept to answer you and keep a record. Sent from an app signed in as a member, the member ID is kept too. For a refund request the server also attaches the order and key details it holds (plan, date issued, payer name). If you send the full key, it is used only to check that it is yours and is not stored. Payment and refund requests are deleted 3 years after they last changed, other requests after 1 year. Your IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays in server memory and the Cloudflare cache for up to 1 hour." },
+      a: "The category, subject, message and replies, the contact you wrote, the order code and key ID, and, if you chose to send it, the app information are kept to answer you and keep a record. Sent from an app signed in as a member, the member ID is kept too. For a refund request the server also attaches the order and key details it holds (plan, date issued, payer name and more). If you send the full key, it is used only to check that it is yours and is not stored. Payment and refund requests are deleted 3 years after they last changed, other requests after 1 year. Your IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays in server memory and the Cloudflare cache for up to 1 hour." },
   ],
 };
 
@@ -257,7 +262,16 @@ export function ipBucket(ip) {
   } else groups = ip.split(":");
   return groups.slice(0, 4).map(g => g.replace(/^0+(?=.)/, "") || "0").join(":") + "::/64";
 }
-const ipTag = async req => (await sha(ipBucket(req.headers.get("CF-Connecting-IP")) + "sb-support")).slice(0, 16);
+// Mixed with a value made from the signing key, like the member accounts' IP values, so a list of every IPv4 address
+// hashed by anyone else does not map a tag back to an address. Without the key (tests) the plain form is used.
+let ipSalt = null, ipSaltOf = null;
+async function ipSaltFor(env) {
+  const k = env?.LICENSE_PRIVATE_KEY || "";
+  if (ipSaltOf !== k) { ipSalt = k ? await sha("systemboost-support-ip|" + k) : ""; ipSaltOf = k; }
+  return ipSalt;
+}
+const ipTag = async (req, env) =>
+  (await sha((await ipSaltFor(env)) + "|" + ipBucket(req.headers.get("CF-Connecting-IP")) + "sb-support")).slice(0, 16);
 
 // ---------------------------------------------------------------- limits and cache without KV writes
 const mem = new Map();   // name -> { v, exp }: this isolate's copy
@@ -283,8 +297,8 @@ async function keep(origin, name, v, seconds) {
   if (c) try { await c.put(cacheUrl(origin, name), new Response(v, { headers: { "Cache-Control": "max-age=" + seconds } })); } catch {}
 }
 // One more call from this IP this hour; true when it is over the limit.
-async function overIp(req, origin, what, max) {
-  const name = "rl:" + what + ":" + (await ipTag(req)) + ":" + now().slice(0, 13);
+async function overIp(req, env, origin, what, max) {
+  const name = "rl:" + what + ":" + (await ipTag(req, env)) + ":" + now().slice(0, 13);
   const m = mem.get(name), mine = m && m.exp > Date.now() ? Number(m.v) || 0 : 0;
   let there = 0;
   const c = edge();
@@ -334,6 +348,10 @@ export function checkConfig(b) {
     if (chars(v) > LIMITS.seller) return { error: "판매자 정보는 항목마다 " + LIMITS.seller + "자까지예요" };
     seller[f] = v;
   }
+  // the privacy policy's blanks (/privacy): where the member database is, and the day the policy takes effect
+  const dbRegion = clean(b.privacy?.dbRegion), effectiveDate = clean(b.privacy?.effectiveDate);
+  if (chars(dbRegion) > LIMITS.seller) return { error: "회원 DB 위치는 " + LIMITS.seller + "자까지예요" };
+  if (effectiveDate && !isDay(effectiveDate)) return { error: "개인정보 처리방침 시행일은 날짜(예: 2026-12-14)로 적어 주세요" };
   const notice = clean(b.notice, true);
   if (chars(notice) > LIMITS.notice) return { error: "공지는 " + LIMITS.notice + "자까지예요" };
   const rd = b.refundDays == null || b.refundDays === "" ? 7
@@ -349,8 +367,9 @@ export function checkConfig(b) {
     faq.push({ q, a });
   }
   if (faq.length > LIMITS.faq) return { error: "자주 묻는 질문은 " + LIMITS.faq + "개까지예요" };
-  return { config: { seller, notice, refundDays: rd, faq, open: b.open !== false } };
+  return { config: { seller, privacy: { dbRegion, effectiveDate }, notice, refundDays: rd, faq, open: b.open !== false } };
 }
+const isDay = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + "T00:00:00Z")) && new Date(s + "T00:00:00Z").toISOString().startsWith(s);
 export async function supportConfig(env) {
   let o = {};
   try { o = JSON.parse((await env.LICENSES.get("config:support")) || "{}"); } catch {}
@@ -495,7 +514,7 @@ async function create(req, url, env, h, ctx) {
     if (!reason) return bad("reason");
   }
 
-  if (await overIp(req, url.origin, "new", LIMITS.createPerIp)) return busy("ip");
+  if (await overIp(req, env, url.origin, "new", LIMITS.createPerIp)) return busy("ip");
   let keyVerified = false;
   if (key) {
     const [p, s] = key.split(".");
@@ -572,7 +591,7 @@ async function statusBatch(req, url, env) {
   if (!Array.isArray(list) || list.length < 1 || list.length > LIMITS.statusBatch ||
       !list.every(x => x && typeof x === "object" && typeof x.id === "string" && typeof x.token === "string" && x.id.length <= 64 && x.token.length <= 128))
     return bad("tickets");
-  if (await overIp(req, url.origin, "status", LIMITS.statusPerIp)) return busy("ip");
+  if (await overIp(req, env, url.origin, "status", LIMITS.statusPerIp)) return busy("ip");
   const out = Object.create(null);   // any id, "__proto__" too, is just a key
   for (const x of list) {
     if (x.id in out) continue;
@@ -592,7 +611,7 @@ async function reply(req, url, env, h, ctx) {
   if (!text || chars(text) > LIMITS.text) return bad("text");
   if (t.status === "closed" && Date.now() - Date.parse(t.closedAt || t.updated) > LIMITS.reopenDays * 864e5) return json({ error: "closed" }, 409);
   if (t.messages.length >= LIMITS.messages) return json({ error: "full" }, 409);
-  if (await overIp(req, url.origin, "reply", LIMITS.repliesPerIp)) return busy("ip");
+  if (await overIp(req, env, url.origin, "reply", LIMITS.repliesPerIp)) return busy("ip");
   const why = await spend(env, 1, "r", ownerOf(t));
   if (why) return refused(why);
   const reopened = t.status === "closed";
@@ -625,7 +644,7 @@ async function close(req, url, env, h, ctx) {
 // key (refunded, shared) and a subscription that is no longer active (no sub:<id>) get the same 404 as a bad key.
 // The link is kept 30 minutes per subscription, so pressing the button again does not call Lemon Squeezy again.
 async function subscription(req, url, env, h) {
-  if (await overIp(req, url.origin, "sub", LIMITS.subscriptionPerIp)) return busy("ip");
+  if (await overIp(req, env, url.origin, "sub", LIMITS.subscriptionPerIp)) return busy("ip");
   const b = await readBody(req);
   if (b === BIG) return tooLarge();
   const key = typeof b?.key === "string" ? b.key.trim() : "";
@@ -696,8 +715,33 @@ export function helpPage(url) {
     "x-frame-options": "DENY", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });
 }
 
+// GET /privacy. The policy is static HTML made from privacy/*.md by build_privacy.mjs (no Markdown at run time); only
+// its four blanks change, filled here from the dashboard's settings, every value escaped, in one pass so a value can
+// never fill in another blank. A blank the seller has not filled in says so. No script; a nonce for the one style.
+export const PRIVACY_EMPTY = { ko: "판매자가 아직 입력하지 않았어요", en: "not entered by the seller yet" };
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const escHtml = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// What fills each blank: the privacy officer is the representative, else the business name (as the dashboard says).
+export function privacyBlanks(c, lang = "ko") {
+  const s = c.seller || {}, p = c.privacy || {}, d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.effectiveDate || "");
+  const day = !d ? "" : lang === "en" ? MONTHS[Number(d[2]) - 1] + " " + Number(d[3]) + ", " + d[1] : d[1] + "년 " + Number(d[2]) + "월 " + Number(d[3]) + "일";
+  return { OWNER_NAME: s.rep || s.name || "", OWNER_EMAIL: s.email || "", SUPABASE_REGION: p.dbRegion || "", EFFECTIVE_DATE: day };
+}
+export async function privacyPage(url, env) {
+  const lang = lang2(url.searchParams.get("lang"));
+  const v = privacyBlanks(await supportConfig(env), lang);
+  const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  const html = PRIVACY_HTML[lang].replaceAll("__NONCE__", nonce)
+    .replace(/\{\{(OWNER_NAME|OWNER_EMAIL|SUPABASE_REGION|EFFECTIVE_DATE)\}\}/g,
+             (_, k) => v[k] ? escHtml(v[k]) : '<span class="blank">' + PRIVACY_EMPTY[lang] + "</span>");
+  return new Response(html, { headers: {
+    "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+    "content-security-policy": `default-src 'none'; style-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    "x-frame-options": "DENY", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });
+}
+
 // ---------------------------------------------------------------- dashboard
-const refundOpen = m => m?.rs === "requested" || m?.rs === "approved";
+const refundOpen =m => m?.rs === "requested" || m?.rs === "approved";
 async function rows(env) {
   const out = [];
   let cursor;

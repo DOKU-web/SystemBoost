@@ -133,6 +133,7 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
 .sf label.chk{display:flex;margin-top:0;font-size:15px;color:var(--txt)}.sf label.chk input{margin:0}
 .sf .cnt{float:right;font-variant-numeric:tabular-nums}
 .sfGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 12px}
+.sfWarn{border:1px solid #6a5420;background:#2a2210;color:var(--warn);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px}
 .faq{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .faq .q{display:grid;gap:6px}.faq .b{display:flex;flex-direction:column;gap:6px}.faq .b button{padding:5px 10px}
 @media(max-width:900px){.supGrid{grid-template-columns:minmax(0,1fr)}}
@@ -337,12 +338,19 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
   </div>
 
   <div class="card sf" id="sfCard">
-    <h2>고객센터 설정 <small>앱의 고객센터와 도움말 페이지(/help)에 보여요</small></h2>
+    <h2>고객센터 설정 <small>앱의 고객센터, 도움말 페이지(/help), 개인정보 처리방침(/privacy)에 보여요</small></h2>
     <label class="chk"><input type="checkbox" id="sfOpen"> 문의 받기</label>
     <div class="mut" style="margin-top:4px">끄면 앱과 도움말 페이지에서 새 문의를 보낼 수 없어요.</div>
     <p class="anSub">판매자 정보</p>
     <div class="sfGrid" id="sfSeller"></div>
     <p class="mut" style="margin:8px 0 0">비워 둔 칸은 앱에 '판매 페이지 참고'로 보여요.</p>
+    <p class="anSub">개인정보 처리방침 (/privacy)</p>
+    <div class="sfGrid">
+      <label>회원 DB 위치 (Supabase 지역)<input id="sf_dbRegion" maxlength="120" placeholder="예: 대한민국 서울 (ap-northeast-2)"></label>
+      <label>개인정보 처리방침 시행일<input id="sf_effectiveDate" type="date"></label>
+    </div>
+    <div class="mut" style="margin-top:4px">처리방침의 개인정보 보호책임자는 위 판매자 정보의 대표자(비어 있으면 상호), 연락처는 메일로 채워져요. 회원 DB 위치는 Supabase 프로젝트 설정의 지역(Region)을 적으세요. <a href="/privacy" target="_blank" rel="noopener">/privacy 열기</a></div>
+    <div class="sfWarn hide" id="sfPrivWarn" role="status"></div>
     <p class="anSub">안내</p>
     <label>공지 (선택) <span class="cnt" id="sfNoticeN"></span><textarea id="sfNotice" class="plain" rows="3" maxlength="500" placeholder="고객센터 맨 위에 보여요. 예: 설 연휴에는 답장이 늦어요."></textarea></label>
     <label>청약철회 기간 (일)<input id="sfDays" type="number" min="0" max="30" step="1" inputmode="numeric" style="max-width:140px"></label>
@@ -1299,6 +1307,9 @@ async function loadSupCfg() {
 function fillSupCfg() {
   const c = supCfg || {}, s = c.seller || {};
   for (const [k] of SELLER) $("sf_" + k).value = s[k] || "";
+  $("sf_dbRegion").value = (c.privacy || {}).dbRegion || "";
+  $("sf_effectiveDate").value = (c.privacy || {}).effectiveDate || "";
+  sfPrivWarn();
   $("sfNotice").value = c.notice || "";
   $("sfDays").value = c.refundDays == null ? 7 : c.refundDays;
   $("sfOpen").checked = c.open !== false;
@@ -1306,6 +1317,15 @@ function fillSupCfg() {
   renderFaq(); sfNoticeCount();
 }
 function sfNoticeCount() { $("sfNoticeN").textContent = `${$("sfNotice").value.length} / 500`; }
+// The privacy policy's blanks, as the server fills them (support.js privacyBlanks), from the saved settings: an empty
+// one shows "판매자가 아직 입력하지 않았어요" on /privacy.
+const PRIV_BLANKS = [[c => (c.seller || {}).rep || (c.seller || {}).name, "개인정보 보호책임자 (대표자 또는 상호)"], [c => (c.seller || {}).email, "보호책임자 연락처 (메일)"],
+                     [c => (c.privacy || {}).dbRegion, "회원 DB 위치 (Supabase 지역)"], [c => (c.privacy || {}).effectiveDate, "개인정보 처리방침 시행일"]];
+function sfPrivWarn() {
+  const gaps = PRIV_BLANKS.filter(([has]) => !has(supCfg || {})).map(([, label]) => label);
+  $("sfPrivWarn").textContent = gaps.length ? `개인정보 처리방침(/privacy)에 아직 빈 칸이 있어요 (저장한 설정 기준): ${gaps.join(", ")}. 빈 칸은 처리방침에 '판매자가 아직 입력하지 않았어요'로 보여요.` : "";
+  $("sfPrivWarn").classList.toggle("hide", !gaps.length);
+}
 function renderFaq() {
   const box = $("sfFaq"); box.textContent = "";
   sfFaq.forEach((f, i) => {
@@ -1333,7 +1353,8 @@ $("sfSave").onclick = async () => {
   if ($("sfDays").value === "" || !Number.isInteger(days) || days < 0 || days > 30) return sfSay("환불 안내 기간은 0~30일이에요", "err");
   const faq = sfFaq.map(f => ({ q: f.q.trim(), a: f.a.trim() })).filter(f => f.q || f.a);
   if (faq.some(f => !f.q || !f.a)) return sfSay("질문과 답을 둘 다 써 주세요", "err");
-  const config = { seller: Object.fromEntries(SELLER.map(([k]) => [k, $("sf_" + k).value.trim()])), notice: $("sfNotice").value.trim(),
+  const config = { seller: Object.fromEntries(SELLER.map(([k]) => [k, $("sf_" + k).value.trim()])),
+                   privacy: { dbRegion: $("sf_dbRegion").value.trim(), effectiveDate: $("sf_effectiveDate").value.trim() }, notice: $("sfNotice").value.trim(),
                    refundDays: days, faq, open: $("sfOpen").checked };
   $("sfSave").disabled = true; sfSay("저장하는 중…");
   try {
@@ -1505,7 +1526,7 @@ function demoApi(path, b) {
         messages: [msg("user", -9, "I bought Pro yearly for my desktop. Can I use the same key on my laptop?"),
                    msg("admin", -8.5, "Hi, this is SystemBoost. One key works on one PC, so the laptop needs its own key."), msg("user", -8.2, "Got it, thanks!")] }];
     demo.supCfg = { seller: { name: "SystemBoost", rep: "", address: "", bizNo: "", mailOrderNo: "", email: "help@systemboost.example", phone: "", hours: "평일 10:00~18:00" },
-      notice: "", refundDays: 7, open: true,
+      privacy: { dbRegion: "", effectiveDate: "" }, notice: "", refundDays: 7, open: true,
       faq: [{ q: "키는 PC 몇 대에 쓸 수 있나요?", a: "키 하나는 PC 한 대에만 써요. 여러 대에 쓰려면 PC마다 키가 하나씩 필요해요." },
             { q: "계좌이체로 결제했는데 키가 안 와요", a: "판매자가 입금을 확인하면 키가 나가요. 결제 신청 화면의 주문 코드와 입금자명을 적어 문의해 주세요." }] };
     demo.log = [{ at: d(-5), action: "키 발급", detail: "c52d18e7aa90b3f1 · 코드 없음 · 30일 · 유튜버 리뷰용 선물" }, { at: d(-3), action: "차단", detail: "1d6f0b9e82a7c355 · 커뮤니티에 키 공유" }];

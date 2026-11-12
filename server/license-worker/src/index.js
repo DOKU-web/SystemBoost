@@ -2,7 +2,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
-import { helpPage, support, supportAdmin, supportCounts, webhookRefund } from "./support.js";
+import { helpPage, privacyPage, support, supportAdmin, supportCounts, webhookRefund } from "./support.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
@@ -20,6 +20,7 @@ export { Stats } from "./stats.js";
 //   GET  /check?id=<key id>      {revoked} - the app asks this at start (offline = keeps working)
 //   POST /ping                   usage statistics from a running app -> {next: seconds until the next ping}
 //   /support/*, GET /help        customer support and refund requests (src/support.js, src/help_page.js)
+//   GET  /privacy                the privacy policy (?lang=en: an English summary), src/privacy_page.js
 //   GET  /admin                  owner dashboard (HTML); its API is /admin/api/* with
 //                                "Authorization: Bearer <ADMIN_TOKEN>"
 //
@@ -204,6 +205,7 @@ export default {
       if (url.pathname.startsWith("/account/")) return await account(req, url, env);
       if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
       if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
+      if (req.method === "GET" && url.pathname === "/privacy") return await privacyPage(url, env);
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       return json({ error: "not found" }, 404);
     } catch (e) {

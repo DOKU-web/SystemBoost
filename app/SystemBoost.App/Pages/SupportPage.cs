@@ -26,7 +26,7 @@ public sealed class SupportPage : UserControl
     private static readonly string[] ConsentLines =
     {
         "보내면 보관하는 필수 항목: 문의 종류, 제목, 내용, 판매자의 답, 동의한 시각, 로그인 중이면 회원 아이디, 환불 요청이면 키 식별 번호와 주문 코드.",
-        "환불 요청이면 판매자 서버에 있는 주문 · 키 정보(플랜, 키를 받은 날, 입금자명)도 문의에 붙여 보관해요. 환불 요청에 함께 가는 키는 서버가 확인에만 쓰고 저장하지 않아요.",
+        "환불 요청이면 판매자 서버에 있는 주문 · 키 정보(플랜, 키를 받은 날, 입금자명 등)도 문의에 붙여 보관해요. 환불 요청에 함께 가는 키는 서버가 확인에만 쓰고 저장하지 않아요.",
         "이유: 문의에 답하고 결제와 환불을 처리한 기록을 남기려고요.",
         "기간: 결제 · 환불 문의는 3년, 그 밖의 문의는 1년 동안 판매자 서버에 보관해요. 기간은 문의가 마지막으로 바뀐 날부터 세요.",
         "IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요.",
@@ -234,6 +234,11 @@ public sealed class SupportPage : UserControl
     {
         var p = new StackPanel { Spacing = 6 };
         foreach (var line in ConsentLines) p.Children.Add(Ui.Text(line, "muted", wrap: true));
+        p.Children.Add(Ui.Text("자세한 내용은 개인정보 처리방침에서 볼 수 있어요.", "muted", wrap: true));
+        var status = Ui.Text("", "muted", wrap: true);
+        status.IsVisible = false;
+        p.Children.Add(Left(Ui.PrivacyButton(status)));
+        p.Children.Add(status);
         p.Children.Add(box);
         return p;
     }

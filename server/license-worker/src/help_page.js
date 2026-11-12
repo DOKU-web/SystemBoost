@@ -32,7 +32,7 @@ label{display:block;margin-top:12px;font-size:14px;color:var(--muted)}
 .note{margin:4px 0 0}
 input,select,textarea{width:100%;margin-top:4px;background:#0f0f11;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit}
 textarea{resize:vertical;min-height:120px}
-.consent{font-size:14px;color:var(--text)}.consent b{display:block;margin-bottom:4px}
+.consent{font-size:14px;color:var(--text)}.consent b{display:block;margin-bottom:4px}.consent a{display:block;margin-top:6px}
 .check{display:flex;gap:10px;align-items:flex-start;color:var(--text)}.check input{width:auto;margin-top:5px}
 button{margin-top:14px;background:var(--accent);color:#111;border:0;border-radius:8px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer}
 button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}button:disabled{opacity:.6;cursor:default}
@@ -46,7 +46,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <noscript><div class="box warn"><p>이 페이지는 JavaScript가 있어야 동작해요. SystemBoost 앱의 '고객센터'에서도 문의할 수 있어요.</p><p>This page needs JavaScript. You can also send a request from 'Support' in the SystemBoost app.</p></div></noscript>
 <header><h1 data-t="title"></h1><a id="langLink" href="?lang=en"></a></header>
 <p class="m" data-t="lead"></p>
-<nav><a href="#s-faq" data-t="faq"></a><a href="#s-refund" data-t="refund"></a><a href="#s-seller" data-t="seller"></a><a href="#s-ask" data-t="ask"></a><a href="#s-mine" data-t="mine"></a></nav>
+<nav><a href="#s-faq" data-t="faq"></a><a href="#s-refund" data-t="refund"></a><a href="#s-seller" data-t="seller"></a><a href="#s-ask" data-t="ask"></a><a href="#s-mine" data-t="mine"></a><a id="privacyNav" href="/privacy" data-t="privacy"></a></nav>
 <div id="offline" class="box warn" hidden></div>
 <div id="notice" class="box" hidden></div>
 
@@ -78,7 +78,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <p class="m note" data-t="keyNote"></p>
 <label><span data-t="contact"></span><span class="cnt" id="contactN"></span><input id="contact" autocomplete="off"></label>
 <p class="m note" data-t="contactNote"></p>
-<div class="box consent"><b data-t="consentTitle"></b><span data-t="consentText"></span></div>
+<div class="box consent"><b data-t="consentTitle"></b><span data-t="consentText"></span><a id="privacyLink" href="/privacy" data-t="privacyMore"></a></div>
 <label class="check"><input type="checkbox" id="consent"><span data-t="consent"></span></label>
 <button type="submit" id="send" data-t="send"></button>
 <p id="formMsg" role="status"></p>
@@ -119,6 +119,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     ko: {
       title: "SystemBoost 고객센터", other: "English", lead: "자주 묻는 질문과 환불 안내를 보고, 앱 없이도 문의를 남길 수 있어요.",
       faq: "자주 묻는 질문", refund: "환불 · 청약철회", seller: "판매자 정보", ask: "문의하기", mine: "내 문의", loading: "불러오는 중…",
+      privacy: "개인정보 처리방침", privacyMore: "자세한 내용은 개인정보 처리방침에서 볼 수 있어요",
       refundLead: "환불(청약철회)은 사용권 계약 제9조를 따라요. 아래는 그 조항 그대로예요.",
       refundDays: "판매자가 안내하는 청약철회 기간: 키를 받은 날부터 {n}일",
       refundHow: "환불 요청은 아래 '문의하기'에서 문의 종류 '환불'로 보내 주세요. 판매자가 확인하고 이 문의로 답해요.",
@@ -134,7 +135,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       contact: "판매자가 따로 연락할 연락처 (선택, 메일 등)",
       contactNote: "적은 경우에만 보내고, 문의와 함께 보관해요. 답은 이 페이지의 '내 문의'에 와요.",
       consentTitle: "보관 안내 (필수)",
-      consentText: "보관하는 것: 문의 종류, 제목, 내용, 판매자의 답, 주문 코드와 키 식별 번호(적은 경우), 동의한 시각.\n왜: 문의에 답하고 결제와 환불 기록을 남기려고요.\n환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명)도 함께 붙어요.\n얼마나: 판매자 서버에 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년 동안 두고 지워요.\nIP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요.\n동의하지 않으면 문의를 보낼 수 없어요. 앱은 그대로 쓸 수 있어요.",
+      consentText: "보관하는 것: 문의 종류, 제목, 내용, 판매자의 답, 주문 코드와 키 식별 번호(적은 경우), 동의한 시각.\n왜: 문의에 답하고 결제와 환불 기록을 남기려고요.\n환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명 등)도 함께 붙어요.\n얼마나: 판매자 서버에 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년 동안 두고 지워요.\nIP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요.\n동의하지 않으면 문의를 보낼 수 없어요. 앱은 그대로 쓸 수 있어요.",
       consent: "보관 안내를 읽었고 동의해요",
       count: "{n} / {max}",
       send: "보내기", sending: "보내는 중…",
@@ -160,6 +161,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     en: {
       title: "SystemBoost Support", other: "한국어", lead: "Read the FAQ and the refund policy, and send a request without the app.",
       faq: "FAQ", refund: "Refunds and withdrawal", seller: "Seller", ask: "Send a request", mine: "My requests", loading: "Loading…",
+      privacy: "Privacy policy", privacyMore: "Details are in the privacy policy",
       refundLead: "Refunds (withdrawal) follow Article 9 of the license agreement. Here it is word for word.",
       refundDays: "Withdrawal period announced by the seller: {n} days from receiving the key",
       refundHow: "Send a refund request under 'Send a request' with the category 'Refund'. The seller checks it and replies in that request.",
@@ -175,7 +177,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       contact: "A contact the seller can use (optional, e.g. email)",
       contactNote: "Sent only if you fill it in, and kept with the request. Replies appear under 'My requests' on this page.",
       consentTitle: "How your request is kept (required)",
-      consentText: "What is kept: the category, subject, message, the seller's replies, the order code and key ID (if you give them), and the time you agreed.\nWhy: to answer you and keep a record of payments and refunds.\nFor a refund request the server also attaches the order and key details it holds (plan, date issued, payer name).\nHow long: on the seller's server, payment and refund requests for 3 years and other requests for 1 year, counted from the day the request last changed.\nYour IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays in server memory and the Cloudflare cache for up to 1 hour.\nIf you do not agree, you cannot send a request. You can still use the app.",
+      consentText: "What is kept: the category, subject, message, the seller's replies, the order code and key ID (if you give them), and the time you agreed.\nWhy: to answer you and keep a record of payments and refunds.\nFor a refund request the server also attaches the order and key details it holds (plan, date issued, payer name and more).\nHow long: on the seller's server, payment and refund requests for 3 years and other requests for 1 year, counted from the day the request last changed.\nYour IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays in server memory and the Cloudflare cache for up to 1 hour.\nIf you do not agree, you cannot send a request. You can still use the app.",
       consent: "I have read this and agree",
       count: "{n} / {max}",
       send: "Send", sending: "Sending…",
@@ -266,6 +268,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
   var link = $("langLink");
   link.textContent = TX.other;
   link.href = L === "en" ? "?lang=ko" : "?lang=en";
+  $("privacyNav").href = $("privacyLink").href = L === "en" ? "/privacy?lang=en" : "/privacy";   // Korean is the policy, English a summary
 
   function renderInfo() {
     if (info.notice) { $("notice").textContent = info.notice; $("notice").hidden = false; }

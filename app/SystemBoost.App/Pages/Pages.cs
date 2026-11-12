@@ -298,11 +298,17 @@ public sealed class SettingsPage : UserControl
         {
             if (TopLevel.GetTopLevel(eula) is Window owner) await new EulaDialog(consent: false).ShowDialog(owner);
         };
-        var buttons = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 10 };
-        buttons.Children.Add(eula);
-        buttons.Children.Add(open);
+        var privacyStatus = Ui.Text("", "muted", wrap: true);
+        privacyStatus.IsVisible = false;
+        var buttons = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+        foreach (var b in new[] { eula, Ui.PrivacyButton(privacyStatus), open })
+        {
+            b.Margin = new Thickness(0, 0, 10, 6);
+            buttons.Children.Add(b);
+        }
         p.Children.Add(buttons);
         p.Children.Add(status);
+        p.Children.Add(privacyStatus);
         return p;
     }
 

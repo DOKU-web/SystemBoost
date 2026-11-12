@@ -1,8 +1,11 @@
 // Small helpers to build pages in code with the theme classes.
+using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using SystemBoost.App.Services;
 
 namespace SystemBoost.App.Pages;
 
@@ -28,6 +31,28 @@ internal static class Ui
     {
         var b = new Button { Content = text };
         b.Classes.Add(cls);
+        return b;
+    }
+
+    /// Opens a web page in the browser. False when there is no window or the browser did not start.
+    public static async Task<bool> OpenUrl(Control from, string url)
+    {
+        try { return TopLevel.GetTopLevel(from) is { } top && await top.Launcher.LaunchUriAsync(new Uri(url)); }
+        catch (Exception) { return false; }
+    }
+
+    /// "개인정보 처리방침 보기": opens /privacy on the seller's server. When the browser does not open,
+    /// status (hidden until then) shows the address to type in.
+    public static Button PrivacyButton(TextBlock status)
+    {
+        var b = Button("개인정보 처리방침 보기", "ghost");
+        b.Click += async (_, _) =>
+        {
+            var url = Support.PrivacyUrl;
+            if (await OpenUrl(b, url)) { status.IsVisible = false; return; }
+            status.Text = $"브라우저를 열지 못했어요. 이 주소를 브라우저에 넣어 주세요: {url}";
+            status.IsVisible = true;
+        };
         return b;
     }
 
