@@ -3,6 +3,8 @@
 // needed and exits together with the app. See native/helper/src/main.cpp for
 // how it checks its caller and what it accepts. Plain (elevated: false), it starts
 // without a prompt and can only do what this user may do.
+// The administrator prompt never comes up over a game: while a game or any full-screen program is in front,
+// EnsureAsync changes nothing and says so (Deferred), and the next try after the game asks.
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -19,6 +21,16 @@ internal sealed class BoostHelper : IDisposable
 {
     private const int ConnectTimeoutMs = 15000;
     private static string HelperPath => Path.Combine(AppContext.BaseDirectory, "sb_helper.exe");
+
+    /// The one elevated helper of this app run, shared by the boost features and the page file setting,
+    /// so one prompt covers both.
+    public static BoostHelper Admin { get; } = new();
+
+    /// What EnsureAsync answers while a game is in front.
+    public const string DeferredText = "게임 화면이 앞에 있어서 관리자 확인 창을 띄우지 않았어요. 게임을 끈 뒤 다시 해 주세요 (바뀐 것 없음)";
+
+    /// A prompt was held back because a game was in front. May fire on any thread.
+    public static event Action? Deferred;
 
     private readonly bool _elevated;
     public BoostHelper(bool elevated = true) { _elevated = elevated; }
@@ -38,6 +50,12 @@ internal sealed class BoostHelper : IDisposable
         {
             if (Running) return null;
             if (!File.Exists(HelperPath)) return "관리자 도우미 파일이 없어요. 앱을 다시 설치해 주세요 (바뀐 것 없음)";
+            // the secure desktop would take a game off the screen in the middle of a match
+            if (_elevated && !Environment.IsPrivilegedProcess && ResourceManagers.FullscreenInFront())
+            {
+                Deferred?.Invoke();
+                return DeferredText;
+            }
             var name = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
             var psi = new ProcessStartInfo(HelperPath, $"--pipe {name} --parent {Environment.ProcessId}")
             { UseShellExecute = true, Verb = _elevated ? "runas" : "", WindowStyle = ProcessWindowStyle.Hidden };

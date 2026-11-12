@@ -9,7 +9,11 @@
 //   CPU cap    Job Object CPU rate control (hard limit, e.g. 20 %)
 //   Memory     ProcessMemoryPriority low -> its pages are trimmed first
 //   GPU        per-app graphics preference "power saving" (iGPU) for lowered apps
-//              (HKCU\Software\Microsoft\DirectX\UserGpuPreferences, applies on the app's next start)
+//              (HKCU\Software\Microsoft\DirectX\UserGpuPreferences, applies on the app's next start;
+//              only the GpuPreference part of that value changes, the other settings in it stay)
+// Before anything changes it is written to share-state.json (ShareRecord), so what a crash or a closed PC
+// left behind goes back at the next start, with "전체 되돌리기" and when the app is uninstalled.
+// A CPU cap cannot be lifted by a later run: it ends when that program closes, and the next start says so.
 // macOS (user processes):
 //   CPU        taskpolicy -b (background QoS: CPU + I/O throttled) / -B to undo
 //   RAM, GPU   measured only - macOS gives apps no control over other apps
@@ -53,7 +57,14 @@ public interface IResourceManager : IDisposable
 public static class ResourceManagers
 {
     public static IResourceManager Create() =>
-        OperatingSystem.IsWindows() ? new WinResourceManager() : new MacResourceManager();
+        Current = OperatingSystem.IsWindows() ? new WinResourceManager() : new MacResourceManager();
+
+    /// The manager behind the "자원 분배" page, so "전체 되돌리기" can put its changes back too.
+    public static IResourceManager? Current { get; private set; }
+
+    /// Everything the page changed went back (the page shows every app at "보통" again). May fire on any thread.
+    public static event Action? Restored;
+    internal static void RaiseRestored() => Restored?.Invoke();
 
     /// Process of the window frame generation is attached to, while it runs.
     public static string? GameProcess { get; set; }
@@ -101,14 +112,40 @@ public static class ResourceManagers
         return KnownGames().Contains(path);
     }
 
-    // Folders that game stores and publishers install into.
+    // Folders that game stores and publishers install into. Roblox also comes through Bloxstrap and Fishstrap
+    // (%LOCALAPPDATA%\Bloxstrap\Versions\...) and the Microsoft Store (WindowsApps\ROBLOXCORPORATION.ROBLOX_...).
     private static readonly string[] GameFolderMarks =
     {
         @"\steamapps\", @"\Epic Games\", @"\Riot Games\", @"\XboxGames\", @"\Ubisoft Game Launcher\games\",
         @"\EA Games\", @"\Electronic Arts\", @"\GOG Galaxy\Games\", @"\Rockstar Games\", @"\Roblox\Versions\",
+        @"\Bloxstrap\", @"\Fishstrap\", @"\ROBLOXCORPORATION.ROBLOX",
         @"\Roberts Space Industries\", @"\Nexon\", @"\Kakao Games\", @"\Smilegate\", @"\Netmarble\", @"\NCSOFT\",
         @"\PlayNC\", @"\Pearl Abyss\", @"\Games\",
     };
+
+    /// A game, or any program over a whole screen, is in front. An administrator prompt now would switch to the
+    /// secure desktop and take the game off the screen, so the helper waits (BoostHelper.EnsureAsync).
+    /// SystemBoost's own window, the desktop and the taskbar do not count.
+    public static bool FullscreenInFront()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        try
+        {
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == 0 || pid == (uint)Environment.ProcessId) return false;
+            var cls = new StringBuilder(64);
+            GetClassName(hwnd, cls, cls.Capacity);
+            if (cls.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd") return false;
+            string name;
+            using (var p = Process.GetProcessById((int)pid)) name = p.ProcessName;
+            if (Games.Contains(name) || string.Equals(name, GameProcess, StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(name, "explorer", StringComparison.OrdinalIgnoreCase)) return false;
+            return FullscreenPids().Contains((int)pid);
+        }
+        catch (Exception) { return false; }
+    }
 
     private static readonly object CacheLock = new();
     private static readonly Dictionary<int, string?> Paths = new();
@@ -195,6 +232,8 @@ public static class ResourceManagers
     [StructLayout(LayoutKind.Sequential)] private struct MONITORINFO { public int cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
     [DllImport("user32", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
     [DllImport("user32")] private static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
     [DllImport("user32")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32")] private static extern bool IsIconic(IntPtr hwnd);
@@ -231,6 +270,7 @@ public static class ResourceManagers
 }
 
 // =============================================================== Windows
+[SupportedOSPlatform("windows")]
 public sealed class WinResourceManager : IResourceManager
 {
     public bool CanCapCpu => true;
@@ -241,7 +281,7 @@ public sealed class WinResourceManager : IResourceManager
     private readonly Dictionary<int, (TimeSpan cpu, DateTime t)> _last = new();
     private readonly Dictionary<int, (uint prio, string name, string? exe)> _changed = new();
     private readonly Dictionary<int, IntPtr> _jobs = new();
-    private readonly Dictionary<string, string?> _gpuOrig = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _lock = new();   // the page's buttons, "전체 되돌리기" and exit can overlap
     private readonly GpuCounters? _gpu = GpuCounters.TryCreate();
 
     public Task<List<AppSample>> SampleAsync() => Task.Run(() =>
@@ -281,21 +321,24 @@ public sealed class WinResourceManager : IResourceManager
         const string Leave = "{0}: 게임과 시스템 프로세스는 바꾸지 않아요";
         if (app.Game || ResourceManagers.IsProtected(app.Name)) return string.Format(Leave, app.Name);
         int done = 0, failed = 0, games = 0;
-        foreach (var p in Process.GetProcessesByName(app.Name))
+        lock (_lock)
         {
-            try
+            foreach (var p in Process.GetProcessesByName(app.Name))
             {
-                if (ResourceManagers.LooksLikeGame(p.Id, app.Name)) { games++; continue; }
-                Apply(p, level, cap);
-                done++;
+                try
+                {
+                    if (ResourceManagers.LooksLikeGame(p.Id, app.Name)) { games++; continue; }
+                    Apply(p, level, cap);
+                    done++;
+                }
+                catch (Exception) { failed++; }
+                finally { p.Dispose(); }
             }
-            catch (Exception) { failed++; }
-            finally { p.Dispose(); }
         }
         if (done == 0 && games > 0) return string.Format(Leave, app.Name);
         string what = level switch
         {
-            ShareLevel.Priority => "우선 (CPU 우선순위 높음)",
+            ShareLevel.Priority => "우선 (CPU 우선순위 보통 이상)",
             ShareLevel.Normal => "보통 (원래대로)",
             ShareLevel.Lower => "낮춤 (우선순위·메모리 우선순위 낮춤, 효율 모드, 다음 실행부터 내장 GPU)",
             _ => $"제한 (CPU 최대 {cap}%)",
@@ -320,23 +363,28 @@ public sealed class WinResourceManager : IResourceManager
                 uint prio = GetPriorityClass(h);
                 if (prio == 0) throw new InvalidOperationException("priority");
                 _changed[p.Id] = (prio, p.ProcessName, ResourceManagers.ImagePath(p.Id));
+                ShareRecord.NoteProcess(p.Id, StartTicks(h), p.ProcessName, prio);   // on disk before anything changes
             }
             var orig = _changed[p.Id];
             switch (level)
             {
                 case ShareLevel.Priority:
+                    ShareRecord.SetProcess(p.Id, AboveNormalClass, capped: false);
                     SetPriorityClass(h, AboveNormalClass);   // never High/Realtime: input & audio would suffer
-                    SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p.Id, h, 0);
+                    SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p.Id, h, 0); SetGpuPref(orig.exe, false);
                     break;
                 case ShareLevel.Normal:
                     SetPriorityClass(h, orig.prio);
                     SetEco(h, false); SetMemPrio(h, 5); SetCpuCap(p.Id, h, 0); SetGpuPref(orig.exe, false);
+                    ShareRecord.ForgetProcess(p.Id);
                     break;
                 case ShareLevel.Lower:
+                    ShareRecord.SetProcess(p.Id, BelowNormalClass, capped: false);
                     SetPriorityClass(h, BelowNormalClass);
                     SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p.Id, h, 0); SetGpuPref(orig.exe, true);
                     break;
                 case ShareLevel.Limit:
+                    ShareRecord.SetProcess(p.Id, BelowNormalClass, capped: true);
                     SetPriorityClass(h, BelowNormalClass);
                     SetEco(h, true); SetMemPrio(h, 2); SetCpuCap(p.Id, h, Math.Clamp(cap, 5, 90)); SetGpuPref(orig.exe, true);
                     break;
@@ -347,32 +395,65 @@ public sealed class WinResourceManager : IResourceManager
 
     public Task RestoreAllAsync() => Task.Run(() =>
     {
-        foreach (var (pid, orig) in _changed.ToList())
+        lock (_lock)
         {
-            try
+            foreach (var (pid, orig) in _changed.ToList())
             {
-                // the number may belong to another program by now
-                using var p = Process.GetProcessById(pid);
-                if (string.Equals(p.ProcessName, orig.name, StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    var h = OpenProcess(SetInformation | QueryLimited, false, pid);
-                    if (h != IntPtr.Zero)
+                    // the number may belong to another program by now
+                    using var p = Process.GetProcessById(pid);
+                    if (string.Equals(p.ProcessName, orig.name, StringComparison.OrdinalIgnoreCase))
                     {
-                        SetPriorityClass(h, orig.prio); SetEco(h, false); SetMemPrio(h, 5);
-                        CloseHandle(h);
+                        var h = OpenProcess(SetInformation | QueryLimited, false, pid);
+                        if (h != IntPtr.Zero)
+                        {
+                            SetPriorityClass(h, orig.prio); SetEco(h, false); SetMemPrio(h, 5);
+                            CloseHandle(h);
+                        }
+                        SetCpuCap(pid, IntPtr.Zero, 0);
                     }
-                    SetCpuCap(pid, IntPtr.Zero, 0);
                 }
+                catch (Exception) { }
+                ShareRecord.ForgetProcess(pid);
             }
-            catch (Exception) { }
-            SetGpuPref(orig.exe, false);
+            _changed.Clear();
+            foreach (var j in _jobs.Values) CloseHandle(j);
+            _jobs.Clear();
+            ShareRecord.GpuBackAll();
         }
-        _changed.Clear();
-        foreach (var j in _jobs.Values) CloseHandle(j);
-        _jobs.Clear();
+        ResourceManagers.RaiseRestored();
     });
 
     public void Dispose() { RestoreAllAsync().Wait(3000); _gpu?.Dispose(); }
+
+    /// After a run that did not put things back: the priority this page set goes back to the one before, only if the
+    /// program still has it, and the power and memory settings go back to normal. Never for anything that may be a game.
+    internal static void PutProcessBack(int pid, string name, uint before, uint setTo)
+    {
+        if (ResourceManagers.LooksLikeGame(pid, name)) return;
+        var h = OpenProcess(SetInformation | QueryLimited, false, pid);
+        if (h == IntPtr.Zero) return;
+        try
+        {
+            if (GetPriorityClass(h) == setTo && before != 0) SetPriorityClass(h, before);
+            SetEco(h, false);
+            SetMemPrio(h, 5);
+        }
+        finally { CloseHandle(h); }
+    }
+
+    /// When a process started, in UTC ticks; 0 when Windows does not say.
+    internal static long StartTicks(IntPtr h) =>
+        GetProcessTimes(h, out var created, out _, out _, out _) && created > 0 ? DateTime.FromFileTimeUtc(created).Ticks : 0;
+
+    internal static long StartTicks(int pid)
+    {
+        var h = OpenProcess(QueryLimited, false, pid);
+        if (h == IntPtr.Zero) return 0;
+        try { return StartTicks(h); }
+        finally { CloseHandle(h); }
+    }
 
     // ---- Win32 -----------------------------------------------------------
     private void SetCpuCap(int pid, IntPtr h, int percent)
@@ -404,20 +485,16 @@ public sealed class WinResourceManager : IResourceManager
         SetProcessInformation(h, 0 /* ProcessMemoryPriority */, ref m, (uint)Marshal.SizeOf(m));
     }
 
-    // lowered: GpuPreference=1 (power saving, iGPU), keeping the value the user had; otherwise put it back
-    private void SetGpuPref(string? exe, bool lowered)
+    // lowered: GpuPreference=1 (power saving, iGPU), the other settings in the value stay; otherwise put it back
+    private static void SetGpuPref(string? exe, bool lowered)
     {
         if (exe == null || !OperatingSystem.IsWindows()) return;
-        using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences");
-        if (lowered)
+        try
         {
-            _gpuOrig.TryAdd(exe, k.GetValue(exe) as string);
-            k.SetValue(exe, "GpuPreference=1;");
+            if (lowered) ShareRecord.LowerGpu(exe);
+            else ShareRecord.GpuBack(exe);
         }
-        else if (_gpuOrig.Remove(exe, out var orig))
-        {
-            if (orig != null) k.SetValue(exe, orig); else k.DeleteValue(exe, false);
-        }
+        catch (Exception) { }
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct JOBOBJECT_CPU_RATE_CONTROL_INFORMATION { public uint ControlFlags; public uint CpuRate; }
@@ -432,6 +509,198 @@ public sealed class WinResourceManager : IResourceManager
     [DllImport("kernel32", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
     [DllImport("kernel32", SetLastError = true)] private static extern uint GetPriorityClass(IntPtr h);
     [DllImport("kernel32", SetLastError = true)] private static extern bool SetPriorityClass(IntPtr h, uint cls);
+    [DllImport("kernel32", SetLastError = true)] private static extern bool GetProcessTimes(IntPtr h, out long created, out long exited, out long kernel, out long user);
+}
+
+/// What the "자원 분배" page changed, written to share-state.json before each change: the GpuPreference it set
+/// for a program, and the programs whose priority or CPU share it changed. A run that ends without putting them
+/// back (a crash, a closed PC) leaves them here for the next start, for "전체 되돌리기" and for the uninstall hook.
+/// Each goes back only while it still holds what was set here.
+[SupportedOSPlatform("windows")]
+public static class ShareRecord
+{
+    public sealed class GpuEntry
+    {
+        public string Exe { get; set; } = "";        // program path, the name of the value
+        public string? Before { get; set; }          // GpuPreference before, null = none
+        public string SetTo { get; set; } = "";
+        public string Owner { get; set; } = "";      // the app run that set it
+    }
+
+    public sealed class ProcEntry
+    {
+        public int Pid { get; set; }
+        public long Start { get; set; }              // process start, UTC ticks
+        public string Name { get; set; } = "";
+        public uint Before { get; set; }             // priority class before
+        public uint SetTo { get; set; }
+        public bool Capped { get; set; }
+        public string Owner { get; set; } = "";
+    }
+
+    public sealed class Data
+    {
+        public List<GpuEntry> Gpu { get; set; } = new();
+        public List<ProcEntry> Processes { get; set; } = new();
+    }
+
+    private const string GpuKey = @"Software\Microsoft\DirectX\UserGpuPreferences";
+    private const string PowerSaving = "1";
+    private static readonly object Lock = new();
+    private static Data? _data;
+    private static string FilePath => System.IO.Path.Combine(Platform.DataDir, "share-state.json");
+
+    /// This app run: a later start tells by it what a run that is gone left behind.
+    private static readonly string Me = RunId(Environment.ProcessId, WinResourceManager.StartTicks(Environment.ProcessId));
+    private static string RunId(int pid, long start) => pid.ToString(CultureInfo.InvariantCulture) + "@" + start.ToString(CultureInfo.InvariantCulture);
+
+    private static Data D
+    {
+        get
+        {
+            if (_data != null) return _data;
+            try { if (System.IO.File.Exists(FilePath)) _data = System.Text.Json.JsonSerializer.Deserialize<Data>(System.IO.File.ReadAllText(FilePath)); }
+            catch (Exception) { }
+            return _data ??= new Data();
+        }
+    }
+
+    private static void Save()
+    {
+        try
+        {
+            if (D.Gpu.Count == 0 && D.Processes.Count == 0) { System.IO.File.Delete(FilePath); return; }
+            var tmp = FilePath + ".tmp";
+            System.IO.File.WriteAllText(tmp, System.Text.Json.JsonSerializer.Serialize(D, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            System.IO.File.Move(tmp, FilePath, true);
+        }
+        catch (Exception) { }
+    }
+
+    /// Something is still changed (for the backup page and "전체 되돌리기").
+    public static bool Any { get { lock (Lock) return D.Gpu.Count > 0 || D.Processes.Count > 0; } }
+
+    // ------------------------------------------------------------ graphics preference
+    public static void LowerGpu(string exe)
+    {
+        lock (Lock)
+        {
+            using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(GpuKey);
+            var cur = k.GetValue(exe) as string;
+            if (!D.Gpu.Any(g => string.Equals(g.Exe, exe, StringComparison.OrdinalIgnoreCase)))
+            {
+                var before = RestoreRules.GpuToken(cur);
+                if (before == PowerSaving) return;   // set so already: nothing to change, nothing to put back
+                D.Gpu.Add(new GpuEntry { Exe = exe, Before = before, SetTo = PowerSaving, Owner = Me });
+                Save();
+            }
+            k.SetValue(exe, RestoreRules.WithGpuToken(cur, PowerSaving), Microsoft.Win32.RegistryValueKind.String);
+        }
+    }
+
+    public static void GpuBack(string exe)
+    {
+        lock (Lock)
+        {
+            var mine = D.Gpu.Where(g => string.Equals(g.Exe, exe, StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var e in mine) { PutGpuBack(e); D.Gpu.Remove(e); }
+            if (mine.Count > 0) Save();
+        }
+    }
+
+    public static void GpuBackAll()
+    {
+        lock (Lock)
+        {
+            if (D.Gpu.Count == 0) return;
+            foreach (var e in D.Gpu) PutGpuBack(e);
+            D.Gpu.Clear();
+            Save();
+        }
+    }
+
+    private static void PutGpuBack(GpuEntry e)
+    {
+        try
+        {
+            using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(GpuKey);
+            var (write, v) = RestoreRules.GpuBack(k.GetValue(e.Exe) as string, e.Before, e.SetTo);
+            if (!write) return;   // the user changed it since
+            if (v == null) k.DeleteValue(e.Exe, false);
+            else k.SetValue(e.Exe, v, Microsoft.Win32.RegistryValueKind.String);
+        }
+        catch (Exception) { }
+    }
+
+    // ------------------------------------------------------------ priorities and CPU caps
+    public static void NoteProcess(int pid, long start, string name, uint before)
+    {
+        lock (Lock)
+        {
+            D.Processes.RemoveAll(p => p.Pid == pid);
+            D.Processes.Add(new ProcEntry { Pid = pid, Start = start, Name = name, Before = before, SetTo = before, Owner = Me });
+            Save();
+        }
+    }
+
+    public static void SetProcess(int pid, uint setTo, bool capped)
+    {
+        lock (Lock)
+        {
+            var e = D.Processes.FirstOrDefault(p => p.Pid == pid && p.Owner == Me);
+            if (e == null) return;
+            e.SetTo = setTo;
+            e.Capped = capped;    // another level turns the job's limit off; the job itself stays with the program
+            Save();
+        }
+    }
+
+    public static void ForgetProcess(int pid)
+    {
+        lock (Lock) { if (D.Processes.RemoveAll(p => p.Pid == pid && p.Owner == Me) > 0) Save(); }
+    }
+
+    /// At start: puts back what an earlier run left. Returns the programs whose CPU cap is still on:
+    /// a later run cannot lift it, it ends when that program closes.
+    public static List<string> RecoverEarlierRuns() => PutBack(earlierOnly: true);
+
+    /// "전체 되돌리기" and the uninstall hook: everything recorded. The page's own run lifts its CPU caps first.
+    public static List<string> PutBackAll() => PutBack(earlierOnly: false);
+
+    private static List<string> PutBack(bool earlierOnly)
+    {
+        var capped = new List<string>();
+        lock (Lock)
+        {
+            if (D.Gpu.Count == 0 && D.Processes.Count == 0) return capped;
+            var running = new Dictionary<string, bool>();
+            bool Gone(string owner)
+            {
+                if (!earlierOnly) return true;
+                if (owner == Me) return false;
+                if (!running.TryGetValue(owner, out var alive)) running[owner] = alive = OwnerAlive(owner);
+                return !alive;
+            }
+            foreach (var e in D.Gpu.Where(g => Gone(g.Owner)).ToList()) { PutGpuBack(e); D.Gpu.Remove(e); }
+            foreach (var e in D.Processes.Where(p => Gone(p.Owner)).ToList())
+            {
+                D.Processes.Remove(e);
+                if (e.Start == 0 || WinResourceManager.StartTicks(e.Pid) != e.Start) continue;   // closed: nothing is left on it
+                try { WinResourceManager.PutProcessBack(e.Pid, e.Name, e.Before, e.SetTo); } catch (Exception) { }
+                if (e.Capped && !capped.Contains(e.Name, StringComparer.OrdinalIgnoreCase)) capped.Add(e.Name);
+            }
+            Save();
+        }
+        return capped;
+    }
+
+    // Another SystemBoost that is still running keeps what it set.
+    private static bool OwnerAlive(string owner)
+    {
+        var p = owner.Split('@');
+        if (p.Length != 2 || !int.TryParse(p[0], out var pid) || !long.TryParse(p[1], out var start)) return false;
+        return start != 0 && WinResourceManager.StartTicks(pid) == start;
+    }
 }
 
 /// Per-process GPU utilisation from the "GPU Engine" performance counters
