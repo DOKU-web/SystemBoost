@@ -5,7 +5,7 @@
 // so the hash costs a free-plan Worker no CPU (it gets 10 ms a request) and the database alone is not
 // enough to try passwords. Replacing the signing key therefore ends every password and recovery code.
 // IP addresses leave this file only as a one-way value, kept for an hour.
-const CONSENT = "2026-11-06";   // the sign-up text the member agreed to
+const CONSENT = "2026-11-12";   // the sign-up text the member agreed to (app: AccountPage.SignUp). Only recorded, never asked again
 export const INVITE_DAYS = 3;   // Premium for whoever signs up with a member's code
 const LIMITS = {
   rewardDays: 3,                // Premium for the member who invited them

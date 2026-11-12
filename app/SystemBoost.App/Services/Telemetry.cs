@@ -2,7 +2,9 @@
 // keep those two and server/license-worker/src/stats.js in step with what is sent here.
 // Sent while the app runs: a random install number made on this PC, app version, operating system, plan,
 // frame generation multiplier, one-click boost on or off. Never a key, mail address, game name or hardware detail.
-// Starts only after the agreement is accepted. Turning it off in Settings also forgets the install number.
+// Optional: the agreement dialog (EulaDialog) has its own box "사용 통계 보내기", and nothing is sent before that
+// dialog is done (Start waits for Eula.WhenAccepted). Off sends nothing at all. Turning it off also forgets the
+// install number.
 using System;
 using System.IO;
 using System.Net.Http;
@@ -36,10 +38,13 @@ public static class Telemetry
         catch (Exception) { return false; }
     }
 
+    // This run's choice, so "off" holds even when the file cannot be written (a read-only folder).
+    private static bool? _choice;
+
     public static bool Enabled
     {
-        get => Read().On;
-        set => Write(new Prefs(value));
+        get => _choice ?? Read().On;
+        set { _choice = value; Write(new Prefs(value)); }
     }
 
     /// Call once, after the agreement is accepted. usageNow reports the frame generation multiplier (0 = off) and the one-click boost.
@@ -49,6 +54,7 @@ public static class Telemetry
         _started = true;
         _ = Task.Run(async () =>
         {
+            await Eula.WhenAccepted;   // the agreement dialog, with its statistics box, comes first
             while (true)
                 await Task.Delay(TimeSpan.FromSeconds(await PingAsync(usageNow)));
         });
@@ -58,10 +64,10 @@ public static class Telemetry
     private static async Task<int> PingAsync(Func<Task<(int frameGen, bool boost)>> usageNow)
     {
         var prefs = Read();
-        if (!prefs.On) return DefaultSeconds;
+        if (!(_choice ?? prefs.On)) return DefaultSeconds;
         if (prefs.Id.Length == 0)
         {
-            prefs = prefs with { Id = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant() };
+            prefs = prefs with { On = true, Id = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant() };
             if (!Write(prefs)) return DefaultSeconds;   // a new number every start would count as a new install each time
         }
         try

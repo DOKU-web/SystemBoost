@@ -64,6 +64,7 @@ public sealed class KeyDialog : Window
         close.Click += (_, _) => Close();
         bar.Children.Add(close);
         p.Children.Add(bar);
+        p.Children.Add(PurchaseInfo.Receipt(key, keys.Length));   // the purchase confirmation to keep (PurchaseInfo.cs)
         Content = p;
     }
 }

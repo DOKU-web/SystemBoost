@@ -13,7 +13,9 @@ namespace SystemBoost.App.Services;
 
 public static class Eula
 {
-    public const string Version = "2026-11-12";   // privacy (Article 8) and Article 9.2/9.5, in force 2026-12-14
+    // Not yet shipped (0.8.11 asks for "2026-11-09"): Articles 1, 3.2/3.3/3.10/3.11, 8, 9.2/9.5 and 10.3, in force 2027-01-01.
+    // server/license-worker/src/purchase_note.js quotes this version on the /thanks page; test_purchase_note.mjs compares them.
+    public const string Version = "2026-11-12";
 
     private sealed record Acceptance(string Version, DateTimeOffset AcceptedAt, string AppVersion);
 

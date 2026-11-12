@@ -180,8 +180,22 @@ public sealed class AccountPage : UserControl
         p.Children.Add(password);
         p.Children.Add(again);
         p.Children.Add(invite);
-        p.Children.Add(Ui.Text("수집 항목: 아이디, 비밀번호(암호화해서 저장), 가입·로그인 시각, 초대 코드와 초대 관계. 목적: 회원 관리와 초대 혜택. 보관: Supabase 데이터베이스에 탈퇴할 때까지. " +
-                               "메일이나 이름은 받지 않아요. 동의하지 않으면 가입할 수 없지만, 앱은 회원이 아니어도 쓸 수 있어요.", "muted", wrap: true));
+        // What accounts.sql and the worker really keep (privacy policy 제1조·제2조). Changing the meaning: raise CONSENT
+        // in server/license-worker/src/accounts.js, which records the version a member agreed to.
+        foreach (var line in new[]
+        {
+            "수집 항목: 아이디, 비밀번호와 복구 코드(해시값으로만 저장), 가입과 마지막 로그인 시각, 동의한 안내문의 판과 시각, 초대 코드와 초대 관계, 초대 수와 보상 일수, " +
+                "할인 티켓(할인율, 만료일, 티켓을 쓴 주문 코드와 시각), 로그인 실패 횟수와 잠금, 차단 여부, 로그인 세션.",
+            "남용을 막으려고 IP 주소로 만든 해시값을 1시간 남짓 두고, 초대 코드를 쓰면 이 PC의 무작위 기기 번호를 90일 보관해요. " +
+                "할인 티켓을 쓰면 그 주문(입금자명과 결제 메모가 들어 있어요)이 아이디와 연결되고, 로그인한 채로 고객센터에 문의하면 문의에 아이디가 붙어요.",
+            "목적: 회원 관리, 초대 보상, 할인 티켓. 보관: 탈퇴할 때까지(백업에는 그 뒤 최대 7일). 아이디는 초대 보상 키의 기록, 판매자 작업 기록(180일), 문의(그 문의의 보관 기간)에 남아요.",
+            "회원 정보는 Supabase에, 판매자 서버는 Cloudflare(미국 회사, 전 세계 데이터센터)에 있어서 개인정보가 국외로 이전돼요. 데이터베이스 위치는 개인정보 처리방침에 적혀 있어요.",
+            "메일이나 이름은 받지 않아요. 동의하지 않으면 가입할 수 없지만, 앱은 회원이 아니어도 쓸 수 있어요.",
+        }) p.Children.Add(Ui.Text(line, "muted", wrap: true));
+        var privacyStatus = Ui.Text("", "muted", wrap: true);
+        privacyStatus.IsVisible = false;
+        p.Children.Add(Left(Ui.PrivacyButton(privacyStatus)));
+        p.Children.Add(privacyStatus);
         p.Children.Add(consent);
         p.Children.Add(age);
         p.Children.Add(Left(go));
@@ -244,7 +258,7 @@ public sealed class AccountPage : UserControl
         p.Children.Add(Ui.Text(m.Id, "h2"));
         p.Children.Add(Ui.Text($"가입일 {m.Created.LocalDateTime:yyyy-MM-dd}", "muted"));
         if (m.TicketPercent is int percent)
-            p.Children.Add(Ui.Text($"할인 티켓 {percent}% · {m.TicketExpires?.LocalDateTime:yyyy-MM-dd}까지 · 플랜 화면의 직접 결제에서 쓸 수 있어요", "label", wrap: true));
+            p.Children.Add(Ui.Text($"할인 티켓 {percent}% · {m.TicketExpires?.LocalDateTime:yyyy-MM-dd}까지 · 플랜 화면의 계좌이체 · 직접 결제에서 쓸 수 있어요(판매자가 그 플랜에 열어 둔 경우, 묶음 키 제외)", "label", wrap: true));
         p.Children.Add(LogOut());
         return p;
     }
@@ -261,6 +275,7 @@ public sealed class AccountPage : UserControl
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("친구 초대", "h2"));
         p.Children.Add(Ui.Text($"내 초대 코드로 가입한 사람은 프로 {m.InviteDays}일과 {m.InviteTicket}% 할인 티켓을 받고, 나는 한 명당 {m.RewardEach}일을 받아요. 받을 수 있는 보상은 모두 {m.RewardCap}일까지예요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text("할인 티켓은 판매자가 계좌이체 · 직접 결제를 열어 둔 플랜에서만 쓸 수 있어요. 카드 결제와 묶음 키에는 쓸 수 없어요.", "muted", wrap: true));
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         if (m.Code != null) row.Children.Add(new SelectableTextBlock { Text = m.Code, FontSize = 20, VerticalAlignment = VerticalAlignment.Center });
         var msg = Message();
@@ -321,7 +336,8 @@ public sealed class AccountPage : UserControl
     {
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("회원 탈퇴", "h2"));
-        p.Children.Add(Ui.Text("아이디와 초대 기록, 받지 않은 보상을 바로 지우고 되돌릴 수 없어요. 이미 받은 키는 기간까지 쓸 수 있어요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text("아이디와 초대 기록, 받지 않은 보상, 쓰지 않은 할인 티켓을 회원 데이터베이스에서 바로 지우고 되돌릴 수 없어요. 서비스 회사의 백업에는 최대 7일 남았다가 지워져요. " +
+                               "아이디는 초대 보상 키의 기록, 판매자 작업 기록(180일), 문의에 남아요. 이미 받은 키는 기간까지 쓸 수 있어요.", "muted", wrap: true));
         var password = Input("비밀번호", secret: true);
         var go = Ui.Button("탈퇴하기", "ghost");
         var msg = Message();
