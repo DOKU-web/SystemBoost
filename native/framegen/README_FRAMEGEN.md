@@ -196,4 +196,4 @@ stdin: `mode x3`, `sharp 0.4`, `enable`, `disable`, `quit`. stdin이 닫히면(�
 
 ## 라이선스
 
-모든 코드와 셰이더는 이 프로젝트용으로 새로 작성했고, 외부 코드는 쓰지 않았습니다. 앱 전체의 고지는 저장소 최상위의 `LICENSE`와 `THIRD_PARTY_NOTICES.txt`를 보세요.
+코드와 셰이더는 AI 코딩 도구(Claude Code)로 이 프로젝트를 위해 작성했습니다. 키워드 검색으로는 외부 코드를 찾지 못했지만, 공개 코드와 줄 단위로 대조하지는 않았습니다. 엔진에는 MSVC 런타임과 C++/WinRT 헤더가 들어갑니다. 앱 전체의 고지는 저장소 최상위의 `LICENSE`와 `THIRD_PARTY_NOTICES.txt`를 보세요.

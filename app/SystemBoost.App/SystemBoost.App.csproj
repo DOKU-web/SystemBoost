@@ -11,7 +11,7 @@
     <Product>SystemBoost</Product>
     <Company>DOKKU</Company>
     <Authors>DOKKU</Authors>
-    <Copyright>© 2026 DOKKU. All rights reserved.</Copyright>
+    <Copyright>Made by DOKKU with AI tools. See LICENSE.txt.</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\assets\brand\SystemBoost.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
