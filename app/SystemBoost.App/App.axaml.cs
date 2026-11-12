@@ -40,5 +40,6 @@ public partial class App : Application
         Services.License.WatchPending();              // an order paid while the app was closed
         Services.Updater.Start();                     // direct-download builds: check GitHub Releases
         Services.Telemetry.Start(main.UsageNow);      // usage statistics, unless turned off in Settings
+        Services.Support.Start();                     // replies to this PC's support tickets, only while one is open
     }
 }

@@ -3,7 +3,7 @@
 // The platform itself is covered by running the worker under `wrangler dev`.
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { Stats, cleanPing, countDownloads } from "./src/stats.js";
+import { FEED, FEED_KINDS, Stats, cleanPing, countDownloads } from "./src/stats.js";
 
 const db = new DatabaseSync(":memory:");
 const sql = {
@@ -135,4 +135,56 @@ assert.equal((await s.read()).today.installs, 3000);
 // file names
 assert.deepEqual(countDownloads([{ tag_name: "v1", assets: [{ name: "SystemBoost-macOS-Intel.pkg", download_count: 2 }, { name: "SystemBoost-osx-arm64-Portable.zip", download_count: 1 }] }]).total,
                  { winSetup: 0, winPortable: 0, mac: 3, updates: 0 });
+// the support feed (support.js writes it, the dashboard reads it): one row per buyer action, no text
+const call = async (path, body) => (await s.fetch(new Request("https://stats" + path, { method: "POST", body: JSON.stringify(body) }))).json();
+const T = n => "T-AAAA-" + "ABCDEFGH"[n % 8] + "BC" + "23456789"[Math.floor(n / 8) % 8];   // valid ticket numbers
+assert.deepEqual(await call("/feed", {}), { events: [], last: 0, more: false }, "empty");
+assert.deepEqual(await call("/event", { kind: "ticket", ticket: T(1), cat: "bug" }), { ok: true });
+for (const bad of [null, {}, { kind: "admin_reply", ticket: T(1), cat: "bug" }, { kind: "reply", ticket: "T-0000-0000", cat: "bug" }, { kind: "reply", ticket: "<b>", cat: "bug" },
+                   { kind: "reply", ticket: T(1) + " ", cat: "bug" }]) {
+  const res = await s.fetch(new Request("https://stats/event", { method: "POST", body: JSON.stringify(bad) }));
+  assert.equal(res.status, 400, JSON.stringify(bad));
+}
+await call("/event", { kind: "reply", ticket: T(1), cat: "<script>" });
+assert.equal(s.one("SELECT cat FROM support_events ORDER BY seq DESC LIMIT 1").cat, "", "an odd category is stored empty");
+assert.deepEqual(s.sql.exec("SELECT * FROM support_events ORDER BY seq").toArray().map(r => Object.keys(r).sort().join()), ["at,cat,kind,seq,ticket", "at,cat,kind,seq,ticket"], "these columns only");
+for (const kind of FEED_KINDS) await call("/event", { kind, ticket: T(2), cat: "refund" });
+let f = await call("/feed", { after: 0 });
+assert.deepEqual(f.events.map(e => e.kind), ["ticket", "reply", ...FEED_KINDS]);
+assert.deepEqual([f.last, f.more, f.events[0].at], [8, false, clock]);
+f = await call("/feed", { after: 5 });
+assert.deepEqual(f.events.map(e => e.seq), [6, 7, 8]);
+// paging: at most 100 a call, oldest first; without after the newest 20
+for (let i = 0; i < 242; i++) { clock += 1000; await call("/event", { kind: "reply", ticket: T(i % 40), cat: "howto" }); }
+f = await call("/feed", { after: 0 });
+assert.deepEqual([f.events.length, f.events[0].seq, f.last, f.more], [FEED.page, 1, 100, true]);
+f = await call("/feed", { after: f.last }); assert.deepEqual([f.events[0].seq, f.last, f.more], [101, 200, true]);
+f = await call("/feed", { after: f.last }); assert.deepEqual([f.events.length, f.last, f.more], [50, 250, false]);
+f = await call("/feed", {});
+assert.deepEqual(f.events.map(e => e.seq), Array.from({ length: FEED.recent }, (_, i) => 231 + i), "the newest 20, oldest first");
+assert.deepEqual([f.last, f.more], [250, false]);
+assert.deepEqual(await call("/feed", { after: 900 }), { events: [], last: 250, more: false }, "a cursor from an older object: go on from the end");
+// a deleted ticket's rows go
+const ofT3 = s.one("SELECT COUNT(*) AS n FROM support_events WHERE ticket = ?", T(3)).n;
+assert.ok(ofT3 > 0);
+await call("/forget", { ticket: T(3) });
+assert.equal(s.one("SELECT COUNT(*) AS n FROM support_events WHERE ticket = ?", T(3)).n, 0);
+assert.equal(s.one("SELECT COUNT(*) AS n FROM support_events").n, 250 - ofT3);
+// at most the newest 1,000 rows
+for (let i = 0; i < 1100; i++) await call("/event", { kind: "reply", ticket: T(5), cat: "howto" });
+assert.equal(s.one("SELECT COUNT(*) AS n FROM support_events").n, FEED.keepRows);
+assert.equal(s.one("SELECT MIN(seq) AS n FROM support_events").n, 1350 - FEED.keepRows + 1, "the oldest went");
+// 30 days: older rows are not shown, and go at the next row or the hourly tick
+clock += FEED.keepDays * DAY - 1000;
+await call("/event", { kind: "close", ticket: T(6), cat: "pay" });
+assert.equal(s.one("SELECT COUNT(*) AS n FROM support_events").n, FEED.keepRows, "29 days later all still kept");
+clock += 2000;
+f = await call("/feed", {});
+assert.deepEqual(f.events.map(e => [e.seq, e.kind]), [[1351, "close"]], "the rows older than 30 days are no longer shown");
+assert.equal((await call("/feed", { after: 0 })).events.length, 1);
+await s.tick();
+assert.equal(s.one("SELECT COUNT(*) AS n FROM support_events").n, 1, "and the tick deletes them");
+clock += FEED.keepDays * DAY + 1;
+await call("/event", { kind: "card", ticket: T(7), cat: "refund" });
+assert.deepEqual(s.sql.exec("SELECT seq, kind FROM support_events").toArray().map(r => [r.seq, r.kind]), [[1352, "card"]], "a new row prunes too; seq keeps counting");
 console.log("ok");

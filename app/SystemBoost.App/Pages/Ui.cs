@@ -1,8 +1,11 @@
 // Small helpers to build pages in code with the theme classes.
+using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using SystemBoost.App.Services;
 
 namespace SystemBoost.App.Pages;
 
@@ -28,6 +31,28 @@ internal static class Ui
     {
         var b = new Button { Content = text };
         b.Classes.Add(cls);
+        return b;
+    }
+
+    /// Opens a web page in the browser. False when there is no window or the browser did not start.
+    public static async Task<bool> OpenUrl(Control from, string url)
+    {
+        try { return TopLevel.GetTopLevel(from) is { } top && await top.Launcher.LaunchUriAsync(new Uri(url)); }
+        catch (Exception) { return false; }
+    }
+
+    /// "개인정보 처리방침 보기": opens /privacy on the seller's server. When the browser does not open,
+    /// status (hidden until then) shows the address to type in.
+    public static Button PrivacyButton(TextBlock status)
+    {
+        var b = Button("개인정보 처리방침 보기", "ghost");
+        b.Click += async (_, _) =>
+        {
+            var url = Support.PrivacyUrl;
+            if (await OpenUrl(b, url)) { status.IsVisible = false; return; }
+            status.Text = $"브라우저를 열지 못했어요. 이 주소를 브라우저에 넣어 주세요: {url}";
+            status.IsVisible = true;
+        };
         return b;
     }
 
@@ -67,13 +92,16 @@ internal static class Ui
     }
 
     /// Gray tag shown instead of a control while a feature is not available yet.
-    public static Border Pending()
+    public static Border Pending() => Tag("준비 중");
+
+    /// Gray tag for a quiet state (the orange Badge is for what needs a look).
+    public static Border Tag(string text)
     {
         return new Border
         {
             Background = new SolidColorBrush(Color.Parse("#232327")), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 4), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = "준비 중", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#8B8A88")) },
+            Child = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#8B8A88")) },
         };
     }
 }

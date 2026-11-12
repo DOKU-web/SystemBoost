@@ -99,6 +99,58 @@ details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600
 .md-mention{background:rgba(88,101,242,.3);color:#c9cdfb;padding:0 2px;border-radius:3px;font-weight:500}
 @media(max-width:900px){.anGrid{grid-template-columns:minmax(0,1fr)}.anPrev{position:static}}
 @media(max-width:600px){.anField{grid-template-columns:1fr}header{flex-wrap:wrap}#annTop{scroll-margin-top:124px}}
+.nb{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:99px;background:var(--or);color:#111;font-size:12px;font-weight:700;line-height:18px;text-align:center}.nb.r{background:var(--bad)}
+.o-refunded{color:var(--warn);border-color:#6a5420}
+.k-open,.r-requested{color:var(--or);border-color:#6a3a14}.k-answered,.r-approved{color:var(--ok);border-color:#1f5a40}.k-closed,.r-done{color:var(--mut);border-color:#3a3a3a}.r-rejected{color:var(--bad);border-color:#6a2626}
+#supTop,#tkView{scroll-margin-top:72px}
+/* header with the 고객센터 button: up to 900px the buttons sit a little tighter and the mode text gives way first (cut
+   with "…", never a letter a line), so the header stays one row like before; when even that does not fit, the buttons
+   move under the title as one group. 600px and below keep the old per-button wrap. */
+header{flex-wrap:wrap;row-gap:10px}.hb{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+@media(max-width:900px){header{padding:14px 14px;gap:8px}header .sp{display:none}.hb{gap:8px}header button{padding:8px 9px}header .nb{margin-left:4px}
+  #modeTxt{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+@media(max-width:600px){.hb{display:contents}header{padding:12px}}
+@media(max-width:900px){#supTop,#annTop,#tkView{scroll-margin-top:124px}}
+.supGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:start}
+.seg.scroll{max-width:100%;overflow-x:auto}
+#tkRows tr{cursor:pointer}#tkRows tr.on td{background:#1b1b1f}.supGrid .tag,#orders .tag{white-space:nowrap}
+button.lnk{background:none;border:0;padding:0;color:var(--txt);font-weight:600;text-align:left;white-space:normal;overflow-wrap:anywhere}button.lnk:hover{color:var(--or)}
+.needs{color:var(--or)}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:5px 14px;margin:0;font-size:14px}.kv dt{color:var(--mut)}.kv dd{margin:0;overflow-wrap:anywhere}
+.kv dd button{padding:2px 8px;font-size:12px;margin-left:6px}
+.rf{border:1px solid #5a3a14;background:#1a1209;border-radius:12px;padding:12px 14px;margin:14px 0}
+.rf h3{font-size:14px;margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rf h4{font-size:13px;font-weight:500;color:var(--mut);margin:14px 0 4px}
+.rf .note{margin:12px 0 0;font-size:13px;color:#ffc58a}.rf .mis{border:1px solid var(--bad);background:#2a1010;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px}.rf .mis b{color:var(--bad)}.rf details summary{margin-top:10px}.rf blockquote{margin:6px 0 0;padding-left:10px;border-left:3px solid #5a3a14;font-size:13px;color:var(--mut)}
+.tkMsgs{display:grid;gap:10px;margin:16px 0}
+.tkMsg{border:1px solid var(--line);background:#0f0f11;border-radius:12px;padding:9px 12px;max-width:88%;justify-self:start}
+.tkMsg.admin{justify-self:end;background:#2a1a0a;border-color:#5a3a14}
+.tkMsg .h{color:var(--mut);font-size:12px;margin-bottom:3px}.tkMsg .b{white-space:pre-wrap;overflow-wrap:anywhere}
+textarea.plain{font-family:inherit;font-size:14px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}.acts .sp{flex:1}
+label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk input{width:16px;height:16px;margin:0;accent-color:var(--or)}
+.sf label{display:block;color:var(--mut);font-size:13px;margin-top:10px}.sf label input,.sf label textarea{margin-top:4px;color:var(--txt);font-size:15px}
+.sf label.chk{display:flex;margin-top:0;font-size:15px;color:var(--txt)}.sf label.chk input{margin:0}
+.sf .cnt{float:right;font-variant-numeric:tabular-nums}
+.sfGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 12px}
+.sfWarn{border:1px solid #6a5420;background:#2a2210;color:var(--warn);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px}
+.faq{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.faq .q{display:grid;gap:6px}.faq .b{display:flex;flex-direction:column;gap:6px}.faq .b button{padding:5px 10px}
+@media(max-width:900px){.supGrid{grid-template-columns:minmax(0,1fr)}}
+.tkAt{display:none}
+@media(max-width:600px){#supTop,#tkView{scroll-margin-top:124px}.tkMsg{max-width:100%}.seg.scroll{flex-wrap:wrap}
+  #tkTbl th:nth-child(3),#tkTbl td:nth-child(3){display:none}.tkAt{display:inline}}
+/* 새 소식 (what buyers did) and its toast near the top */
+.feed{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto}
+.feed li{display:flex;gap:6px 12px;align-items:baseline;justify-content:space-between;flex-wrap:wrap;padding:7px 2px;border-bottom:1px solid var(--line)}
+.feed li .mut{white-space:nowrap}.feed li button.lnk{font-weight:400;flex:1 1 240px}
+.fk{color:var(--mut);margin-right:8px}.feed li.new .fk{color:var(--or);font-weight:600}
+.feed li.new .fk::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--or);margin-right:7px;vertical-align:1px}
+#ftoast{position:fixed;top:72px;left:50%;transform:translateX(-50%);z-index:20;width:min(560px,calc(100vw - 24px));display:grid;gap:2px;
+  background:#1a1209;border:1px solid var(--or);border-radius:12px;padding:8px 40px 8px 12px;box-shadow:0 8px 24px rgba(0,0,0,.55)}
+#ftoast .ft{display:block;width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere;background:none;border:0;padding:4px 2px;font-weight:600}
+#ftoast .ft:hover{color:var(--or)}#ftoast .more{color:var(--mut);font-size:13px;padding:2px}
+#ftoast .x{position:absolute;top:4px;right:4px;background:none;border:0;padding:4px 10px;color:var(--mut);font-size:18px;line-height:1}
 </style>
 </head>
 <body>
@@ -110,7 +162,7 @@ details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600
 </div>
 
 <div id="app" class="hide">
-<header><b>SystemBoost 관리자</b><span class="mut" id="modeTxt"></span><span class="sp"></span><button id="goAnn">디스코드 공지</button><button id="reload">새로고침</button><button id="out">나가기</button></header>
+<header><b>SystemBoost 관리자</b><span class="mut" id="modeTxt"></span><span class="sp"></span><span class="hb"><button id="goSup">고객센터<span class="nb hide" id="supBadge"></span><span class="nb r hide" id="supBadgeR"></span></button><button id="goAnn">디스코드 공지</button><button id="reload">새로고침</button><button id="out">나가기</button></span></header>
 <main>
   <div id="demoNote" class="demo hide">시연 모드예요. 가짜 데이터로 동작하고 서버에 아무것도 저장하지 않아요.</div>
   <div id="usage">
@@ -178,7 +230,7 @@ details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600
 
   <div class="card">
     <h2>결제 신청 <small>구매자가 앱에서 '결제하기'를 누르면 신청이 생기고, 결제했다고 알리면 '결제 확인 요청'으로 바뀌어요.</small></h2>
-    <div class="seg" id="oseg" style="margin-bottom:10px"><button data-o="open" class="on">처리할 것</button><button data-o="approved">승인</button><button data-o="rejected">거절</button><button data-o="all">전체</button></div>
+    <div class="seg scroll" id="oseg" style="margin-bottom:10px"><button data-o="open" class="on">처리할 것</button><button data-o="approved">승인</button><button data-o="rejected">거절</button><button data-o="refunded">환불됨</button><button data-o="all">전체</button></div>
     <div class="tbl"><table><thead><tr><th>주문 코드</th><th>플랜</th><th>상태</th><th>입금자 / 메모</th><th>시각</th><th></th></tr></thead><tbody id="orders"></tbody></table></div>
   </div>
 
@@ -248,10 +300,10 @@ details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600
   <div class="card">
     <h2>발급된 키</h2>
     <div class="row" style="margin-bottom:10px">
-      <input id="q" placeholder="메일, 키 번호, 주문 코드, 메모로 찾기">
+      <input id="q" placeholder="메일, 키 식별 번호, 주문 코드, 메모로 찾기">
       <div class="seg" id="seg"><button data-s="all" class="on">전체</button><button data-s="active">사용 중</button><button data-s="expired">만료</button><button data-s="revoked">차단</button><button data-s="test">테스트</button></div>
     </div>
-    <div class="tbl"><table><thead><tr><th>키 번호</th><th>메일 / 메모</th><th>플랜</th><th>발급</th><th>만료</th><th>상태</th><th></th></tr></thead><tbody id="keys"></tbody></table></div>
+    <div class="tbl"><table><thead><tr><th>키 식별 번호</th><th>메일 / 메모</th><th>플랜</th><th>발급</th><th>만료</th><th>상태</th><th></th></tr></thead><tbody id="keys"></tbody></table></div>
     <p class="mut" id="more"></p>
   </div>
 
@@ -266,6 +318,47 @@ details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600
       <h2>기록 <small>최근 100개, 180일 보관</small></h2>
       <div class="tbl" style="max-height:300px;overflow:auto"><table><tbody id="log"></tbody></table></div>
     </div>
+  </div>
+
+  <h2 id="supTop" style="margin:22px 0 10px">고객센터</h2>
+  <div class="card" id="feedCard">
+    <h2>새 소식 <small>구매자가 앱이나 도움말 페이지(/help)에서 한 일이에요. 이 탭이 화면에 보이는 동안 30초마다 확인해요. 최근 20개, 서버에 30일 보관해요.</small></h2>
+    <ul class="feed" id="feedList"><li class="empty">불러오는 중이에요</li></ul>
+    <div class="acts"><span class="mut" id="feedNote"></span><span class="sp"></span><button id="feedAlert" class="hide">브라우저 알림 켜기</button><button id="feedRead" disabled>모두 읽음</button></div>
+  </div>
+  <div class="supGrid" id="supGrid">
+    <div class="card">
+      <h2>문의 <small>앱과 도움말 페이지(/help)에서 온 문의예요. 답장은 앱이나 /help의 '내 문의'에 떠요.</small></h2>
+      <div class="seg scroll" id="tkSeg" style="margin-bottom:10px"><button data-ts="open" class="on">처리할 것</button><button data-ts="answered">답변함</button><button data-ts="closed">닫힘</button><button data-ts="refund">환불</button><button data-ts="all">전체</button></div>
+      <input id="tkQ" placeholder="제목, 문의 번호, 주문 코드, 키 식별 번호, 아이디로 찾기" style="margin-bottom:10px">
+      <div class="tbl"><table id="tkTbl"><thead><tr><th>상태</th><th>문의</th><th>마지막</th></tr></thead><tbody id="tkRows"></tbody></table></div>
+      <p class="mut">결제·환불 문의는 3년, 나머지는 1년 보관해요. 마지막으로 바뀐 날부터 세요.</p>
+    </div>
+    <div class="card" id="tkView"></div>
+  </div>
+
+  <div class="card sf" id="sfCard">
+    <h2>고객센터 설정 <small>앱의 고객센터, 도움말 페이지(/help), 개인정보 처리방침(/privacy)에 보여요</small></h2>
+    <label class="chk"><input type="checkbox" id="sfOpen"> 문의 받기</label>
+    <div class="mut" style="margin-top:4px">끄면 앱과 도움말 페이지에서 새 문의를 보낼 수 없어요.</div>
+    <p class="anSub">판매자 정보</p>
+    <div class="sfGrid" id="sfSeller"></div>
+    <p class="mut" style="margin:8px 0 0">비워 둔 칸은 앱에 '판매 페이지 참고'로 보여요.</p>
+    <p class="anSub">개인정보 처리방침 (/privacy)</p>
+    <div class="sfGrid">
+      <label>회원 DB 위치 (Supabase 지역)<input id="sf_dbRegion" maxlength="120" placeholder="예: 대한민국 서울 (ap-northeast-2)"></label>
+      <label>개인정보 처리방침 시행일<input id="sf_effectiveDate" type="date"></label>
+    </div>
+    <div class="mut" style="margin-top:4px">처리방침의 개인정보 보호책임자는 위 판매자 정보의 대표자(비어 있으면 상호), 연락처는 메일로 채워져요. 회원 DB 위치는 Supabase 프로젝트 설정의 지역(Region)을 적으세요. <a href="/privacy" target="_blank" rel="noopener">/privacy 열기</a></div>
+    <div class="sfWarn hide" id="sfPrivWarn" role="status"></div>
+    <p class="anSub">안내</p>
+    <label>공지 (선택) <span class="cnt" id="sfNoticeN"></span><textarea id="sfNotice" class="plain" rows="3" maxlength="500" placeholder="고객센터 맨 위에 보여요. 예: 설 연휴에는 답장이 늦어요."></textarea></label>
+    <label>청약철회 기간 (일)<input id="sfDays" type="number" min="0" max="30" step="1" inputmode="numeric" style="max-width:140px"></label>
+    <div class="mut" style="margin-top:4px">도움말 페이지(/help)의 환불 안내에만 보여요. 사용권 계약 제9조는 키를 받은 날부터 7일이에요.</div>
+    <p class="anSub">자주 묻는 질문 <span id="sfFaqN"></span></p>
+    <div id="sfFaq"></div>
+    <button id="sfFaqAdd" style="margin-top:10px">+ 질문 추가</button>
+    <div class="acts"><span class="sp"></span><span id="sfMsg" class="mut"></span><button class="p" id="sfSave">설정 저장</button></div>
   </div>
 
   <h2 id="annTop" style="margin:22px 0 10px">디스코드 공지</h2>
@@ -324,6 +417,7 @@ details.anHooks summary{margin:0;font-size:15px;color:var(--txt);font-weight:600
 
 <dialog id="dlg"><h2 id="dT"></h2><div id="dB" class="mut"></div><div class="row" style="margin-top:14px;justify-content:flex-end"><span class="sp"></span><button id="dNo">취소</button><button class="p" id="dYes">확인</button></div></dialog>
 <div id="toast"></div>
+<div id="ftoast" class="hide" role="status" aria-live="polite"></div>
 <div id="vizTip"><b></b><span></span></div>
 
 <script>
@@ -343,7 +437,7 @@ const BUNDLE_LINKS = { yearly_x5: "pYearly5", yearly_x10: "pYearly10", ultra_yea
                        biz_yearly_x5: "pBizYearly5", biz_yearly_x10: "pBizYearly10" };   // no ticket: discounted already
 const ALL_LINKS = { ...LINKS, ...TICKET_LINKS, ...BUNDLE_LINKS };
 const ST = { active: "사용 중", revoked: "차단", expired: "만료", test: "테스트" };
-const OS = { requested: "신청 중", paid: "결제 확인 요청", approved: "승인", rejected: "거절" };
+const OS = { requested: "신청 중", paid: "결제 확인 요청", approved: "승인", rejected: "거절", refunded: "환불됨" };
 let ostatus = "open";
 // The license server swaps the marker below for "true" when it serves this page; opened anywhere else
 // (a downloaded file, a phone's file viewer, a preview) it is the demo with fake data.
@@ -377,7 +471,8 @@ async function api(path, body) {
 }
 
 // ------------------------------------------------------------ views
-async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers(), loadAnnounce(), loadCard()]); }
+async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers(), loadAnnounce(), loadCard(),
+                                               loadSupport(), loadSupCfg(), tkId ? openTicket(tkId, true) : null]); }
 const CARD_PLANS = ["monthly", "yearly", "ultra_monthly", "ultra_yearly", "biz_monthly", "biz_yearly"];
 function showCard(c) {
   const mark = (id, on) => { $(id).textContent = on ? "등록됨" : "없음"; $(id).className = on ? "yes" : "no"; };
@@ -427,11 +522,15 @@ async function loadRefs() {
     <td style="text-align:right;white-space:nowrap"><button data-ref-set="${esc(r.code)}" data-on="${r.on ? "" : "1"}">${r.on ? "끄기" : "켜기"}</button> <button class="d" data-ref-del="${esc(r.code)}">지우기</button></td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">아직 추천 코드가 없어요</td></tr>`;
 }
+let sumCounts = null;
+function sumTiles(c) {
+  $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["답변할 문의", c.ticketsOpen || 0, "var(--or)"], ["환불 진행 중", c.refundsOpen || 0, "var(--bad)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total]]
+    .map(([l, n, col]) => `<div class="stat"><div class="n" style="color:${col || "inherit"}">${n}</div><div class="l">${l}</div></div>`).join("");
+}
 async function loadSummary() {
   const s = await api("/summary"), c = s.counts;
-  $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total]]
-    .map(([l, n, col]) => `<div class="stat"><div class="n" style="color:${col || "inherit"}">${n}</div><div class="l">${l}</div></div>`).join("");
-  $("modeTxt").textContent = "· 카드 결제 " + { off: "꺼짐", test: "테스트", live: "실판매" }[s.sales];
+  sumCounts = c; supBadge(c); sumTiles(c);
+  $("modeTxt").textContent = $("modeTxt").title = "· 카드 결제 " + { off: "꺼짐", test: "테스트", live: "실판매" }[s.sales];   // title: the full text when a narrow header cuts it
   document.querySelectorAll("#mode button").forEach(b => b.classList.toggle("on", b.dataset.m === s.sales));
   $("methodHelp").textContent = s.sales === "off"
     ? "— 꺼져 있어요."
@@ -442,14 +541,15 @@ async function loadSummary() {
 }
 async function loadOrders() {
   const { orders, count } = await api("/orders?status=" + ostatus);
-  const n = { open: count.requested + count.paid, approved: count.approved, rejected: count.rejected, all: count.requested + count.paid + count.approved + count.rejected };
-  document.querySelectorAll("#oseg button").forEach(b => b.textContent = { open: "처리할 것", approved: "승인", rejected: "거절", all: "전체" }[b.dataset.o] + " " + n[b.dataset.o]);
+  const refunded = count.refunded || 0;
+  const n = { open: count.requested + count.paid, approved: count.approved, rejected: count.rejected, refunded, all: count.requested + count.paid + count.approved + count.rejected + refunded };
+  document.querySelectorAll("#oseg button").forEach(b => b.textContent = { open: "처리할 것", approved: "승인", rejected: "거절", refunded: "환불됨", all: "전체" }[b.dataset.o] + " " + n[b.dataset.o]);
   $("orders").innerHTML = orders.length ? orders.map(o => `<tr>
     <td><code>${esc(o.code)}</code><div class="mut">${o.method === "card" || o.method === "auto" ? "카드" : "직접 결제"}</div></td><td>${esc(PLAN[o.plan] || o.plan || "—")}</td>
     <td><span class="tag o-${esc(o.status)}">${OS[o.status] || esc(o.status)}</span></td>
     <td>${esc(o.payer) || ""}<div class="mut">${[o.ticket ? "할인 티켓 " + o.ticket + "%" : "", o.msg, o.reason ? "거절 사유: " + o.reason : "", o.email, o.keyId ? "키 " + o.keyId + (o.seats > 1 ? " 외 " + (o.seats - 1) + "개" : "") : ""].filter(Boolean).map(esc).join(" · ")}</div></td>
     <td class="m">${when(o.paidAt || o.at)}</td>
-    <td style="text-align:right;white-space:nowrap">${["requested", "paid"].includes(o.status) ? `<button class="p" data-approve="${esc(o.code)}">승인</button> <button class="d" data-reject="${esc(o.code)}">거절</button> ` : ""}${o.status !== "approved" ? `<button data-del="${esc(o.code)}">삭제</button>` : ""}</td></tr>`).join("")
+    <td style="text-align:right;white-space:nowrap">${["requested", "paid"].includes(o.status) ? `<button class="p" data-approve="${esc(o.code)}">승인</button> <button class="d" data-reject="${esc(o.code)}">거절</button> ` : ""}${!["approved", "refunded"].includes(o.status) ? `<button data-del="${esc(o.code)}">삭제</button>` : ""}</td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">${ostatus === "open" ? "처리할 결제 신청이 없어요" : "없어요"}</td></tr>`;
 }
 async function loadKeys() {
@@ -698,7 +798,7 @@ async function onClick(e) {
   } else if (t.dataset.copy) {
     const { key } = await api("/key?id=" + t.dataset.copy); key ? copy(key) : toast("서버에 키 원문이 없어요");
   } else if (t.dataset.rev) {
-    if (!(await ask("이 키를 차단할까요?", `<code>${esc(t.dataset.rev)}</code><br>앱이 인터넷에 연결된 상태로 켜질 때 유료 기능이 꺼져요. 구독 키라면 갱신도 멈춰요.<br><br><input id="why" placeholder="사유 (예: 환불, 공유 발견)">`, "차단"))) return;
+    if (!(await ask("이 키를 차단할까요?", `<code>${esc(t.dataset.rev)}</code><br>앱이 인터넷에 연결된 상태로 켜질 때 유료 기능이 꺼져요. 카드 구독의 결제는 Lemon Squeezy에서 해지해야 멈춰요.<br><br><input id="why" placeholder="사유 (예: 환불, 공유 발견)">`, "차단"))) return;
     await api("/revoke", { id: t.dataset.rev, reason: (document.getElementById("why") || {}).value || "관리자 차단" }); toast("차단했어요"); loadAll();
   } else if (t.dataset.unrev) {
     if (await ask("차단을 풀까요?", `<code>${esc(t.dataset.unrev)}</code>`, "해제")) { await api("/unrevoke", { id: t.dataset.unrev }); loadAll(); }
@@ -716,18 +816,20 @@ $("look").onclick = async () => {
   if (r.error) { $("lOut").innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
   const p = r.payload || {};
   $("lOut").innerHTML = (r.valid ? '<span class="okc">서명 확인: 우리가 만든 키예요</span>' : '<span class="err">서명이 맞지 않아요: 위조됐거나 다른 키로 만든 키예요</span>') +
-    `<br>키 번호 <code>${esc(r.id)}</code> · ${r.registered ? "발급 목록에 있음" : "발급 목록에 없음 (오프라인 도구로 만든 키)"}` +
+    `<br>키 식별 번호 <code>${esc(r.id)}</code> · ${r.registered ? "발급 목록에 있음" : "발급 목록에 없음 (오프라인 도구로 만든 키)"}` +
     `<br>메일 ${esc(p.email) || "없음"} · 등급 ${TIER_KO[p.plan] || "프로"} · 발급 ${day(p.issued)} · 만료 ${p.expires ? day(p.expires) : "없음"}${p.test ? " · 테스트 키" : ""}` +
     (r.revoked ? `<br><span class="err">차단됨: ${esc(r.revoked)}</span> <button data-unrev="${esc(r.id)}">해제</button>` : (r.valid ? ` <button class="d" data-rev="${esc(r.id)}">차단</button>` : ""));
 };
-$("reload").onclick = () => { loadAll(); loadStats(); };
+$("reload").onclick = () => { loadAll(); loadStats(); feedPoll(); };
 $("goAnn").onclick = () => $("annTop").scrollIntoView();
+$("goSup").onclick = () => { $("supTop").scrollIntoView(); feedNew = 0; feedTitle(); };
 $("out").onclick = () => logout("");
-function logout(msg) { token = ""; try { sessionStorage.removeItem("sbAdmin"); } catch (e) {} $("app").classList.add("hide"); $("login").classList.remove("hide"); $("lerr").textContent = msg; }
+function logout(msg) { token = ""; feedNew = 0; feedTitle(); try { sessionStorage.removeItem("sbAdmin"); } catch (e) {} $("app").classList.add("hide"); $("login").classList.remove("hide"); $("lerr").textContent = msg; }
 async function login() {
   try { await api("/summary"); } catch (e) { if (e.message !== "401") $("lerr").textContent = "서버에 연결하지 못했어요"; return; }
   try { sessionStorage.setItem("sbAdmin", token); } catch (e) {}
-  $("login").classList.add("hide"); $("app").classList.remove("hide"); loadAll(); loadStats();
+  $("login").classList.add("hide"); $("app").classList.remove("hide");
+  feedStart().then(() => { loadAll(); loadStats(); });   // the feed first, so the first ticket list also names its tickets
 }
 $("go").onclick = () => { token = $("tok").value.trim(); login(); };
 $("tok").onkeydown = e => { if (e.key === "Enter") $("go").click(); };
@@ -956,6 +1058,427 @@ $("anSaveHooks").onclick = async () => {
   finally { $("anSaveHooks").disabled = false; }
 };
 
+// ------------------------------------------------------------ customer support (src/support.js)
+// Money never moves here. A card refund is made in the Lemon Squeezy dashboard and its webhook blocks the key;
+// a manual one is paid back by hand, and '환불 완료' here then blocks the keys and marks the order refunded.
+const TK_ST = { open: "답변 대기", answered: "답변함", closed: "닫힘" };
+const TK_SEG = { open: "처리할 것", answered: "답변함", closed: "닫힘", refund: "환불", all: "전체" };
+const TK_CAT = { pay: "결제", refund: "환불", bug: "오류 신고", howto: "사용 방법", idea: "제안", other: "기타" };
+const RF_ST = { requested: "환불 요청됨", approved: "환불 승인됨", rejected: "환불 거절됨", done: "환불 완료" };
+const RF_WHY = { change_mind: "단순 변심", not_working: "작동하지 않음 · 표시나 광고와 다름", double: "중복 결제", other: "기타" };
+const UNOWNED = "키 소유 확인 안 됨: 구매자가 키 식별 번호만 적었어요";
+const RF_HOW = { card: "카드 (Lemon Squeezy)", manual: "계좌이체 · 직접 결제", unknown: "알 수 없음" };
+const TK_MAX = 2000, TK_MSGS = 30;
+const SELLER = [["name", "상호"], ["rep", "대표자"], ["address", "주소"], ["bizNo", "사업자등록번호"], ["mailOrderNo", "통신판매업 신고번호"],
+                ["email", "메일"], ["phone", "전화"], ["hours", "문의 받는 시간"]];
+const CANNED = [
+  { label: "키 재전송 안내", text: "안녕하세요, SystemBoost예요.\n키를 아래에 다시 보내 드려요. 앱 '★ 플랜'의 '라이선스 키' 칸에 붙여 넣고 '등록'을 눌러 주세요. 키 하나는 PC 한 대에만 써요.\n\n" },
+  { label: "결제 확인 중", text: "안녕하세요, SystemBoost예요.\n결제를 확인하고 있어요. 확인되면 키를 보내 드리고 이 문의로 알려 드릴게요.\n계좌이체로 결제하셨다면 입금자명과 금액을 알려 주시면 더 빨리 찾을 수 있어요." },
+  { label: "환불 접수 안내", text: "안녕하세요, SystemBoost예요.\n환불 요청을 받았어요. 주문과 키를 확인한 뒤 이 문의로 결과를 알려 드릴게요.\n환불과 청약철회는 사용권 계약 제9조를 따라요." },
+  { label: "오류 정보 요청", text: "안녕하세요, SystemBoost예요.\n불편을 드려 죄송해요. 원인을 찾을 수 있게 아래 내용을 알려 주세요.\n- 문제가 생긴 게임이나 프로그램\n- 어떤 순서로 하면 생기는지\n- 앱 버전과 Windows 또는 macOS 버전\n- 그래픽카드 이름" },
+];
+const CLAUSE9 = ["1. 사용자는 키를 받은 날부터 7일 이내에 청약을 철회할 수 있습니다.",
+  "2. 키를 등록해 유료 기능을 쓰기 시작하면 디지털콘텐츠의 제공이 시작된 것으로 보아 청약철회가 제한될 수 있습니다.",
+  "3. 프로그램이 표시나 광고의 내용과 다르거나 계약과 다르게 제공된 경우, 사용자는 받은 날부터 3개월 이내, 그 사실을 안 날 또는 알 수 있었던 날부터 30일 이내에 청약을 철회할 수 있습니다.",
+  "4. 환불이 끝나면 판매자는 해당 키를 막습니다."];
+let sstatus = "open", tkId = "", tkCur = null, tkKeys = [], tkOther = null, tkCanned = "", supCfg = null, sfFaq = [], sfDirty = false;
+const planName = p => PLAN[p] || TIER_KO[p] || p || "—";
+const won = n => "₩" + Number(n).toLocaleString("ko-KR");
+
+function supBadge(c) {
+  const n = Number(c.ticketsOpen) || 0, r = Number(c.refundsOpen) || 0;
+  $("supBadge").textContent = n; $("supBadge").classList.toggle("hide", !n);
+  $("supBadgeR").textContent = "환불 " + r; $("supBadgeR").classList.toggle("hide", !r);
+  $("goSup").title = `답변할 문의 ${n}개 · 환불 진행 중 ${r}개`;
+}
+async function loadSupport() {
+  let r;
+  // tickets the feed shows that no list has named yet come back in `named` from the same single KV list
+  const asked = [...new Set(feedEvents.map(e => e.ticket))].filter(id => !(id in tkNames)).slice(0, 100);
+  try { r = await api("/support?status=" + sstatus + "&q=" + encodeURIComponent($("tkQ").value.trim()) + (asked.length ? "&names=" + asked.join(",") : "")); }
+  catch (e) { if (e.message !== "401") $("tkRows").innerHTML = `<tr><td colspan="3" class="empty err">불러오지 못했어요: ${esc(e.message)}</td></tr>`; return; }
+  const c = r.count || {}, n = { open: c.open || 0, answered: c.answered || 0, closed: c.closed || 0, refund: c.refund || 0 };
+  n.all = n.open + n.answered + n.closed;
+  supBadge({ ticketsOpen: n.open, refundsOpen: n.refund });   // the same counts the summary has
+  if (sumCounts) { sumCounts.ticketsOpen = n.open; sumCounts.refundsOpen = n.refund; sumTiles(sumCounts); }
+  for (const t of r.tickets || []) tkNames[t.id] = { subj: t.subj, cat: t.cat, status: t.status };
+  for (const id of asked) if (!tkNames[id]) tkNames[id] = (r.named || {})[id] || null;
+  renderFeed();
+  document.querySelectorAll("#tkSeg button").forEach(b => b.textContent = TK_SEG[b.dataset.ts] + " " + n[b.dataset.ts]);
+  const list = r.tickets || [];
+  $("tkRows").innerHTML = list.length ? list.map(t => {
+    const needs = t.status !== "closed" && t.last === "user";
+    const meta = [TK_CAT[t.cat] || t.cat, t.id, t.order, t.acct, "메시지 " + Number(t.n || 0) + "개"].filter(Boolean).map(esc).join(" · ");
+    return `<tr data-tk="${esc(t.id)}"${t.id === tkId ? ' class="on"' : ""}>
+    <td><span class="tag k-${esc(t.status)}">${TK_ST[t.status] || esc(t.status)}</span>${t.rs ? `<div style="margin-top:4px"><span class="tag r-${esc(t.rs)}">${RF_ST[t.rs] || esc(t.rs)}</span></div>` : ""}</td>
+    <td><button class="lnk" data-tk="${esc(t.id)}">${esc(t.subj) || "(제목 없음)"}</button><div class="mut">${needs ? '<span class="needs">답장 필요</span> · ' : ""}${meta}<span class="tkAt"> · ${esc(when(t.updated))}</span></div></td>
+    <td class="m" style="white-space:nowrap">${when(t.updated)}</td></tr>`;
+  }).join("") : `<tr><td colspan="3" class="empty">${sstatus === "open" ? "처리할 문의가 없어요" : "없어요"}</td></tr>`;
+}
+function tkEmpty(msg) {
+  $("tkView").innerHTML = `<h2>문의 내용</h2><div class="empty${msg ? " err" : ""}">${msg ? esc(msg) : "목록에서 문의를 고르면 여기에 보여요."}</div>`;
+}
+async function openTicket(id, keep, jump) {   // keep: a reply being written stays when it is the same ticket
+  let r;
+  try { r = await api("/support/ticket?id=" + encodeURIComponent(id)); }
+  catch (e) { if (e.message !== "401") { tkId = id; tkCur = null; tkEmpty("불러오지 못했어요: " + e.message); } return; }
+  const same = tkId === id;
+  tkId = id; tkKeys = r.keys || []; tkOther = r.otherKeys || null;
+  renderTk(r.ticket, keep && same);
+  document.querySelectorAll("#tkRows tr").forEach(tr => tr.classList.toggle("on", tr.dataset.tk === id));
+  if (jump && matchMedia("(max-width:900px)").matches) $("tkView").scrollIntoView();
+}
+function kvList(rows) { return `<dl class="kv">${rows.filter(Boolean).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>`; }
+function keyRows(keys) {
+  return `<table><tbody>${keys.map(k => `<tr>
+    <td><code>${esc(k.id)}</code><div class="mut">${esc(planName(k.plan))} · 발급 ${day(k.issued)} · 만료 ${k.expires ? day(k.expires) : "없음"}</div>${k.note ? `<div class="mut">${esc(k.note)}</div>` : ""}${k.owned === false ? `<div class="err">${esc(UNOWNED)}</div>` : ""}</td>
+    <td style="text-align:right">${k.state ? `<span class="tag t-${esc(k.state)}">${ST[k.state] || esc(k.state)}</span>` : ""}</td></tr>`).join("")}</tbody></table>`;
+}
+function rfPanel(t) {
+  const rf = t.refund; if (!rf) return "";
+  const f = rf.facts || {}, how = rf.method || "unknown", done = rf.status === "done";
+  const days = supCfg && supCfg.refundDays != null ? ` <span class="mut">· 설정한 청약철회 기간 ${Number(supCfg.refundDays)}일</span>` : "";
+  const facts = kvList([
+    ["사유", esc(RF_WHY[rf.reason] || rf.reason || "—")],
+    ["플랜", esc(planName(f.plan))],
+    ["결제", esc(RF_HOW[how] || how)],
+    ["키 발급", f.issued ? day(f.issued) + (f.daysSinceKey != null ? ` · 받은 지 ${Number(f.daysSinceKey)}일` : "") + days : "—"],
+    f.expires && ["만료", day(f.expires)],
+    f.sub && ["구독", `Lemon Squeezy <code>${esc(f.sub)}</code>`],
+    f.payer && ["입금자", esc(f.payer)],
+    ["주문 상태", f.orderStatus ? `<span class="tag o-${esc(f.orderStatus)}">${OS[f.orderStatus] || esc(f.orderStatus)}</span>` : "—"],
+    ["요청", when(rf.asked) || "—"],
+    rf.decidedAt && ["처리", when(rf.decidedAt)],
+    rf.rejectReason && ["거절 사유", esc(rf.rejectReason)],
+    rf.amount != null && rf.amount !== "" && ["돌려준 금액", won(rf.amount)],
+  ]);
+  const keys = done
+    ? `<h4>이 환불로 막은 키</h4>${(rf.revoked || []).length ? rf.revoked.map(id => `<code>${esc(id)}</code>`).join(", ") : '<span class="mut">키는 그대로 뒀어요</span>'}`
+    : `<h4>'환불 완료'를 누르면 막을 키</h4>${tkKeys.length ? keyRows(tkKeys) : '<div class="mut">찾은 키가 없어요. 필요하면 \'발급된 키\'에서 직접 막으세요.</div>'}`;
+  // the order code and the key the buyer sent belong to different purchases: the order is the subject
+  const mis = !f.mismatch ? "" : `<div class="mis"><b>주문 코드와 키가 서로 다른 구매예요</b>
+    <div style="margin-top:6px">이 요청의 주문: <code>${esc(t.order || f.order || "—")}</code>${f.orderStatus ? ` <span class="tag o-${esc(f.orderStatus)}">${OS[f.orderStatus] || esc(f.orderStatus)}</span>` : " <span class=\"mut\">(서버에 없는 주문)</span>"}. 위 사실과 '환불 완료'는 이 주문 기준이에요.</div>
+    <div style="margin-top:6px">구매자가 적은 키: <code>${esc(f.otherKeyId || "—")}</code>${f.otherOrder ? ` · 그 키의 주문 <code>${esc(f.otherOrder)}</code>` : ""}</div>
+    <h4>그 키의 구매</h4>${tkOther && tkOther.length ? keyRows(tkOther) : '<div class="mut">서버에 없는 키예요.</div>'}
+    <div style="margin-top:6px">어느 구매를 환불하는지 구매자에게 확인하세요. 다른 구매라면 그 구매로 새 요청을 받으세요.</div></div>`;
+  const note = how === "card" ? "카드 결제예요. Lemon Squeezy 대시보드에서 환불하고 구독도 해지하세요. Lemon Squeezy가 환불을 알려 오면 키는 자동으로 막히고 이 요청도 '환불 완료'로 바뀌어요."
+    : how === "manual" ? "계좌이체 · 직접 결제예요. 구매자에게 돈을 먼저 직접 돌려준 뒤 '환불 완료'를 누르세요. 그러면 키가 막히고 주문이 '환불됨'으로 바뀌어요."
+    : "결제 방식을 알 수 없어요. 주문과 키를 먼저 확인하세요.";
+  const acts = done ? "" : `<div class="acts">${rf.status !== "approved" ? '<button data-rf="approve">승인</button>' : ""}${rf.status !== "rejected" ? '<button class="d" data-rf="reject">거절</button>' : ""}<span class="sp"></span><button class="p" data-rf="done">환불 완료</button></div>`;
+  return `<div class="rf"><h3>환불 <span class="tag r-${esc(rf.status)}">${RF_ST[rf.status] || esc(rf.status)}</span>${f.mismatch ? ' <span class="tag t-revoked">주문 · 키 불일치</span>' : ""}</h3>${mis}${facts}${keys}
+    ${done ? "" : `<p class="note">${esc(note)}</p>`}${acts}
+    <details><summary>사용권 계약 제9조</summary><blockquote>${CLAUSE9.map(esc).join("<br>")}</blockquote></details></div>`;
+}
+function renderTk(t, keepDraft) {
+  const draft = keepDraft && $("tkText") ? $("tkText").value : "";
+  tkCur = t;
+  const closed = t.status === "closed", msgs = t.messages || [], full = msgs.length >= TK_MSGS;
+  const dg = t.diag ? [t.diag.app && "앱 " + t.diag.app, t.diag.os, t.diag.gpu].filter(Boolean).join(" · ") : "";
+  const rff = (t.refund && t.refund.facts) || {}, order = t.order || rff.order || "", keyId = t.keyId || rff.keyId || "";
+  const facts = kvList([
+    ["연락처", t.contact ? esc(t.contact) + '<button data-tk-copy="1">복사</button>' : '<span class="mut">없음 · 앱과 도움말 페이지로만 답해요</span>'],
+    ["주문", order ? `<code>${esc(order)}</code><button data-tk-find="${esc(order)}">키 찾기</button>` : "—"],
+    ["키 식별 번호", keyId ? `<code>${esc(keyId)}</code><button data-tk-find="${esc(keyId)}">키 찾기</button>` +
+                (t.keyId && !t.keyVerified ? `<div class="err">${esc(UNOWNED)}</div>` : t.keyVerified ? '<div class="mut">구매자가 키 전체를 보내 소유를 확인했어요</div>' : "") : "—"],
+    ["아이디", t.account ? `<code>${esc(t.account)}</code>` : "—"],
+    ["앱 정보", dg ? esc(dg) : '<span class="mut">보내지 않음</span>'],
+    ["언어", t.lang === "en" ? "English" : "한국어"],
+    ["문의", esc(when(t.created)) + " · 마지막 변경 " + esc(when(t.updated))],
+  ]);
+  const thread = msgs.map(m => `<div class="tkMsg${m.from === "admin" ? " admin" : ""}"><div class="h">${m.from === "admin" ? "판매자 (나)" : "구매자"} · ${esc(when(m.at))}</div><div class="b">${esc(m.text)}</div></div>`).join("");
+  const reply = full ? `<p class="mut">메시지가 ${TK_MSGS}개라 더 답할 수 없어요.</p>` : `
+    <div class="chips">${CANNED.map((c, i) => `<button data-canned="${i}">${esc(c.label)}</button>`).join("")}</div>
+    <textarea id="tkText" class="plain" rows="5" maxlength="${TK_MAX}" placeholder="답장 쓰기. 위 버튼을 누르면 자주 쓰는 답이 들어가요. 고쳐서 보내세요."></textarea>
+    <div class="acts"><span class="mut" id="tkCnt"></span><span class="sp"></span><button class="p" data-tk-send="reply">보내기</button><button data-tk-send="close">보내고 닫기</button></div>`;
+  $("tkView").innerHTML = `<h2>${esc(t.subject) || "(제목 없음)"} <small>${esc(t.id)} · ${esc(TK_CAT[t.cat] || t.cat)}</small></h2>
+    <div class="acts" style="margin:0 0 12px"><span class="tag k-${esc(t.status)}">${TK_ST[t.status] || esc(t.status)}</span>${t.unreadUser ? '<span class="mut">구매자가 아직 답장을 읽지 않았어요</span>' : ""}</div>
+    ${facts}${rfPanel(t)}<div class="tkMsgs">${thread}</div>${reply}
+    <div class="acts" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">${closed ? '<button data-tk-st="open">다시 열기</button>' : '<button data-tk-st="closed">답장 없이 닫기</button>'}<span class="sp"></span><button class="d" data-tk-del="1">삭제</button></div>`;
+  if ($("tkText")) { $("tkText").value = draft; $("tkText").oninput = tkCount; tkCount(); }
+  if (!keepDraft) tkCanned = "";
+}
+function tkCount() {
+  const n = $("tkText").value.length;
+  $("tkCnt").textContent = `${n} / ${TK_MAX}`; $("tkCnt").className = n > TK_MAX ? "err" : "mut";
+}
+function tkBusy(on) { $("tkView").querySelectorAll("button").forEach(b => b.disabled = on); }
+function afterSup() { loadSupport(); loadSummary(); loadLog(); }
+const dlgVal = id => ((document.getElementById(id) || {}).value || "").trim();
+
+async function supClick(e) {
+  const t = e.target.closest("button, tr[data-tk]"); if (!t || t.disabled) return;
+  const ds = t.dataset;
+  if (ds.ts) { sstatus = ds.ts; document.querySelectorAll("#tkSeg button").forEach(b => b.classList.toggle("on", b === t)); return loadSupport(); }
+  if (ds.tk) return openTicket(ds.tk, true, true);
+  if (!tkCur) return;
+  const id = tkCur.id;
+  if (ds.canned) {
+    const ta = $("tkText"), c = CANNED[+ds.canned].text;
+    ta.value = !ta.value.trim() || ta.value === tkCanned ? c : ta.value.replace(/\s+$/, "") + "\n\n" + c;
+    tkCanned = ta.value; tkCount(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    return;
+  }
+  if (ds.tkCopy) return copy(tkCur.contact);
+  if (ds.tkFind) { $("q").value = ds.tkFind; await loadKeys(); $("q").scrollIntoView({ block: "center" }); return; }
+  if (ds.tkSend) {
+    const text = $("tkText").value.trim();
+    if (!text) return toast("답장을 써 주세요");
+    if (text.length > TK_MAX) return toast(TK_MAX + "자까지 쓸 수 있어요");
+    const close = ds.tkSend === "close";
+    tkBusy(true);
+    try { const r = await api("/support/reply", { id, text, close }); renderTk(r.ticket, false); toast(close ? "보내고 닫았어요" : "보냈어요"); afterSup(); }
+    finally { tkBusy(false); }
+    return;
+  }
+  if (ds.tkSt) {
+    const r = await api("/support/status", { id, status: ds.tkSt });
+    renderTk(r.ticket, true); toast(ds.tkSt === "closed" ? "닫았어요" : "다시 열었어요"); afterSup();
+    return;
+  }
+  if (ds.tkDel) {
+    if (!(await ask("문의를 지울까요?", `<code>${esc(id)}</code> · ${esc(tkCur.subject)}<br>되돌릴 수 없어요. 구매자 앱에서도 더는 열리지 않아요.`, "삭제"))) return;
+    await api("/support/delete", { id });
+    tkId = ""; tkCur = null; tkKeys = []; tkEmpty(); toast("지웠어요"); afterSup();
+    return;
+  }
+  if (!ds.rf || !tkCur.refund) return;
+  const rf = tkCur.refund, card = rf.method === "card";
+  const msgBox = mid => `<textarea id="${mid}" class="plain" rows="3" maxlength="${TK_MAX}" placeholder="구매자에게 보낼 말 (선택, 비우면 기본 문구)" style="margin-top:10px"></textarea>`;
+  let body;
+  if (ds.rf === "approve") {
+    if (!(await ask("환불 요청을 승인할까요?", "구매자에게 승인됐다고 알려요. 돈을 돌려주고 키를 막는 일은 '환불 완료'에서 해요." +
+                    (card ? "<br>카드 결제는 Lemon Squeezy 대시보드에서 환불해요." : "") + msgBox("rfMsg"), "승인"))) return;
+    const message = dlgVal("rfMsg");
+    body = { id, action: "approve", ...(message ? { message } : {}) };
+  } else if (ds.rf === "reject") {
+    if (!(await ask("환불 요청을 거절할까요?", "사유는 구매자에게 그대로 보여요.<br><br>" +
+                    `<textarea id="rfWhy" class="plain" rows="3" maxlength="300" placeholder="거절 사유 (꼭 적어 주세요, 300자까지)"></textarea>`, "거절"))) return;
+    const reason = dlgVal("rfWhy");
+    if (!reason) return toast("거절 사유를 적어 주세요");
+    body = { id, action: "reject", reason };
+  } else if (ds.rf === "done") {
+    const live = tkKeys.filter(k => k.state !== "revoked");
+    const keyNote = tkKeys.length
+      ? `<label class="chk" style="margin-top:12px"><input type="checkbox" id="rfRev" checked> 키 ${tkKeys.length}개 막기</label>
+         <div style="margin-top:4px">켜 두면 아래 키는 더 동작하지 않아요. 앱이 인터넷에 연결된 상태로 켜질 때 유료 기능이 꺼져요. 카드 결제는 Lemon Squeezy에서 해지해야 멈춰요.<br>${tkKeys.map(k => `<code>${esc(k.id)}</code>${k.state === "revoked" ? " (이미 차단)" : k.owned === false ? " (소유 확인 안 됨)" : ""}`).join(", ")}</div>`
+      : `<div style="margin-top:12px">막을 키를 찾지 못했어요. 필요하면 '발급된 키'에서 직접 막으세요.</div>`;
+    if (!(await ask("환불 완료로 처리할까요?",
+      (card ? "Lemon Squeezy에서 환불하고 구독을 해지했는지 먼저 확인하세요. 보통은 Lemon Squeezy가 환불을 알려 올 때 자동으로 처리돼요."
+            : "구매자에게 돈을 직접 돌려준 뒤에만 누르세요.") +
+      (tkCur.order || (rf.facts || {}).order ? `<br>주문 <code>${esc(tkCur.order || rf.facts.order)}</code>은 '환불됨'으로 바뀌어요.` : "") +
+      `<br><br><input id="rfAmt" type="number" min="0" step="1" inputmode="numeric" placeholder="돌려준 금액 (원, 선택)">` + keyNote + msgBox("rfDone"),
+      live.length ? "환불 완료 · 키 막기" : "환불 완료"))) return;
+    const amt = dlgVal("rfAmt"), message = dlgVal("rfDone"), box = document.getElementById("rfRev");
+    if (amt && !/^\d+$/.test(amt)) return toast("금액은 숫자만 써 주세요");
+    body = { id, action: "done", revoke: box ? box.checked : true, ...(amt ? { amount: Number(amt) } : {}), ...(message ? { message } : {}) };
+    // a key the buyer did not show they hold (a key id typed alone) is blocked only on a second yes; the server asks too
+    const doubt = body.revoke ? tkKeys.filter(k => k.state !== "revoked" && k.owned === false) : [];
+    if (doubt.length) {
+      if (!(await ask("키 주인이 확인되지 않았어요",
+        `${esc(UNOWNED)}.<br>다른 사람의 키 식별 번호를 적었을 수도 있어요. 막으면 그 사람의 앱도 무료 플랜으로 돌아가요.<br><br>` +
+        `${doubt.map(k => `<code>${esc(k.id)}</code>`).join(", ")}<br><br>구매자의 키가 맞는지 확인했을 때만 막으세요. 아니면 취소하고 구매자에게 키 전체나 주문 코드를 물어보세요.`,
+        "확인했어요 · 키 막기"))) return;
+      body.confirmUnverified = true;
+    }
+  } else return;
+  tkBusy(true);
+  try {
+    const r = await api("/support/refund", body);
+    renderTk(r.ticket, true);
+    toast({ approve: "승인했어요", reject: "거절했어요", done: "환불 완료로 바꿨어요" }[body.action]);
+    afterSup();
+    if (body.action === "done") { openTicket(id, true); loadOrders(); loadKeys(); }
+  } finally { tkBusy(false); }
+}
+$("supGrid").addEventListener("click", e => supClick(e).catch(err => { if (err.message !== "401") toast("실패했어요: " + err.message); }));
+let tkq; $("tkQ").oninput = () => { clearTimeout(tkq); tkq = setTimeout(loadSupport, 250); };
+tkEmpty();
+
+// settings: what the app's 고객센터 page and /help show
+function sfSay(t, cls) { $("sfMsg").textContent = t; $("sfMsg").className = cls || "mut"; }
+$("sfSeller").innerHTML = SELLER.map(([k, l]) => `<label>${esc(l)}<input id="sf_${k}" maxlength="120"${k === "hours" ? ' placeholder="예: 평일 10:00~18:00"' : ""}></label>`).join("");
+async function loadSupCfg() {
+  let c;
+  try { c = (await api("/support/config")).config; }
+  catch (e) { if (e.message !== "401") sfSay("설정을 불러오지 못했어요: " + e.message, "err"); return; }
+  supCfg = c || {};
+  if (!sfDirty) fillSupCfg();   // a reload keeps what is being typed
+}
+function fillSupCfg() {
+  const c = supCfg || {}, s = c.seller || {};
+  for (const [k] of SELLER) $("sf_" + k).value = s[k] || "";
+  $("sf_dbRegion").value = (c.privacy || {}).dbRegion || "";
+  $("sf_effectiveDate").value = (c.privacy || {}).effectiveDate || "";
+  sfPrivWarn();
+  $("sfNotice").value = c.notice || "";
+  $("sfDays").value = c.refundDays == null ? 7 : c.refundDays;
+  $("sfOpen").checked = c.open !== false;
+  sfFaq = (c.faq || []).map(f => ({ q: f.q || "", a: f.a || "" }));
+  renderFaq(); sfNoticeCount();
+}
+function sfNoticeCount() { $("sfNoticeN").textContent = `${$("sfNotice").value.length} / 500`; }
+// The privacy policy's blanks, as the server fills them (support.js privacyBlanks), from the saved settings: an empty
+// one shows "판매자가 아직 입력하지 않았어요" on /privacy.
+const PRIV_BLANKS = [[c => (c.seller || {}).rep || (c.seller || {}).name, "개인정보 보호책임자 (대표자 또는 상호)"], [c => (c.seller || {}).email, "보호책임자 연락처 (메일)"],
+                     [c => (c.privacy || {}).dbRegion, "회원 DB 위치 (Supabase 지역)"], [c => (c.privacy || {}).effectiveDate, "개인정보 처리방침 시행일"]];
+function sfPrivWarn() {
+  const gaps = PRIV_BLANKS.filter(([has]) => !has(supCfg || {})).map(([, label]) => label);
+  $("sfPrivWarn").textContent = gaps.length ? `개인정보 처리방침(/privacy)에 아직 빈 칸이 있어요 (저장한 설정 기준): ${gaps.join(", ")}. 빈 칸은 처리방침에 '판매자가 아직 입력하지 않았어요'로 보여요.` : "";
+  $("sfPrivWarn").classList.toggle("hide", !gaps.length);
+}
+function renderFaq() {
+  const box = $("sfFaq"); box.textContent = "";
+  sfFaq.forEach((f, i) => {
+    const r = document.createElement("div"); r.className = "faq";
+    r.innerHTML = `<div class="q"><input maxlength="120" placeholder="질문"><textarea class="plain" rows="3" maxlength="1500" placeholder="답"></textarea></div>
+      <div class="b"><button title="위로" aria-label="위로">↑</button><button title="아래로" aria-label="아래로">↓</button><button class="d" title="삭제" aria-label="삭제">×</button></div>`;
+    const q = r.querySelector("input"), a = r.querySelector("textarea"), [up, down, del] = r.querySelectorAll("button");
+    q.value = f.q; a.value = f.a;
+    q.oninput = () => { f.q = q.value; }; a.oninput = () => { f.a = a.value; };
+    up.disabled = i === 0; down.disabled = i === sfFaq.length - 1;
+    const move = d => { sfFaq.splice(i + d, 0, sfFaq.splice(i, 1)[0]); sfDirty = true; renderFaq(); };
+    up.onclick = () => move(-1); down.onclick = () => move(1);
+    del.onclick = () => { sfFaq.splice(i, 1); sfDirty = true; renderFaq(); };
+    box.appendChild(r);
+  });
+  if (!sfFaq.length) box.innerHTML = `<div class="mut">비워 두면 서버에 있는 기본 질문이 보여요.</div>`;
+  $("sfFaqN").textContent = sfFaq.length ? `${sfFaq.length} / 30` : "";
+  $("sfFaqAdd").disabled = sfFaq.length >= 30;
+}
+$("sfCard").addEventListener("input", () => { sfDirty = true; });
+$("sfNotice").addEventListener("input", sfNoticeCount);
+$("sfFaqAdd").onclick = () => { if (sfFaq.length < 30) { sfFaq.push({ q: "", a: "" }); sfDirty = true; renderFaq(); $("sfFaq").lastChild.querySelector("input").focus(); } };
+$("sfSave").onclick = async () => {
+  const days = Number($("sfDays").value);
+  if ($("sfDays").value === "" || !Number.isInteger(days) || days < 0 || days > 30) return sfSay("환불 안내 기간은 0~30일이에요", "err");
+  const faq = sfFaq.map(f => ({ q: f.q.trim(), a: f.a.trim() })).filter(f => f.q || f.a);
+  if (faq.some(f => !f.q || !f.a)) return sfSay("질문과 답을 둘 다 써 주세요", "err");
+  const config = { seller: Object.fromEntries(SELLER.map(([k]) => [k, $("sf_" + k).value.trim()])),
+                   privacy: { dbRegion: $("sf_dbRegion").value.trim(), effectiveDate: $("sf_effectiveDate").value.trim() }, notice: $("sfNotice").value.trim(),
+                   refundDays: days, faq, open: $("sfOpen").checked };
+  $("sfSave").disabled = true; sfSay("저장하는 중…");
+  try {
+    const r = await api("/support/config", config);
+    supCfg = r.config || config; sfDirty = false; fillSupCfg();
+    sfSay("저장했어요. 앱은 다음에 고객센터를 열 때 반영해요.", "okc"); loadLog();
+    if (tkCur && tkCur.refund) renderTk(tkCur, true);   // the refund panel shows refundDays
+  } catch (e) { if (e.message !== "401") sfSay(e.message, "err"); }
+  finally { $("sfSave").disabled = false; }
+};
+
+// ------------------------------------------------------------ 새 소식: what buyers did, without 새로고침
+// The server keeps one row per buyer action in its Durable Object (src/stats.js, no KV). While this tab is visible the
+// page asks for the rows after the last one it has, every 30 s and once when the tab comes back. When rows come it
+// reloads the ticket list once (one KV list), which also sets the badges and names the tickets: the feed itself carries
+// no buyer text, so a subject is always the list's, put in with esc() or textContent.
+const FEED_EVERY = (() => { try { const v = Number(localStorage.getItem("sbFeedEvery")); if (v >= 1000) return v; } catch (e) {} return 30000; })();   // sbFeedEvery: tests only
+const FEED_SEEN = DEMO ? "sbFeedSeenDemo" : "sbFeedSeen";
+const FEED_KIND = { ticket: "새 문의", refund: "환불 요청", reply: "답장이 왔어요", reopen: "닫힌 문의에 답장이 왔어요", close: "구매자가 문의를 닫았어요", card: "카드 환불이 끝났어요" };
+const TITLE = document.title;
+const tkNames = {};   // ticket id -> { subj, cat, status } from the lists this page loaded; null once the server says it is gone
+let feedEvents = [], feedLast = null, feedSeen = null, feedNew = 0, feedBusy = false, feedHide = 0;
+try { const v = localStorage.getItem(FEED_SEEN); if (v !== null && /^\d+$/.test(v)) feedSeen = Number(v); } catch (e) {}
+function feedSave() { try { localStorage.setItem(FEED_SEEN, String(feedSeen)); } catch (e) {} }
+function feedName(e) { const n = tkNames[e.ticket]; return n ? n.subj || "(제목 없음)" : n === null ? "지운 문의 " + e.ticket : "문의 " + e.ticket; }
+function feedWhat(e) { return (e.kind === "ticket" && TK_CAT[e.cat] ? "[" + TK_CAT[e.cat] + "] " : "") + feedName(e); }
+function feedLine(e) { return (FEED_KIND[e.kind] || e.kind) + ": " + feedWhat(e); }
+function feedTitle() { document.title = (feedNew ? "(" + feedNew + ") " : "") + TITLE; }
+function renderFeed() {
+  const list = feedEvents.slice().reverse();
+  $("feedList").innerHTML = list.length ? list.map(e => `<li${e.seq > feedSeen ? ' class="new"' : ""}><button class="lnk" data-feed="${esc(e.ticket)}"><span class="fk">${esc(FEED_KIND[e.kind] || e.kind)}</span>${esc(feedWhat(e))}</button><span class="mut">${esc(when(new Date(e.at).toISOString()))}</span></li>`).join("")
+                                        : `<li class="empty">아직 새 소식이 없어요</li>`;
+  $("feedRead").disabled = !list.some(e => e.seq > feedSeen);
+}
+const feedOn = () => !!token && !document.hidden && !$("app").classList.contains("hide");
+// the seller is looking at 고객센터: the count in the tab title goes
+const supInView = () => !document.hidden && document.hasFocus() && $("feedCard").getBoundingClientRect().top < innerHeight && $("supGrid").getBoundingClientRect().bottom > 0;
+function feedLook() { if (feedNew && supInView()) { feedNew = 0; feedTitle(); } }
+function feedFail(e) { if (e.message !== "401") $("feedNote").textContent = "새 소식을 불러오지 못했어요 · " + new Date().toLocaleTimeString("ko-KR"); }
+async function feedStart() {
+  try {
+    const r = await api("/support/feed");   // the newest 20
+    feedEvents = r.events; feedLast = r.last;
+    // first time in this browser, or a feed that started again: nothing counts as new yet (the demo shows two)
+    if (feedSeen === null || feedSeen > r.last) { feedSeen = DEMO ? Math.max(0, r.last - 2) : r.last; feedSave(); }
+    feedNew = feedEvents.filter(e => e.seq > feedSeen).length;
+    $("feedNote").textContent = "";
+  } catch (e) { feedFail(e); }
+  renderFeed(); feedTitle(); feedLook(); feedAlertBtn();
+}
+async function feedPoll() {
+  if (feedBusy || !feedOn()) return;
+  if (feedLast === null) return feedStart();
+  feedBusy = true;
+  const fresh = [];
+  try {
+    for (let i = 0; i < 5; i++) {   // up to 500 rows at once; any more come with the next poll
+      const r = await api("/support/feed?after=" + feedLast);
+      if (r.last < feedLast) { feedLast = 0; feedSeen = 0; feedSave(); continue; }   // the server's feed started again: all of it is new
+      fresh.push(...r.events); feedLast = r.last;
+      if (!r.more) break;
+    }
+    $("feedNote").textContent = "";
+  } catch (e) { feedFail(e); }
+  finally { feedBusy = false; }
+  if (fresh.length) await feedArrived(fresh);
+}
+async function feedArrived(fresh) {
+  feedEvents = feedEvents.concat(fresh).slice(-20);
+  await loadSupport();   // once, however many rows came: the list, the badges and these tickets' subjects
+  if (tkId && fresh.some(e => e.ticket === tkId)) openTicket(tkId, true);   // the ticket on screen changed; a reply being written stays
+  feedNew += fresh.filter(e => e.seq > feedSeen).length;
+  feedLook(); feedTitle(); renderFeed(); feedToast(fresh); feedNotify(fresh);
+}
+function feedToast(fresh) {
+  const box = $("ftoast");
+  box.textContent = "";
+  for (const e of fresh.slice(-3).reverse()) {
+    const b = document.createElement("button"); b.className = "ft"; b.dataset.feed = e.ticket; b.textContent = feedLine(e); box.append(b);
+  }
+  if (fresh.length > 3) { const m = document.createElement("div"); m.className = "more"; m.textContent = "외 " + (fresh.length - 3) + "개 · 고객센터의 새 소식에 모두 있어요"; box.append(m); }
+  const x = document.createElement("button"); x.className = "x"; x.dataset.feedX = "1"; x.textContent = "×"; x.title = "닫기"; x.setAttribute("aria-label", "닫기"); box.append(x);
+  box.style.top = Math.round(document.querySelector("header").getBoundingClientRect().bottom + 8) + "px";   // under the header, however many rows it has
+  box.classList.remove("hide");
+  clearTimeout(feedHide); feedHide = setTimeout(() => box.classList.add("hide"), 15000);
+}
+function feedOpen(id) {
+  $("ftoast").classList.add("hide");
+  feedNew = 0; feedTitle();
+  if (!matchMedia("(max-width:900px)").matches) $("supTop").scrollIntoView();
+  openTicket(id, false, true);
+}
+// Browser notifications: only after the seller presses the button and the browser allows it; they show while this tab
+// is open but the window is not the one in front (the page does not poll in a hidden tab).
+const canAlert = () => "Notification" in window;
+function feedAlertBtn() {
+  const b = $("feedAlert");
+  if (!canAlert() || Notification.permission === "denied") { b.classList.add("hide"); return; }
+  const on = Notification.permission === "granted";
+  b.classList.remove("hide"); b.disabled = on;
+  b.textContent = on ? "브라우저 알림 켜짐" : "브라우저 알림 켜기";
+  b.title = on ? "이 탭이 열려 있고 다른 창을 보고 있을 때 알려 드려요. 끄려면 브라우저의 사이트 설정에서 알림을 막으세요."
+               : "이 탭이 열려 있고 다른 창을 보고 있을 때 새 소식을 알려 드려요";
+}
+function feedNotify(fresh) {
+  if (!canAlert() || Notification.permission !== "granted" || (!document.hidden && document.hasFocus())) return;
+  const e = fresh[fresh.length - 1];
+  try {
+    const n = new Notification("SystemBoost 고객센터", { body: feedLine(e) + (fresh.length > 1 ? " 외 " + (fresh.length - 1) + "개" : ""), tag: "sb-feed" });
+    n.onclick = () => { window.focus(); feedOpen(e.ticket); n.close(); };
+  } catch (err) { /* e.g. Android Chrome needs a service worker: no notification then */ }
+}
+$("feedAlert").onclick = () => {
+  if (!canAlert()) return;
+  try { const p = Notification.requestPermission(feedAlertBtn); if (p && p.then) p.then(feedAlertBtn, feedAlertBtn); } catch (e) {}
+};
+$("feedRead").onclick = () => { feedSeen = Math.max(feedSeen || 0, feedLast || 0); feedSave(); feedNew = 0; feedTitle(); renderFeed(); };
+$("feedList").onclick = e => { const b = e.target.closest("[data-feed]"); if (b) feedOpen(b.dataset.feed); };
+$("ftoast").onclick = e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.feedX) $("ftoast").classList.add("hide"); else feedOpen(b.dataset.feed); };
+setInterval(() => { if (feedOn()) feedPoll(); }, FEED_EVERY);
+document.addEventListener("visibilitychange", () => { if (feedOn()) { feedPoll(); feedLook(); } });
+addEventListener("focus", feedLook);
+addEventListener("scroll", () => { if (feedNew) requestAnimationFrame(feedLook); }, { passive: true });
+
 // ------------------------------------------------------------ demo data (file:// or ?demo only)
 let demo;
 function demoApi(path, b) {
@@ -966,13 +1489,46 @@ function demoApi(path, b) {
                { code: "SB-H4WT-3RZP", plan: "monthly", at: d(-0.3), status: "requested", method: "manual" },
                { code: "SB-PX7Q-2MKC", plan: "lifetime", at: d(-12), status: "approved", method: "manual", payer: "김민수", email: "minsu@example.com", keyId: "3fa91c0e5b7d2a14" },
                { code: "SB-9TNE-WQ4A", plan: "monthly", at: d(-20), status: "approved", method: "card", email: "jy.park@example.com", keyId: "a07be2d9c4113f68" },
-               { code: "SB-ZZ8K-4LMA", plan: "yearly", at: d(-2), status: "rejected", method: "manual", payer: "이서연", reason: "입금이 확인되지 않았어요" }],
+               { code: "SB-ZZ8K-4LMA", plan: "yearly", at: d(-2), status: "rejected", method: "manual", payer: "이서연", reason: "입금이 확인되지 않았어요" },
+               { code: "SB-M3QF-8TJW", plan: "yearly", at: d(-3.1), paidAt: d(-3.05), status: "approved", method: "manual", payer: "박지훈", msg: "국민은행 39,800원", email: "jihoon.park@example.com", keyId: "5b0e9a2c7d41f8e3", seats: 2 },
+               { code: "SB-QW3R-T8YU", plan: "ultra_monthly", at: d(-1.6), status: "approved", method: "card", email: "hana.lee@example.com", keyId: "e81c4a7d09b3f562" }],
       keys: [
         { id: "3fa91c0e5b7d2a14", email: "minsu@example.com", note: "SB-PX7Q-2MKC · 입금 김민수", plan: "premium", issued: d(-12), expires: "", src: "payment", revoked: "" },
         { id: "a07be2d9c4113f68", email: "jy.park@example.com", note: "SB-9TNE-WQ4A · 토스 결제", plan: "premium", issued: d(-20), expires: d(14), src: "payment", revoked: "" },
         { id: "c52d18e7aa90b3f1", email: "", note: "유튜버 리뷰용 선물", plan: "premium", issued: d(-5), expires: d(25), src: "manual", revoked: "" },
         { id: "9e3b77f0d1c84a26", email: "old@example.com", note: "SB-CC3D-8HJK · 월간", plan: "premium", issued: d(-50), expires: d(-16), src: "payment", revoked: "" },
-        { id: "1d6f0b9e82a7c355", email: "share@example.com", note: "SB-R2VX-6NFT · 평생", plan: "premium", issued: d(-40), expires: "", src: "payment", revoked: "커뮤니티에 키 공유" }] };
+        { id: "1d6f0b9e82a7c355", email: "share@example.com", note: "SB-R2VX-6NFT · 평생", plan: "premium", issued: d(-40), expires: "", src: "payment", revoked: "커뮤니티에 키 공유" },
+        { id: "5b0e9a2c7d41f8e3", email: "jihoon.park@example.com", note: "SB-M3QF-8TJW · 2대 묶음 1/2 · 박지훈 · 국민은행 39,800원", plan: "premium", issued: d(-3), expires: d(366), src: "payment", revoked: "" },
+        { id: "c8d27f1a0e956b4d", email: "jihoon.park@example.com", note: "SB-M3QF-8TJW · 2대 묶음 2/2 · 박지훈 · 국민은행 39,800원", plan: "premium", issued: d(-3), expires: d(366), src: "payment", revoked: "" },
+        { id: "e81c4a7d09b3f562", email: "hana.lee@example.com", note: "SB-QW3R-T8YU · Lemon Squeezy 구독", plan: "ultra", issued: d(-1.6), expires: d(32.4), src: "subscription", sub: "1048576", revoked: "" }] };
+    const msg = (from, at, text) => ({ from, at: d(at), text });
+    demo.tickets = [
+      { id: "T-R7KD-2MXP", cat: "refund", subject: "2대 묶음 환불 요청해요", status: "open", created: d(-0.2), updated: d(-0.2), consentAt: d(-0.2), lang: "ko",
+        contact: "jihoon.park@example.com", order: "SB-M3QF-8TJW", orderMatched: true, keyId: "5b0e9a2c7d41f8e3", keyVerified: false, unreadUser: false,
+        messages: [msg("user", -0.2, "회사 PC 두 대에 쓰려고 프로 연간 2대 묶음을 계좌이체로 샀어요.\n그런데 회사 보안 정책 때문에 두 PC 모두 설치가 막혀서 쓸 수가 없어요. 키는 아직 등록하지 않았어요.\n두 키 모두 환불받고 싶어요. 입금자명은 박지훈이에요.")],
+        refund: { status: "requested", reason: "not_working", asked: d(-0.2), method: "manual",
+                  facts: { plan: "yearly", issued: d(-3), expires: d(366), src: "payment", order: "SB-M3QF-8TJW", payer: "박지훈", orderStatus: "approved", daysSinceKey: 3 } } },
+      { id: "T-5HZC-NV3K", cat: "bug", subject: "프레임 생성을 켜면 화면이 깜빡여요", status: "open", created: d(-0.6), updated: d(-0.05), consentAt: d(-0.6), lang: "ko",
+        account: "gamer_kim", diag: { app: "0.8.11", os: "Windows 10 Home 22H2", gpu: "AMD Radeon RX 6600" }, unreadUser: false,
+        messages: [msg("user", -0.6, "엘든 링에서 프레임 생성 2배를 켜면 화면이 계속 깜빡여요. 끄면 괜찮아요."),
+                   msg("admin", -0.4, CANNED[3].text), msg("user", -0.05, "창 모드에서도 똑같아요. 그래픽 드라이버는 최신이에요.")] },
+      { id: "T-9WQB-H4NE", cat: "pay", subject: "카드 결제했는데 다시 설치하니 무료로 나와요", status: "answered", created: d(-1.2), updated: d(-1.1), consentAt: d(-1.2), lang: "ko",
+        order: "SB-9TNE-WQ4A", orderMatched: true, keyId: "a07be2d9c4113f68", keyVerified: true, account: "jy_park", diag: { app: "0.8.11", os: "Windows 11 Home 24H2", gpu: "NVIDIA GeForce RTX 4060" }, unreadUser: true,
+        messages: [msg("user", -1.2, "카드로 프로 월간 구독 중이에요. PC를 포맷하고 앱을 다시 설치했더니 무료로 나와요. 키를 다시 받을 수 있을까요?"),
+                   msg("admin", -1.1, CANNED[0].text + "eyJwbGFuIjoicHJlbWl1bSIsImRlbW8iOnRydWV9.시연용-키")] },
+      { id: "T-E6UY-3BWS", cat: "refund", subject: "구독 환불 부탁드려요", status: "answered", created: d(-1.5), updated: d(-1.4), consentAt: d(-1.5), lang: "ko",
+        contact: "hana.lee@example.com", order: "SB-QW3R-T8YU", orderMatched: true, keyId: "e81c4a7d09b3f562", keyVerified: true, unreadUser: false,
+        messages: [msg("user", -1.5, "프로 월간을 사려다가 울트라 월간을 잘못 결제했어요. 키는 등록하지 않았어요. 환불해 주세요."),
+                   msg("admin", -1.4, "환불 요청을 승인했어요. 환불을 마치면 여기로 알려 드릴게요.")],
+        refund: { status: "approved", reason: "change_mind", asked: d(-1.5), decidedAt: d(-1.4), method: "card",
+                  facts: { plan: "ultra_monthly", issued: d(-1.6), expires: d(32.4), src: "subscription", sub: "1048576", order: "SB-QW3R-T8YU", orderStatus: "approved", daysSinceKey: 1 } } },
+      { id: "T-K2PL-7GAT", cat: "howto", subject: "Can I use one key on my laptop too?", status: "closed", created: d(-9), updated: d(-8), consentAt: d(-9), lang: "en", contact: "alex@example.com", unreadUser: false,
+        messages: [msg("user", -9, "I bought Pro yearly for my desktop. Can I use the same key on my laptop?"),
+                   msg("admin", -8.5, "Hi, this is SystemBoost. One key works on one PC, so the laptop needs its own key."), msg("user", -8.2, "Got it, thanks!")] }];
+    demo.supCfg = { seller: { name: "SystemBoost", rep: "", address: "", bizNo: "", mailOrderNo: "", email: "help@systemboost.example", phone: "", hours: "평일 10:00~18:00" },
+      privacy: { dbRegion: "", effectiveDate: "" }, notice: "", refundDays: 7, open: true,
+      faq: [{ q: "키는 PC 몇 대에 쓸 수 있나요?", a: "키 하나는 PC 한 대에만 써요. 여러 대에 쓰려면 PC마다 키가 하나씩 필요해요." },
+            { q: "계좌이체로 결제했는데 키가 안 와요", a: "판매자가 입금을 확인하면 키가 나가요. 결제 신청 화면의 주문 코드와 입금자명을 적어 문의해 주세요." }] };
     demo.log = [{ at: d(-5), action: "키 발급", detail: "c52d18e7aa90b3f1 · 코드 없음 · 30일 · 유튜버 리뷰용 선물" }, { at: d(-3), action: "차단", detail: "1d6f0b9e82a7c355 · 커뮤니티에 키 공유" }];
     $("demoNote").classList.remove("hide");
   }
@@ -993,8 +1549,11 @@ function demoApi(path, b) {
                    releases: [{ tag: "v0.8.7", published: new Date(Date.now() - 4 * 864e5).toISOString(), winSetup: 96, winPortable: 22, mac: 19, updates: 401 }, { tag: "v0.8.6", published: new Date(Date.now() - 19 * 864e5).toISOString(), winSetup: 306, winPortable: 96, mac: 72, updates: 333 }] }, downloadsError: "" });
   }
   if (p === "/summary") { const c = { total: demo.keys.length, active: 0, revoked: 0, expired: 0, test: 0, last30: demo.keys.filter(k => Date.parse(k.issued) > Date.now() - 30 * 864e5).length };
-    demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length; return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c }); }
-  if (p === "/orders") { const w = q.get("status"); const count = { requested: 0, paid: 0, approved: 0, rejected: 0 }; demo.orders.forEach(o => count[o.status]++);
+    demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length;
+    c.ticketsOpen = demo.tickets.filter(t => t.status === "open").length; c.refundsOpen = demo.tickets.filter(t => t.refund && ["requested", "approved"].includes(t.refund.status)).length;
+    return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c }); }
+  if (p.startsWith("/support")) return demoSupport(p, q, b, { st, L, R });
+  if (p === "/orders") { const w = q.get("status"); const count = { requested: 0, paid: 0, approved: 0, rejected: 0, refunded: 0 }; demo.orders.forEach(o => count[o.status]++);
     return R({ count, orders: demo.orders.filter(o => w === "all" || (w === "open" ? ["requested", "paid"].includes(o.status) : o.status === w)) }); }
   if (p.startsWith("/members")) {
     demo.members = demo.members || [{ id: "gamer_kim", created: Date.now() - 864e5, lastLogin: Date.now() - 36e5, code: "K7M2QX9D", invitedBy: null, invites: 4, earned: 12, waiting: 3, blocked: 0 }, { id: "newbie01", created: Date.now() - 36e5, lastLogin: Date.now() - 36e5, code: null, invitedBy: "gamer_kim", invites: 0, earned: 0, waiting: 0, blocked: 0 }];
@@ -1050,6 +1609,83 @@ function demoApi(path, b) {
   if (p === "/unrevoke") { const k = demo.keys.find(k => k.id === b.id); if (k) k.revoked = ""; L("차단 해제", b.id); return R({ ok: true }); }
   if (p === "/sales-mode") { demo.mode = b.mode; L("판매 모드", b.mode); return R({ sales: b.mode }); }
   if (p === "/lookup") return R(b.key.includes(".") ? { id: "3fa91c0e5b7d2a14", valid: true, registered: true, revoked: null, payload: { email: "minsu@example.com", issued: demo.keys[0].issued } } : { error: "키 형식이 아니에요" });
+  return R({});
+}
+// The /admin/api/support/... routes on fake data, shaped like SPEC "Admin API".
+function demoSupport(p, q, b, { st, L, R }) {
+  const at = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
+  const fail = m => Promise.reject(new Error(m));
+  const row = t => ({ id: t.id, cat: t.cat, status: t.status, subj: t.subject.slice(0, 40), created: t.created, updated: t.updated,
+                      last: t.messages[t.messages.length - 1].from, n: t.messages.length, rs: t.refund ? t.refund.status : "", order: t.order || "", acct: t.account || "", key: t.keyId || "" });
+  const keysOf = t => !t.refund ? [] : demo.keys.filter(k => t.refund.method === "manual" && t.order ? k.note.startsWith(t.order) : k.id === t.keyId)
+                                         .map(k => ({ id: k.id, plan: k.plan, issued: k.issued, expires: k.expires, state: st(k), note: k.note,
+                                                       owned: !!(t.keyVerified && k.id === t.keyId) || !!(t.orderMatched && t.order && k.note.startsWith(t.order)) }));
+  const say = (t, text) => { t.messages.push({ from: "admin", at: at(), text }); t.updated = at(); t.unreadUser = true; };
+  if (p === "/support") {
+    const w = q.get("status") || "open", s = (q.get("q") || "").toLowerCase(), rows = demo.tickets.map(row);
+    const refund = r => ["requested", "approved"].includes(r.rs);
+    const count = { open: 0, answered: 0, closed: 0, refund: rows.filter(refund).length }; rows.forEach(r => count[r.status]++);
+    const tickets = rows.filter(r => (w === "all" || (w === "refund" ? refund(r) : r.status === w)) && (!s || [r.id, r.subj, r.order, r.acct, r.key].join(" ").toLowerCase().includes(s)))
+                        .sort((a, c) => (c.status === "open") - (a.status === "open") || c.updated.localeCompare(a.updated));
+    const names = (q.get("names") || "").split(",").filter(Boolean), named = {};
+    rows.forEach(r => { if (names.includes(r.id)) named[r.id] = { subj: r.subj, cat: r.cat, status: r.status, ...(r.rs ? { rs: r.rs } : {}) }; });
+    return R({ tickets, count, ...(names.length ? { named } : {}) });
+  }
+  if (p === "/support/feed") {   // like GET /admin/api/support/feed
+    if (!demo.feed) {
+      demo.feed = [[-8.2, "close", "T-K2PL-7GAT", "howto"], [-1.5, "refund", "T-E6UY-3BWS", "refund"], [-1.2, "ticket", "T-9WQB-H4NE", "pay"], [-0.6, "ticket", "T-5HZC-NV3K", "bug"],
+                   [-0.2, "refund", "T-R7KD-2MXP", "refund"], [-0.05, "reply", "T-5HZC-NV3K", "bug"]].map(([n, kind, ticket, cat], i) => ({ seq: i + 1, at: Date.now() + n * 864e5, kind, ticket, cat }));
+      demo.feedSeq = demo.feed.length; demo.feedAt = Date.now();
+    }
+    // a buyer writes while the demo is open, so the toast, the badge and the title count can be seen
+    const t = demo.tickets.find(x => x.id === "T-R7KD-2MXP");
+    if (!demo.feedLive && t && Date.now() - demo.feedAt > 20e3) {
+      demo.feedLive = true;
+      t.messages.push({ from: "user", at: at(), text: "입금 확인증이 필요하면 보내 드릴게요." }); t.updated = at(); t.status = "open";
+      demo.feed.push({ seq: ++demo.feedSeq, at: Date.now(), kind: "reply", ticket: t.id, cat: t.cat });
+    }
+    const a = q.get("after"), ev = a === null ? demo.feed.slice(-20) : demo.feed.filter(e => e.seq > Number(a)).slice(0, 100);
+    return R({ events: ev, last: ev.length ? ev[ev.length - 1].seq : demo.feedSeq, more: false });
+  }
+  if (p === "/support/config") {
+    if (b) {
+      if (!(Number.isInteger(b.refundDays) && b.refundDays >= 0 && b.refundDays <= 30)) return fail("refundDays");
+      if ((b.faq || []).length > 30) return fail("faq");
+      demo.supCfg = JSON.parse(JSON.stringify(b)); L("고객센터 설정", "시연");
+    }
+    return R({ config: demo.supCfg });
+  }
+  const t = demo.tickets.find(x => x.id === (b ? b.id : q.get("id")));
+  if (!t) return fail("문의를 찾지 못했어요");
+  if (p === "/support/ticket") return R({ ticket: t, keys: keysOf(t) });
+  if (p === "/support/reply") {
+    if (t.messages.length >= 30) return fail("messages");
+    say(t, String(b.text).slice(0, 2000)); t.status = b.close ? "closed" : "answered"; L("문의 답장", t.id + (b.close ? " · 닫음" : ""));
+    return R({ ticket: t });
+  }
+  if (p === "/support/status") { t.status = b.status; t.updated = at(); L(b.status === "closed" ? "문의 닫기" : "문의 다시 열기", t.id); return R({ ticket: t }); }
+  if (p === "/support/delete") { demo.tickets = demo.tickets.filter(x => x !== t); demo.feed = (demo.feed || []).filter(e => e.ticket !== t.id); L("문의 삭제", t.id); return R({ ok: true }); }
+  if (p === "/support/refund") {
+    const rf = t.refund; if (!rf) return fail("refund");
+    if (rf.status === "done") return fail("이미 환불을 마친 요청이에요");
+    if (b.action === "approve") { rf.status = "approved"; rf.decidedAt = at(); delete rf.rejectReason; say(t, b.message || "환불 요청을 승인했어요. 환불을 마치면 여기로 알려 드릴게요."); }
+    else if (b.action === "reject") {
+      if (!b.reason) return fail("거절 사유를 적어 주세요 (300자까지, 구매자에게 보여요)");
+      Object.assign(rf, { status: "rejected", decidedAt: at(), rejectReason: b.reason }); say(t, b.message || "환불 요청을 받아들이지 못했어요. 사유: " + b.reason + "\n궁금한 점은 이 문의에 답장해 주세요.");
+    } else if (b.action === "done") {
+      const doubt = b.revoke === false ? [] : keysOf(t).filter(k => k.state !== "revoked" && !k.owned).map(k => k.id);
+      if (doubt.length && b.confirmUnverified !== true) return fail("키 소유 확인 안 됨: 구매자가 키 식별 번호만 적어서 이 키(" + doubt.join(", ") + ")가 구매자의 것인지 확인되지 않았어요.");
+      const ids = b.revoke === false ? [] : keysOf(t).filter(k => k.state !== "revoked").map(k => k.id);
+      demo.keys.forEach(k => { if (ids.includes(k.id)) k.revoked = "환불"; });
+      const o = demo.orders.find(x => x.code === t.order); if (o) o.status = "refunded";
+      Object.assign(rf, { status: "done", decidedAt: at(), ...(ids.length ? { revoked: ids } : {}), ...(b.amount != null ? { amount: b.amount } : {}) });
+      delete rf.rejectReason;
+      say(t, b.message || (ids.length ? "환불을 마쳤어요. 환불한 키는 막았어요(사용권 계약 제9조 제4항)." : "환불을 마쳤어요."));
+    } else return fail("action");
+    t.status = "answered";
+    L("환불 " + { approve: "승인", reject: "거절", done: "완료" }[b.action], t.id + (b.action === "done" ? (rf.revoked ? " · 키 " + rf.revoked.join(", ") : " · 키 그대로") : ""));
+    return R({ ticket: t });
+  }
   return R({});
 }
 if (DEMO) { token = "demo"; login(); } else if (token) login();
