@@ -5,12 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SystemBoost 다운로드</title>
 <link rel="icon" type="image/png" href="favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0b0b0c;--card:#141416;--inner:#101012;--line:#232327;--text:#e8e6e3;--mut:#8b8a88;--or:#ff7a1a;--or2:#ff9a4d}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:"Noto Sans KR",system-ui,sans-serif;line-height:1.55;min-height:100vh}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;line-height:1.55;min-height:100vh}
 a{color:inherit}
 .wrap{max-width:1080px;margin:0 auto;padding:48px 24px 64px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px}
@@ -46,6 +44,7 @@ h1{font-size:clamp(30px,5vw,44px);font-weight:800;letter-spacing:-.5px;margin:40
 .compare th,.compare td{padding:10px 12px;border-top:1px solid var(--line);text-align:left}
 .compare th{color:var(--mut);font-weight:500}
 .yes{color:var(--or);font-weight:700}.no{color:#5d5c60}
+.foot{margin-top:32px;color:var(--mut);font-size:13px;display:flex;flex-wrap:wrap;gap:16px}
 </style>
 </head>
 <body>
@@ -109,15 +108,17 @@ h1{font-size:clamp(30px,5vw,44px);font-weight:800;letter-spacing:-.5px;margin:40
       <h4>운영체제별 기능</h4>
       <table class="compare">
         <tr><th></th><th>Windows</th><th>macOS</th></tr>
-        <tr><td>프레임 생성 (자동·2~8배)</td><td class="yes">●</td><td class="yes">●</td></tr>
+        <tr><td>프레임 생성 (표시 프레임 2~8배)</td><td class="yes">●</td><td class="yes">●</td></tr>
         <tr><td>업스케일링 + 선명화</td><td class="yes">●</td><td class="yes">●</td></tr>
-        <tr><td>듀얼 GPU</td><td class="yes">●</td><td class="yes">Intel Mac</td></tr>
+        <tr><td>듀얼 GPU (내장 + 외장 그래픽)</td><td class="yes">두 그래픽이 있는 PC</td><td class="yes">Intel Mac만</td></tr>
         <tr><td>벤치마크·기록</td><td class="yes">●</td><td class="yes">●</td></tr>
-        <tr><td>RAM·GPU·CPU 부스트, 오버클럭</td><td class="yes">●</td><td class="no">—</td></tr>
+        <tr><td>RAM·GPU·CPU 설정 바꾸기</td><td class="yes">●</td><td class="no">—</td></tr>
+        <tr><td>GPU 오버클럭 / 전력 제한</td><td class="yes">NVIDIA만</td><td class="no">—</td></tr>
         <tr><td>게임 부스트</td><td class="yes">●</td><td class="yes">●</td></tr>
         <tr><td>백업·원클릭 되돌리기</td><td class="yes">●</td><td class="yes">●</td></tr>
       </table>
-      <p class="note">프레임 생성 배수는 무료 2배, 프로 자동·3·4배, 울트라 6·8배까지예요. 듀얼 GPU, 게임별 자동 최적화, 오버클럭은 울트라 전용이에요. 출력 FPS는 기본으로 모니터 주사율을 따르고, 더 높게 정해도 모니터는 자기 주사율까지만 표시해요.</p>
+      <p class="note">프레임 생성 배수는 무료 2배, 프로 자동·3·4배, 울트라 6·8배까지예요. 배수는 캡처한 화면 사이에 만들어 넣는 표시 프레임의 수예요. 게임 자체의 FPS가 그만큼 오르지는 않고, 효과는 게임과 PC마다 달라요. 무료 2배와 벤치마크로 먼저 확인해 보세요. 듀얼 GPU, 게임별 자동 최적화, 오버클럭은 울트라 전용이에요. 출력 FPS는 기본으로 모니터 주사율을 따르고, 더 높게 정해도 모니터는 자기 주사율까지만 표시해요.</p>
+      <p class="note">게임 부스트는 설정을 바꾸고 원클릭으로 되돌리는 기능이에요. 게임 FPS가 오르는지는 아직 재지 않았어요. GPU 오버클럭 / 전력 제한은 Windows의 NVIDIA 그래픽카드에서만 돼요. 듀얼 GPU는 내장 그래픽과 외장 그래픽이 모두 있어야 하고, GPU가 하나인 Apple Silicon Mac에서는 쓸 수 없어요.</p>
       <p class="note">macOS의 게임 부스트는 저전력 모드 끄기, 백업·색인 멈추기, 무거운 앱 정리예요. RAM·GPU·CPU 항목은 macOS가 허용하지 않아서 없어요.</p>
     </div>
     <div class="card">
@@ -131,6 +132,7 @@ h1{font-size:clamp(30px,5vw,44px);font-weight:800;letter-spacing:-.5px;margin:40
       <p class="note">프레임 생성은 다음 프레임을 기다려야 해서 입력 지연이 늘어나요. 경쟁 게임에는 권장하지 않아요. 추가 지연은 프로그램 화면에 측정값으로 표시돼요.</p>
     </div>
   </div>
+  <p class="foot"><a href="https://systemboost-license.euning97.workers.dev/privacy">개인정보 처리방침</a><a href="https://systemboost-license.euning97.workers.dev/help">고객센터 · 환불 · 판매자 정보</a></p>
 </div>
 
 <script>
