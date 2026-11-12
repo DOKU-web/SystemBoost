@@ -37,7 +37,27 @@ public sealed class PremiumPage : UserControl
     private readonly TextBlock _state = Ui.Text("", "h2");
     private readonly TextBlock _stateSub = Ui.Text("", "sub", wrap: true);
     private readonly TextBlock _price = Ui.Text(PriceMonthly, "big");
-    private readonly TextBox _key = new() { Watermark = "XXXX.XXXX 형식 라이선스 키", MinWidth = 360 };
+    private readonly TextBox _key = new() { Watermark = "받은 라이선스 키를 붙여 넣으세요", MinWidth = 360 };
+    // this PC's key: hidden until '보기', so a screenshot or a screen share does not show it
+    private readonly StackPanel _currentPanel = new() { Spacing = 6, IsVisible = false };
+    private readonly TextBlock _currentInfo = Ui.Text("", "muted", wrap: true);
+    private readonly TextBox _current = new() { IsReadOnly = true, PasswordChar = '•', MinWidth = 360 };
+    private readonly Button _currentShow = Ui.Button("보기", "ghost");
+    private readonly TextBox _claim = new() { Watermark = "SB-XXXX-XXXX", MaxLength = 40, MinWidth = 200 };
+    private readonly TextBlock _claimMsg = Ui.Text("", "muted", wrap: true);
+    private readonly StackPanel _otherOrders = new() { Spacing = 6, IsVisible = false };
+    private string? _shown;   // the order the order panel shows; null = the newest
+    private readonly Button _cancelBtn = Ui.Button("주문 취소", "ghost");
+    // Two clicks for what cannot be undone from here: the first click says what will happen, the second does it.
+    private readonly Dictionary<Button, object?> _armed = new();
+    private bool Confirmed(Button b, string again)
+    {
+        if (_armed.Remove(b, out var original)) { b.Content = original; return true; }
+        _armed[b] = b.Content;
+        b.Content = again;
+        return false;
+    }
+    private void Disarm(Button b) { if (_armed.Remove(b, out var original)) b.Content = original; }
     private readonly TextBlock _msg = Ui.Text("", "muted", wrap: true);
     private readonly TextBlock _buyMsg = Ui.Text("", "muted", wrap: true);
     private readonly CheckBox _ticketBox = new() { IsVisible = false };
@@ -55,8 +75,8 @@ public sealed class PremiumPage : UserControl
     private readonly Border _methodBox = new() { HorizontalAlignment = HorizontalAlignment.Left, IsVisible = false };
     private readonly TextBlock _methodNote = Ui.Text("", "muted", wrap: true);
     private readonly StackPanel _paidPanel = new() { Spacing = 8 };
-    private readonly TextBox _payer = new() { Watermark = "입금자명 / 결제자 이름", MinWidth = 200 };
-    private readonly TextBox _memo = new() { Watermark = "메모 (선택: 결제 수단, 시각 등)", MinWidth = 240 };
+    private readonly TextBox _payer = new() { Watermark = "입금자명 / 결제자 이름", MinWidth = 200, MaxLength = 40 };
+    private readonly TextBox _memo = new() { Watermark = "메모 (선택: 결제 수단, 시각 등)", MinWidth = 240, MaxLength = 100 };
     private readonly StackPanel _orderPanel = new() { Spacing = 8, IsVisible = false };
     private readonly TextBlock _orderCode = Ui.Text("", "big");
     private readonly TextBlock _orderSub = Ui.Text("", "muted", wrap: true);
@@ -99,13 +119,15 @@ public sealed class PremiumPage : UserControl
         p.Children.Add(Ui.Text("추천 코드", "h2"));
         p.Children.Add(Ui.Text("추천 코드가 있으면 적어 주세요. 코드에 정해진 플랜을 그 기간 동안 쓸 수 있어요. 기기 한 대에 한 번만 쓸 수 있고, 코드와 무작위 기기 번호를 판매자 서버로 보내요.", "muted", wrap: true));
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var box = new TextBox { Watermark = "추천 코드", MaxLength = 16 };
+        var box = new TextBox { Watermark = "추천 코드" };   // no length cap: a key pasted here is told where it goes, not cut off
         var apply = Ui.Button("적용", "primary");
         apply.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(apply, 1);
         var msg = Ui.Text("", "muted", wrap: true);
         apply.Click += async (_, _) =>
         {
+            if ((box.Text ?? "").Contains('.')) { msg.Text = "라이선스 키는 위 '라이선스 키' 칸에 넣어 주세요."; return; }
+            if (License.NormalizeOrderCode(box.Text) != null) { msg.Text = "주문 코드는 위 '주문 코드로 키 받기' 칸에 넣어 주세요."; return; }
             apply.IsEnabled = false;
             var err = await License.RedeemReferralAsync(box.Text ?? "");
             apply.IsEnabled = true;
@@ -254,12 +276,23 @@ public sealed class PremiumPage : UserControl
         var reopen = Ui.Button("결제 페이지 다시 열기", "ghost");
         reopen.Click += async (_, _) =>
         {
-            if (License.Pending is { Url.Length: > 0 } o) await Open(o.Url);
+            if (License.PendingOrders.FirstOrDefault(o => o.Code == _shown) is { Url.Length: > 0 } o) await Open(o.Url);
         };
         codeRow.Children.Add(reopen);
-        var cancel = Ui.Button("주문 취소", "ghost");
-        cancel.Click += (_, _) => { License.ForgetPending(); ShowPending(); _buyMsg.Text = "이 기기에서 주문을 지웠어요. 이미 결제했다면 결제 메모의 코드로 판매자에게 문의하세요."; };
-        codeRow.Children.Add(cancel);
+        _cancelBtn.Click += (_, _) =>
+        {
+            if (_shown is not { } code) return;
+            if (!Confirmed(_cancelBtn, "한 번 더 누르면 지워요"))
+            {
+                _buyMsg.Text = $"주문 {code}을 이 PC에서 지울까요? 이미 결제했다면 지우지 마세요. 지운 뒤에도 판매자가 승인하면 이 화면을 열 때 키를 받아 와요.";
+                return;
+            }
+            License.ForgetPending(code);   // kept aside: a late approval still reaches this PC
+            _shown = null;
+            ShowPending();
+            _buyMsg.Text = $"이 PC에서 주문 {code}을 지웠어요. 이미 결제했다면 고객센터 '문의하기'로 주문 코드를 보내 주세요.";
+        };
+        codeRow.Children.Add(_cancelBtn);
         _orderPanel.Children.Add(codeRow);
         _orderPanel.Children.Add(_orderSub);
         // manual payments: "I paid" so the order shows up as 결제 확인 요청 in the seller's dashboard
@@ -271,7 +304,7 @@ public sealed class PremiumPage : UserControl
         {
             if (string.IsNullOrWhiteSpace(_payer.Text)) { _buyMsg.Text = "판매자가 결제를 찾을 수 있게 입금자명(결제자 이름)을 적어 주세요."; return; }
             paidBtn.IsEnabled = false;
-            var err = await License.MarkPaidAsync(_payer.Text!.Trim(), (_memo.Text ?? "").Trim());
+            var err = _shown == null ? "주문이 없어요" : await License.MarkPaidAsync(_payer.Text!.Trim(), (_memo.Text ?? "").Trim(), _shown);
             paidBtn.IsEnabled = true;
             _buyMsg.Text = err ?? "판매자에게 알렸어요. 확인되면 키가 자동으로 떠요.";
             ShowPending();
@@ -280,6 +313,7 @@ public sealed class PremiumPage : UserControl
         _paidPanel.Children.Add(Ui.Text("결제를 마쳤다면 알려 주세요", "label"));
         _paidPanel.Children.Add(paidRow);
         _orderPanel.Children.Add(_paidPanel);
+        _orderPanel.Children.Add(_otherOrders);   // a new order never replaces one still waiting: each is listed
         buy.Children.Add(_orderPanel);
         _buyCard = Ui.Card(buy);
         _buyCard.IsVisible = false;
@@ -289,15 +323,54 @@ public sealed class PremiumPage : UserControl
         var keyP = new StackPanel { Spacing = 10 };
         keyP.Children.Add(Ui.Text("라이선스 키", "h2"));
         keyP.Children.Add(_keyNote);
+        // the key registered here, to copy for a reinstall or before it is replaced
+        _currentPanel.Children.Add(Ui.Text("이 PC의 키", "label"));
+        _currentPanel.Children.Add(_currentInfo);
+        var currentRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
+        currentRow.Children.Add(_current);
+        _currentShow.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(_currentShow, 1);
+        _currentShow.Click += (_, _) =>
+        {
+            _current.RevealPassword = !_current.RevealPassword;
+            _currentShow.Content = _current.RevealPassword ? "숨기기" : "보기";
+        };
+        currentRow.Children.Add(_currentShow);
+        var copyKey = Ui.Button("키 복사", "ghost");
+        copyKey.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(copyKey, 2);
+        copyKey.Click += async (_, _) =>
+        {
+            var cb = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (cb != null && License.KeyText() is { } k) { await cb.SetTextAsync(License.Canonical(k)); copyKey.Content = "복사했어요"; }
+        };
+        currentRow.Children.Add(copyKey);
+        _currentPanel.Children.Add(currentRow);
+        keyP.Children.Add(_currentPanel);
+        keyP.Children.Add(Ui.Text("키 등록", "label"));
         var keyRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };   // keeps a long key inside the card
         keyRow.Children.Add(_key);
         var act = Ui.Button("등록", "primary");
         act.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(act, 1);
-        act.Click += (_, _) =>
+        act.Click += async (_, _) =>
         {
-            var err = License.Activate(_key.Text ?? "");
-            _msg.Text = err ?? PlanStatus.Rank switch
+            // a key that would replace a better one here (a lower plan, an earlier end, one key of a bundle, a card
+            // subscription key) is asked about first; the second click registers it
+            bool confirmed = _armed.ContainsKey(act);
+            Disarm(act);
+            act.IsEnabled = false;
+            var r = await License.RegisterTypedAsync(_key.Text ?? "", confirmed);
+            act.IsEnabled = true;
+            if (r.Confirm != null)
+            {
+                Confirmed(act, "한 번 더 누르면 바꿔요");
+                _msg.Text = r.Confirm;
+                return;
+            }
+            if (r.Error != null) { _msg.Text = r.Error; return; }
+            _key.Text = "";   // the key is a secret: shown again only under '이 PC의 키'
+            _msg.Text = PlanStatus.Rank switch
             {
                 3 => "산업이 켜졌어요. 모든 기능을 바로 쓸 수 있어요.",
                 2 => "울트라가 켜졌어요. 울트라 기능을 바로 쓸 수 있어요.",
@@ -305,14 +378,46 @@ public sealed class PremiumPage : UserControl
             };
             Refresh();
         };
+        _key.TextChanged += (_, _) => Disarm(act);
         keyRow.Children.Add(act);
         var off = Ui.Button("이 기기에서 해제", "ghost");
         off.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(off, 2);
-        off.Click += (_, _) => { License.Deactivate(); _msg.Text = "이 기기에서 키를 해제했어요"; Refresh(); };
+        off.Click += (_, _) =>
+        {
+            if (License.KeyText() == null) { _msg.Text = "이 PC에 등록된 키가 없어요"; return; }
+            if (!Confirmed(off, "한 번 더 누르면 해제해요"))
+            {
+                _msg.Text = "이 PC에서 키를 해제할까요? 다시 쓰려면 키가 필요하니 먼저 '이 PC의 키'에서 복사해 두세요." +
+                            (License.Info?.Sub != null ? " " + License.SubscriptionGoesOn : "");
+                return;
+            }
+            License.Deactivate();
+            _msg.Text = "이 기기에서 키를 해제했어요";
+            Refresh();
+        };
         keyRow.Children.Add(off);
         keyP.Children.Add(keyRow);
         keyP.Children.Add(_msg);
+        // an order whose key did not pop up here: ordered on another PC, cancelled here, or the app was closed too long
+        keyP.Children.Add(Ui.Text("주문 코드로 키 받기", "label"));
+        keyP.Children.Add(Ui.Text("결제했는데 키가 이 PC에 뜨지 않았다면 주문 코드(SB-로 시작)를 넣으세요. 승인된 주문의 키는 계좌이체 30일, 카드 결제 7일 동안 받을 수 있어요. 아직 승인 전이면 승인될 때까지 기다려요.", "muted", wrap: true));
+        var claimRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        claimRow.Children.Add(_claim);
+        var claimBtn = Ui.Button("키 받기", "ghost");
+        claimBtn.Click += async (_, _) =>
+        {
+            claimBtn.IsEnabled = false;
+            _claimMsg.Text = "확인하는 중…";
+            var err = await License.ClaimOrderAsync(_claim.Text ?? "");
+            claimBtn.IsEnabled = true;
+            _claimMsg.Text = err ?? "키를 받았어요.";
+            if (err == null) _claim.Text = "";
+            ShowPending();
+        };
+        claimRow.Children.Add(claimBtn);
+        keyP.Children.Add(claimRow);
+        keyP.Children.Add(_claimMsg);
         _keyCard = Ui.Card(keyP);
         root.Children.Add(_keyCard);
         root.Children.Add(Ui.Card(ReferralCard()));
@@ -323,6 +428,7 @@ public sealed class PremiumPage : UserControl
         ShowPending();
         AttachedToVisualTree += async (_, _) => await LoadShop();   // links may change in the dashboard
         AttachedToVisualTree += async (_, _) => await LoadTicket();
+        AttachedToVisualTree += async (_, _) => await License.CheckStoppedAsync();   // an order approved after it stopped being watched
     }
 
     /// From the plan window: that plan selected, and the place to pay in view.
@@ -335,6 +441,10 @@ public sealed class PremiumPage : UserControl
         foreach (var o in _periodP.Children.OfType<ToggleButton>()) o.IsChecked = (string?)o.Tag == period;
         UpdateBuy();
         await LoadShop();
+        // 기간 연장 of a key that does not renew by itself: a bank-transfer order continues from the key's end, a card
+        // subscription starts on the day it is paid
+        int rank = tier switch { "biz" => 3, "ultra" => 2, _ => 1 };
+        if (rank == PlanStatus.Rank && PlanStatus.CanExtend && _methods["manual"].Contains(PlanId)) { _method = "manual"; UpdateBuy(); }
         var target = _buyCard.IsVisible ? _buyCard : _keyCard;
         Avalonia.Threading.Dispatcher.UIThread.Post(target.BringIntoView, Avalonia.Threading.DispatcherPriority.Background);
     }
@@ -373,30 +483,60 @@ public sealed class PremiumPage : UserControl
         _methodBox.IsVisible = card && manual;                              // choice only when both are open
         foreach (var t in _methodP.Children.OfType<ToggleButton>()) t.IsChecked = (string?)t.Tag == _method;
         var open = _method == "card" ? card : manual;
+        // a running card subscription changes its plan instead of starting a second one next to it
+        bool change = _method == "card" && _seats == 1 && License.SubscriptionActive;
+        Disarm(_buyBtn);
         _buyBtn.IsEnabled = open;
-        _buyBtn.Content = !open ? "결제 준비 중" : _method == "card" ? "카드로 결제하기" : "결제하기";
+        _buyBtn.Content = !open ? "결제 준비 중" : change ? "구독 플랜 바꾸기" : _method == "card" ? "카드로 결제하기" : "결제하기";
         _ticketBox.IsVisible = _ticketPercent > 0 && open && _method == "manual" && _seats == 1;   // a card checkout and a bundle cannot take it
         ShowPrice();
         _methodNote.IsVisible = open;
-        _methodNote.Text = _method == "card"
-            ? ("카드를 등록하면 기간마다 자동으로 결제되고 키도 자동으로 연장돼요. 해지는 결제 메일의 구독 관리 링크에서 언제든 할 수 있어요.")
-            : "판매자 결제 페이지에서 결제한 뒤 '결제했어요'를 누르면, 판매자가 확인하고 키를 보내 줘요. 기간이 끝나기 전에 다시 결제하면 이어서 써요.";
+        if (change)
+            _methodNote.Text = "지금 쓰는 카드 구독의 플랜을 바꿔요. 구독이 하나 더 생기지 않고, 새 플랜의 키는 몇 분 안에 자동으로 받아 와요. 금액 차이는 카드 결제 서비스가 정산해요.";
+        else if (_method == "card")
+            _methodNote.Text = "카드를 등록하면 해지할 때까지 기간마다 자동으로 결제되고, 앱을 켜면 새 기간의 키를 자동으로 받아 와요. 해지는 '고객센터 → 구독 관리'나 결제 메일의 구독 관리 링크에서 언제든 할 수 있어요. " +
+                              "카드 구독은 결제한 날부터 시작해요(지금 키의 남은 기간은 더해지지 않아요).";
+        else
+        {
+            var note = "판매자 결제 페이지에서 결제한 뒤 '결제했어요'를 누르면, 판매자가 확인하고 키를 보내 줘요.";
+            if (License.ExtendsFrom(PlanId, "manual") is DateTime end)
+                note += " " + $"지금 키가 끝나는 {end.ToLocalTime():yyyy-MM-dd}부터 이어서 새 기간이 더해져요.";
+            else if (_seats == 1)
+                note += " 키의 기간은 판매자가 승인한 날부터 시작해요.";
+            if (License.SubscriptionActive) note += " " + License.SubscriptionGoesOn;
+            _methodNote.Text = note;
+        }
     }
 
     private void ShowPending()
     {
-        var o = License.Pending;
+        var all = License.PendingOrders;   // newest first
+        var o = all.FirstOrDefault(x => x.Code == _shown) ?? all.FirstOrDefault();
+        if (o?.Code != _shown) Disarm(_cancelBtn);
+        _shown = o?.Code;
         _orderPanel.IsVisible = o != null;
+        _otherOrders.Children.Clear();
+        _otherOrders.IsVisible = all.Length > 1;
         if (o == null) return;
         _orderCode.Text = o.Code;
-        var plan = PlanLabel(o.Plan);
+        var plan = o.Plan.Length > 0 ? PlanLabel(o.Plan) : "주문 코드로 확인한";   // a code typed in: the plan is not known here
         var auto = o.Method is "card" or "auto";
         _paidPanel.IsVisible = !auto && o.Status != "paid";
         _orderSub.Text = auto
             ? $"{plan} 카드 결제 · 결제창에서 결제를 마치면 키가 자동으로 만들어져 이 앱에 떠요. 앱을 껐다 켜도 이어서 기다려요."
             : o.Status == "paid"
-                ? $"{plan} 주문 · 결제 확인 요청을 보냈어요. 판매자가 확인하면 키가 자동으로 떠요(시간이 걸릴 수 있어요). 앱을 껐다 켜도 이어서 기다려요."
+                ? $"{plan} 주문 · 결제 확인 요청을 보냈어요. 판매자가 확인하면 키가 자동으로 떠요(시간이 걸릴 수 있어요). 앱을 껐다 켜도 주문한 날부터 90일까지 기다려요."
                 : $"{plan} 주문 · 결제할 때 요청사항(메모)에 이 코드를 꼭 적어 주세요. 결제를 마친 뒤 아래에 입금자명을 적고 '결제했어요'를 누르면 판매자가 확인해요.";
+        if (o.Extends is DateTime end) _orderSub.Text += "\n" + $"지금 키가 끝나는 {end.ToLocalTime():yyyy-MM-dd}부터 이어서 새 기간이 더해져요.";
+        if (all.Length < 2) return;
+        _otherOrders.Children.Add(Ui.Text("기다리는 다른 주문 · 누르면 그 주문을 보여 줘요", "label"));
+        foreach (var other in all.Where(x => x.Code != o.Code))
+        {
+            var b = Ui.Button(other.Code + " · " + (other.Plan.Length > 0 ? PlanLabel(other.Plan) : "주문") + (other.Status == "paid" ? " · 결제 확인 중" : ""), "ghost");
+            b.HorizontalAlignment = HorizontalAlignment.Left;
+            b.Click += (_, _) => { _shown = other.Code; ShowPending(); };
+            _otherOrders.Children.Add(b);
+        }
     }
 
     private async System.Threading.Tasks.Task Open(string url)
@@ -456,19 +596,43 @@ public sealed class PremiumPage : UserControl
     /// Gets an order code, shows it, opens the seller's payment page. The key arrives later (License.KeyArrived).
     private async System.Threading.Tasks.Task Buy()
     {
-        if (License.Pending is { } prev && prev.Plan == PlanId && prev.Method == _method && prev.Ticket == UseTicket && prev.Url.Length > 0)
-        {   // same plan already ordered: reuse the code instead of making a new one
-            _buyMsg.Text = "이미 만든 주문이 있어요. 같은 주문으로 결제하세요.";
+        if (_method == "card" && _seats == 1 && License.SubscriptionActive)
+        {   // a running card subscription: its plan changes, a second checkout would bill twice
+            if (!Confirmed(_buyBtn, "한 번 더 누르면 플랜을 바꿔요"))
+            {
+                _buyMsg.Text = $"지금 카드 구독을 {PlanLabel(PlanId)}(으)로 바꿔요. 구독이 하나 더 생기지 않아요.";
+                return;
+            }
+            _buyBtn.IsEnabled = false;
+            _buyMsg.Text = "플랜을 바꾸는 중…";
+            var error = await License.ChangeSubscriptionAsync(PlanId);
+            UpdateBuy();
+            _buyMsg.Text = error ?? "플랜 변경을 요청했어요. 새 플랜의 키는 몇 분 안에 자동으로 받아 와요.";
+            return;
+        }
+        if (License.PendingOrders.FirstOrDefault(o => o.Plan == PlanId && o.Method == _method && o.Ticket == UseTicket && o.Url.Length > 0 && o.Status != "paid") is { } prev)
+        {   // same plan already ordered and not paid yet: reuse the code instead of making a new one
+            _shown = prev.Code;
+            ShowPending();
+            _buyMsg.Text = $"이미 만든 주문 {prev.Code}이 있어요. 같은 주문으로 결제하세요.";
             await Open(prev.Url);
             return;
         }
+        // an order reported as paid keeps waiting next to a new one: said before a second payment
+        if (License.PaidPending is { } paid && !Confirmed(_buyBtn, "한 번 더 누르면 새로 주문해요"))
+        {
+            _buyMsg.Text = $"결제 확인을 기다리는 주문 {paid.Code}이 있어요. 새로 주문해도 그 주문은 계속 기다려요. 같은 플랜을 두 번 결제하지 않게 주의하세요.";
+            return;
+        }
+        Disarm(_buyBtn);
         _buyBtn.IsEnabled = false;
         _buyMsg.Text = "주문을 만드는 중…";
         var (code, url, err) = await License.CreateOrderAsync(PlanId, _method, UseTicket);
         UpdateBuy();
         if (code == null || url == null) { _buyMsg.Text = err ?? "주문을 만들지 못했어요."; return; }
+        _shown = code;
         ShowPending();
-        if (License.Pending?.Method is "card" or "auto")
+        if (License.PendingOrders.FirstOrDefault(o => o.Code == code)?.Method is "card" or "auto")
             _buyMsg.Text = "카드 결제창이 열려요. 결제가 끝나면 키가 자동으로 떠요.";
         else
         {
@@ -481,7 +645,7 @@ public sealed class PremiumPage : UserControl
 
     private void Refresh()
     {
-        var info = License.Info;
+        var info = License.Info is { } i && (i.Expires == null || i.Expires > DateTime.UtcNow) ? i : null;   // a key that ran out is shown below only
         if (License.IsPremium)
         {
             _state.Text = PlanStatus.Rank switch { 3 => "산업 사용 중 ★", 2 => "울트라 사용 중 ★", _ => "프로 사용 중 ★" };
@@ -494,6 +658,22 @@ public sealed class PremiumPage : UserControl
                                          : "프레임 생성 2배, 업스케일, 모니터링을 쓸 수 있어요.";
         }
         if (License.Notice != null) _msg.Text = License.Notice;
+        ShowCurrent();
         ShowPending();
+        UpdateBuy();   // a card subscription key arriving or ending changes what the buy button does
+    }
+
+    private void ShowCurrent()
+    {
+        var raw = License.KeyText();
+        var info = License.Info;
+        _currentPanel.IsVisible = raw != null && info != null;
+        if (raw == null || info == null) { _current.Text = ""; return; }
+        var text = License.Canonical(raw);
+        if (_current.Text != text) { _current.Text = text; _current.RevealPassword = false; _currentShow.Content = "보기"; }
+        var parts = new List<string> { License.Describe(info) };
+        if (info.Sub != null) parts.Add("카드 구독");
+        if (info.Expires is DateTime e && e < DateTime.UtcNow) parts.Add("기간이 끝났어요");
+        _currentInfo.Text = string.Join(" · ", parts);
     }
 }
