@@ -1125,5 +1125,6 @@
 "같은 드라이브가 두 번 있어요": "The same drive is listed twice",
 "{0} 드라이브를 찾을 수 없어요. 다른 드라이브를 고르세요": "Drive {0} cannot be found. Choose another drive",
 "크기가 잘못됐어요": "The size is not valid",
-"이 드라이브의 남은 공간보다 커요 (10 GB는 남겨 둬요). 크기를 줄이세요": "This is more than the free space on the drive (10 GB is kept free). Reduce the size"
+"이 드라이브의 남은 공간보다 커요 (10 GB는 남겨 둬요). 크기를 줄이세요": "This is more than the free space on the drive (10 GB is kept free). Reduce the size",
+"게임 프레임 제한(드라이버 프로필)을 되돌리지 못했어요: {0}": "The game frame limit (driver profile) could not be put back: {0}"
 }

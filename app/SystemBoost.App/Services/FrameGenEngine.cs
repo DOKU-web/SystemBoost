@@ -450,6 +450,12 @@ public sealed class FrameGenEngine : IDisposable
         finally { DriverGate.Release(); }
     }
 
+    /// A frame limit of ours is on record in some game's driver profile (전체 되돌리기 counts it).
+    internal static bool HasDriverLimits
+    {
+        get { try { return OperatingSystem.IsWindows() && LoadDriverLimits().Count > 0; } catch (Exception) { return false; } }
+    }
+
     /// The same for the Velopack uninstall hook (Program.cs): no window and no elevation there, so the plain
     /// helper only. Waits at most 10 seconds and never throws.
     public static void RestoreDriverSettings()

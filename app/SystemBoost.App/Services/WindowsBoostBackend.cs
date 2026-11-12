@@ -463,8 +463,12 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         await _gate.WaitAsync();
         try
         {
-            int count = ChangedItems().Count + (Has(GameLimit) ? 1 : 0);
+            bool fgLimit = FrameGenEngine.HasDriverLimits;   // frame generation's limit in a game's NVIDIA driver profile
+            int count = ChangedItems().Count + (Has(GameLimit) ? 1 : 0) + (fgLimit ? 1 : 0);
             if (count == 0) return "변경된 것이 없어요";
+            var fgNote = fgLimit && await FrameGenEngine.RestoreDriverSettingsAsync(mayElevate: true) is { } fgFailed
+                ? " · 게임 프레임 제한(드라이버 프로필)을 되돌리지 못했어요: " + fgFailed : "";
+            if (fgNote.Length > 0) count--;   // it stays on record for the next try
             _s.OneClick = false;
             _s.OneClickOwned.Clear();
             _s.Enabled.Clear();
@@ -483,11 +487,11 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             if (_s.Backups.Any(IsAdminKind))
             {
                 var e = await _helper.EnsureAsync();
-                if (e != null) { await RestoreAsync(_s.Backups.Where(b => !IsAdminKind(b)).ToList()); Save(); return e + cappedNote; }
+                if (e != null) { await RestoreAsync(_s.Backups.Where(b => !IsAdminKind(b)).ToList()); Save(); return e + cappedNote + fgNote; }
             }
             var failed = await RestoreAsync(_s.Backups.ToList());
             Save();
-            return (failed == null ? $"{count}개 항목을 원래대로 돌렸어요" : $"일부를 되돌리지 못했어요: {failed}") + cappedNote;
+            return (failed == null ? $"{count}개 항목을 원래대로 돌렸어요" : $"일부를 되돌리지 못했어요: {failed}") + cappedNote + fgNote;
         }
         catch (Exception e) { return "실패했어요: " + e.Message; }
         finally { _gate.Release(); Publish(); }
