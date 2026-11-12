@@ -82,6 +82,7 @@ public sealed record SupportDraft(string Cat, string Subject, string Text, strin
 public static class Support
 {
     public const int MaxKept = 20, MaxSubject = 80, MaxText = 2000, MaxContact = 120, MaxMessages = 30;
+    public const int MaxKey = 4000;   // the server's LIMITS.key
     private const int MaxDiag = 80;
     private static readonly TimeSpan BackgroundEvery = TimeSpan.FromMinutes(30);
     public static readonly TimeSpan PageEvery = TimeSpan.FromSeconds(60);
@@ -462,7 +463,7 @@ public static class Support
         if (order.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(order, "^SB-[A-Z0-9]{4}-[A-Z0-9]{4}$"))
             return (null, "주문 코드 형식이 맞지 않아요 (SB-XXXX-XXXX)");
         if (d.Cat == "refund" && order.Length == 0 && string.IsNullOrEmpty(d.Key))
-            return (null, "이 PC에 키가 없으면 주문 코드를 적어 주세요. 주문 코드를 모르면 '문의하기'에 결제한 날, 금액, 입금자명을 적어 주세요.");
+            return (null, "이 PC에 키가 없으면 키 전체나 주문 코드를 적어 주세요. 둘 다 모르면 '문의하기'에 결제한 날, 금액, 입금자명을 적어 주세요.");
         if (d.Cat == "refund" && string.IsNullOrEmpty(d.RefundReason)) return (null, "환불 사유를 골라 주세요");
 
         var body = new Dictionary<string, object>
@@ -675,10 +676,18 @@ public static class Support
         _ = RefreshAsync(Scope.Waiting);
     }
 
-    /// A pre-signed link to the card subscription's own management page. Only for a key with a subscription.
-    public static async Task<(string? url, string? error)> SubscriptionPortalAsync()
+    /// A pre-signed link to the card subscription's own management page. Only for a key with a subscription:
+    /// typed = a key typed into the refund form, else this PC's key.
+    public static async Task<(string? url, string? error)> SubscriptionPortalAsync(TypedKey? typed = null)
     {
-        if (License.Info?.Sub == null || License.KeyText() is not { } key) return (null, "이 PC의 키는 카드 구독 키가 아니에요");
+        string key;
+        if (typed != null)
+        {
+            if (typed.Info.Sub == null) return (null, "입력한 키는 카드 구독 키가 아니에요");
+            key = typed.Key;
+        }
+        else if (License.Info?.Sub == null || License.KeyText() is not { } own) return (null, "이 PC의 키는 카드 구독 키가 아니에요");
+        else key = own;
         var (status, r, _, _) = await Call(HttpMethod.Post, "/support/subscription", new Dictionary<string, string> { ["key"] = key });
         if (status == 200 && Str(r, "portal") is { } link && Uri.TryCreate(link, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
             return (link, null);

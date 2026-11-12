@@ -33,6 +33,9 @@ public enum PremiumFeature
 
 public sealed record LicenseInfo(string Plan, string Email, DateTime? Expires, string Source, string? Sub = null, DateTime? Issued = null);
 
+/// A key typed by hand: the key in the server's spelling, its id ("lic:" + Id on the server) and what it says.
+public sealed record TypedKey(string Key, string Id, LicenseInfo Info);
+
 public interface ISteamOwnership { bool OwnsPremiumDlc(); }
 
 public static class License
@@ -158,7 +161,19 @@ public static class License
         RaiseChanged();
     }
 
-    private static LicenseInfo? Verify(string key, out string error)
+    /// A key the user typed or pasted (the refund form), with its id. Checked by its signature and read also when it has
+    /// run out; not registered on this PC. Null with a message when it is not a key of this shop (empty text: no message).
+    internal static TypedKey? Inspect(string? text, out string error)
+    {
+        var key = Canonical(System.Text.RegularExpressions.Regex.Replace(text ?? "", @"\s+", ""));
+        if (key.Length == 0) { error = ""; return null; }
+        LicenseInfo? info;
+        try { info = Verify(key, out error, allowExpired: true); }
+        catch (Exception) { error = "올바른 키가 아니에요"; return null; }   // a signed payload that is not ours
+        return info == null ? null : new TypedKey(key, IdOf(key), info);
+    }
+
+    private static LicenseInfo? Verify(string key, out string error, bool allowExpired = false)
     {
         error = "";
         if (string.IsNullOrEmpty(PublicKeyB64)) { error = "아직 결제 연동 전이라 키를 확인할 수 없어요"; return null; }
@@ -173,7 +188,7 @@ public static class License
         using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(payload));
         var r = doc.RootElement;
         DateTime? exp = r.TryGetProperty("expires", out var e) && e.ValueKind == JsonValueKind.String ? DateTime.Parse(e.GetString()!).ToUniversalTime() : null;
-        if (exp != null && exp < DateTime.UtcNow) { error = "기간이 끝난 키예요. 구독을 연장하세요"; return null; }
+        if (!allowExpired && exp != null && exp < DateTime.UtcNow) { error = "기간이 끝난 키예요. 구독을 연장하세요"; return null; }
         DateTime? issued = r.TryGetProperty("issued", out var i) && i.ValueKind == JsonValueKind.String && DateTime.TryParse(i.GetString(),
                                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal, out var at) ? at : null;
         return new LicenseInfo(r.GetProperty("plan").GetString() ?? "premium", r.TryGetProperty("email", out var m) ? m.GetString() ?? "" : "", exp, "key",

@@ -68,7 +68,13 @@ public sealed class SupportPage : UserControl
     private readonly StackPanel _refundPanel = new() { Spacing = 10 };
     private readonly ContentControl _rfFacts = new();
     private readonly ContentControl _rfCard = new();
-    private readonly TextBox _rfOrder = Input("주문 코드 SB-XXXX-XXXX (있으면)", 12);
+    // long enough to take a whole key pasted by mistake: it is moved to the key box instead of being cut to 12 characters
+    private readonly TextBox _rfOrder = Input("주문 코드 SB-XXXX-XXXX (있으면)", Support.MaxKey);
+    // a key typed by hand, hidden like a password; its plan and dates show once it checks out
+    private readonly TextBox _rfKey = new() { Watermark = "키 전체 (이 PC에 없는 키로 요청할 때)", MaxLength = Support.MaxKey, PasswordChar = '•' };
+    private readonly Button _rfKeyShow = Ui.Button("보기", "ghost");
+    private readonly TextBlock _rfKeyMsg = Message();
+    private TypedKey? _rfTyped;
     private readonly ComboBox _rfReason = new() { PlaceholderText = "환불 사유 고르기" };
     private string? _rfReasonId;
     private readonly TextBox _rfText = Area($"자세한 내용 (선택, {Support.MaxText}자까지)", Support.MaxText);
@@ -495,8 +501,32 @@ public sealed class SupportPage : UserControl
         p.Children.Add(Ui.Text("환불 요청", "h2"));
         p.Children.Add(Ui.Text("요청을 판매자에게 보내요. 판매자가 확인하고 환불 여부와 방법을 '내 문의'로 답해 줘요.", "muted", wrap: true));
         p.Children.Add(_rfFacts);
+        p.Children.Add(Ui.Text("키", "label"));
+        var keyRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        _rfKeyShow.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(_rfKeyShow, 1);
+        keyRow.Children.Add(_rfKey);
+        keyRow.Children.Add(_rfKeyShow);
+        p.Children.Add(keyRow);
+        p.Children.Add(Ui.Text("다른 PC에서 쓰던 키라면 키 전체를 붙여 넣으세요. 키가 맞으면 위에 그 키의 플랜과 기간이 보이고, 그 키로 요청해요. 키는 판매자 서버가 서명으로 확인하는 데만 쓰고 저장하지 않아요.", "muted", wrap: true));
+        p.Children.Add(_rfKeyMsg);
+        _rfKey.TextChanged += (_, _) => TypedKeyChanged();
+        _rfKeyShow.Click += (_, _) =>
+        {
+            _rfKey.RevealPassword = !_rfKey.RevealPassword;
+            _rfKeyShow.Content = _rfKey.RevealPassword ? "숨기기" : "보기";
+        };
+        p.Children.Add(Ui.Text("주문 코드", "label"));
         p.Children.Add(_rfOrder);   // ShowKeyParts fills in the order still waiting for its key, if any
-        p.Children.Add(Ui.Text("주문 코드는 '★ 플랜'에서 결제할 때 받은 SB-로 시작하는 코드예요. 이 PC에 키가 있으면 적지 않아도 되고, 적으면 키와 함께 보내요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text("주문 코드는 '★ 플랜'에서 결제할 때 받은 SB-로 시작하는 코드예요. 키가 있으면 적지 않아도 되고, 적으면 키와 함께 보내요.", "muted", wrap: true));
+        _rfOrder.TextChanged += (_, _) =>
+        {   // a whole key pasted into the order box goes to the key box instead of being cut off
+            var t = (_rfOrder.Text ?? "").Trim();
+            if (t.Length <= 20 || !t.Contains('.')) return;
+            _rfOrder.Text = "";
+            _rfKey.Text = t;
+            if (_rfTyped != null) _rfKeyMsg.Text = "주문 코드 칸에 넣은 키를 '키' 칸으로 옮겼어요.";
+        };
         p.Children.Add(Clause9());
         p.Children.Add(_rfCard);
         p.Children.Add(Ui.Text("환불 사유", "label"));
@@ -520,7 +550,13 @@ public sealed class SupportPage : UserControl
             if (_rfConsent.IsChecked != true) { _rfMsg.Text = "보관에 동의해야 보낼 수 있어요"; return; }
             var reason = _info.RefundReasons.FirstOrDefault(r => r.Id == _rfReasonId);
             if (reason == null) { _rfMsg.Text = "환불 사유를 골라 주세요"; return; }
-            var info = License.Info;
+            var typed = _rfTyped;
+            if (typed == null && !string.IsNullOrWhiteSpace(_rfKey.Text))
+            {   // never fall back to this PC's key when the user meant another one
+                _rfMsg.Text = "'키' 칸의 키를 확인하지 못했어요. 키를 고치거나 칸을 비워 주세요.";
+                return;
+            }
+            var info = typed?.Info ?? License.Info;
             var order = (_rfOrder.Text ?? "").Trim().ToUpperInvariant();
             var subject = Lang.T("환불 요청") + (info != null ? " · " + Lang.T(PlanName(info.Plan)) : order.Length > 0 ? " · " + order : "");
             var text = (_rfText.Text ?? "").Trim();
@@ -528,12 +564,16 @@ public sealed class SupportPage : UserControl
             _rfSending = true;
             _rfSend.IsEnabled = false;
             _rfMsg.Text = "보내는 중…";
-            // the key itself goes along, so the server can check it is this buyer's; the server keeps only its ID
+            // the key itself goes along (the typed one, else this PC's), so the server can check it is this buyer's;
+            // the server keeps only its ID
             var (id, error) = await Support.CreateAsync(new SupportDraft("refund", subject, text, _rfContact.Text, null, order,
-                                                                         License.KeyText(), License.KeyId, reason.Id));
+                                                                         typed?.Key ?? License.KeyText(), typed?.Id ?? License.KeyId, reason.Id));
             _rfSending = false;
             _rfSend.IsEnabled = _info.Open;
             if (id == null) { _rfMsg.Text = error ?? ""; return; }
+            _rfKey.Text = "";   // the key is a secret: it does not stay on screen after the request went
+            _rfKey.RevealPassword = false;
+            _rfKeyShow.Content = "보기";
             _rfText.Text = "";
             _rfMsg.Text = "";
             OpenThread(id, $"환불 요청을 보냈어요. 문의 번호 {id}");
@@ -550,6 +590,15 @@ public sealed class SupportPage : UserControl
     }
 
     private string? _rfPrefill;   // the order code the page filled in itself
+
+    /// The key box changed: check the key by its signature (this PC does not register it) and show what it says.
+    private void TypedKeyChanged()
+    {
+        var text = _rfKey.Text ?? "";
+        _rfTyped = License.Inspect(text, out var error);
+        _rfKeyMsg.Text = _rfTyped != null || string.IsNullOrWhiteSpace(text) ? "" : error.Length > 0 ? error : "올바른 키가 아니에요";
+        ShowKeyParts();
+    }
 
     /// The key facts of this PC, the card subscription note and the order code box: all follow the key.
     /// A registered key goes along with the request; an order still waiting for its key is filled in whenever there
@@ -570,8 +619,27 @@ public sealed class SupportPage : UserControl
             _rfPrefill = pending;
         }
         var p = new StackPanel { Spacing = 6 };
-        if (id == null)
-            p.Children.Add(Ui.Text("이 PC에 등록된 키가 없어요. 아래에 주문 코드를 적어 주세요.", "label", wrap: true));
+        if (_rfTyped is { } typed)
+        {   // the key typed below is the one the request names
+            var t = typed.Info;
+            p.Children.Add(Ui.Text("입력한 키로 요청해요", "label"));
+            var rows = new List<(string, string)>
+            {
+                ("키 식별 번호", typed.Id),
+                ("플랜 종류", PlanName(t.Plan)),
+                ("키를 받은 날", t.Issued is DateTime issued ? Since(issued) : "키에 적혀 있지 않아요"),
+                ("사용 기간", t.Expires is not DateTime end ? "기간 제한 없음"
+                              : end < DateTime.UtcNow ? $"{end.ToLocalTime():yyyy-MM-dd}에 끝났어요"
+                              : $"{end.ToLocalTime():yyyy-MM-dd}까지 · {(int)Math.Ceiling((end - DateTime.UtcNow).TotalDays)}일 남음"),
+            };
+            if (t.Sub != null) rows.Add(("받은 방법", "카드 구독"));
+            if (typed.Id == id) rows.Add(("이 PC", "이 PC에 등록된 키와 같아요"));
+            p.Children.Add(Facts(rows));
+            p.Children.Add(Ui.Text("키 식별 번호는 키 자체가 아니라, 판매자가 이 키를 찾을 때 쓰는 번호예요.", "muted", wrap: true));
+            info = t;   // the card note below follows the typed key
+        }
+        else if (id == null)
+            p.Children.Add(Ui.Text("이 PC에 등록된 키가 없어요. 아래에 키 전체나 주문 코드를 적어 주세요.", "label", wrap: true));
         else
         {
             var rows = new List<(string, string)> { ("키 식별 번호", id) };
@@ -592,7 +660,7 @@ public sealed class SupportPage : UserControl
         var card = new StackPanel { Spacing = 8 };
         card.Children.Add(Ui.Text("카드 구독 키예요. 환불이 정해지면 판매자가 카드 결제로 돌려줘요. 다음 결제가 되지 않게 하려면 '구독 관리'에서 구독을 해지해 주세요.", "label", wrap: true));
         var msg = Message();
-        card.Children.Add(Left(PortalButton(msg)));
+        card.Children.Add(Left(PortalButton(msg, _rfTyped)));
         card.Children.Add(msg);
         _rfCard.Content = Ui.Card(card, "note");
         _rfCard.IsVisible = true;
@@ -625,14 +693,14 @@ public sealed class SupportPage : UserControl
     }
 
     // ------------------------------------------------------------ 구독 관리 (a key with a card subscription only)
-    private Button PortalButton(TextBlock msg)
+    private Button PortalButton(TextBlock msg, TypedKey? typed = null)
     {
         var b = Ui.Button("구독 관리", "ghost");
         b.Click += async (_, _) =>
         {
             b.IsEnabled = false;
             msg.Text = "구독 관리 링크를 받는 중…";
-            var (url, error) = await Support.SubscriptionPortalAsync();
+            var (url, error) = await Support.SubscriptionPortalAsync(typed);
             b.IsEnabled = true;
             if (url == null) { msg.Text = error ?? ""; return; }
             try
