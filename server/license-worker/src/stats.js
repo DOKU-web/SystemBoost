@@ -8,6 +8,11 @@
 // GitHub only gives running totals per release file, so the daily download numbers are the difference
 // between one day's last total and the day before's. The hourly cron keeps those totals going while
 // nobody has the dashboard open.
+//
+// The same object keeps the support dashboard's event feed ("새 소식"): one row per thing a buyer did (new ticket,
+// refund request, reply, reopen, close) and per card refund the webhook finished, so the dashboard sees it without
+// a reload. A row holds the time, the kind, the ticket number and its category, never what the buyer wrote; the
+// dashboard takes the subject from its own ticket list. Kept 30 days and at most the newest 1,000 rows.
 
 const REPO = "DOKU-web/SystemBoost";
 const MINUTE = 60e3, DAY = 864e5;
@@ -18,6 +23,9 @@ const SCAN_MS = 5 * MINUTE;    // the numbers that scan every recent install are
 const GITHUB_MS = 5 * MINUTE;  // the dashboard asks GitHub at most this often
 const HISTORY_DAYS = 30;
 const MULTIPLIERS = [0, 2, 3, 4, 6, 8];
+export const FEED = { keepDays: 30, keepRows: 1000, page: 100, recent: 20 };
+export const FEED_KINDS = ["ticket", "refund", "reply", "reopen", "close", "card"];
+const TICKET_RE = /^T-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;   // as in support.js
 
 // The free plan stops the whole worker at 100,000 requests a day, license checks and orders included, and
 // SQLite at 100,000 rows written; a ping writes 3 rows. So the more people use the app today, the less often
@@ -37,6 +45,10 @@ CREATE TABLE IF NOT EXISTS days (
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS download_totals (day TEXT PRIMARY KEY, installers INTEGER NOT NULL, updates INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS support_events (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, kind TEXT NOT NULL, ticket TEXT NOT NULL, cat TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS support_events_ticket ON support_events(ticket);
 `;
 
 const koreanDay = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
@@ -99,6 +111,9 @@ export class Stats {
     if (path === "/read") return reply(await this.read());
     if (path === "/downloads") { this.saveDownloads(body); return reply({ ok: true }); }
     if (path === "/tick") { await this.tick(); return reply({ ok: true }); }
+    if (path === "/event") { const r = this.event(body); return reply(r, r.error ? 400 : 200); }
+    if (path === "/feed") return reply(this.feed(body));
+    if (path === "/forget") { this.sql.exec("DELETE FROM support_events WHERE ticket = ?", String(body?.ticket || "")); return reply({ ok: true }); }
     return reply({ error: "not found" }, 404);
   }
 
@@ -190,5 +205,31 @@ export class Stats {
   async tick() {
     await this.askGitHub();
     this.sql.exec("DELETE FROM installs WHERE last_seen < ?", Date.now() - KEEP_DAYS * DAY);
+    this.pruneFeed();
+  }
+
+  // ---- support feed
+  event(e) {
+    if (!e || !FEED_KINDS.includes(e.kind) || !TICKET_RE.test(e.ticket)) return { error: "bad event" };
+    this.sql.exec("INSERT INTO support_events (at, kind, ticket, cat) VALUES (?, ?, ?, ?)", Date.now(), e.kind, e.ticket,
+                  /^[a-z]{1,12}$/.test(e.cat) ? e.cat : "");
+    this.pruneFeed();
+    return { ok: true };
+  }
+  pruneFeed() {
+    this.sql.exec(`DELETE FROM support_events WHERE at < ?
+                   OR seq <= (SELECT seq FROM support_events ORDER BY seq DESC LIMIT 1 OFFSET ?)`, Date.now() - FEED.keepDays * DAY, FEED.keepRows);
+  }
+  // after: the last seq the dashboard has; the rows after it, oldest first, at most FEED.page. Without it the newest
+  // FEED.recent. last: what to send as after next time. It is below after when the feed started again (an empty
+  // object), so the dashboard simply goes on from there.
+  feed(b) {
+    const since = Date.now() - FEED.keepDays * DAY, after = b?.after;
+    const head = this.one("SELECT COALESCE(MAX(seq), 0) AS n FROM support_events").n;
+    const rows = Number.isSafeInteger(after) && after >= 0
+      ? this.sql.exec("SELECT seq, at, kind, ticket, cat FROM support_events WHERE seq > ? AND at >= ? ORDER BY seq LIMIT ?", after, since, FEED.page).toArray()
+      : this.sql.exec("SELECT seq, at, kind, ticket, cat FROM support_events WHERE at >= ? ORDER BY seq DESC LIMIT ?", since, FEED.recent).toArray().reverse();
+    const last = rows.length ? rows.at(-1).seq : head;
+    return { events: rows.map(r => ({ seq: r.seq, at: r.at, kind: r.kind, ticket: r.ticket, cat: r.cat })), last, more: last < head };
   }
 }

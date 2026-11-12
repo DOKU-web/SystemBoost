@@ -49,6 +49,8 @@ public partial class MainWindow : Window
         AddNav("▧   벤치마크 · 기록", "bench", () => new BenchmarkPage());
         AddNav("★   플랜", "premium", () => new PremiumPage(_backend.Connected));
         AddNav("◈   계정", "account", () => new AccountPage(OpenPlans));
+        AddNav("✉   고객센터", "support", () => new SupportPage());
+        SupportNav();
         AddNav("↺   백업 · 되돌리기", "backup", () => new BackupPage(_backend));
         NavSettings.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
         UpdatePlan();
@@ -96,6 +98,33 @@ public partial class MainWindow : Window
         NavPanel.Children.Add(b);
         _pages[b] = make;
         _navByKey[key] = b;
+    }
+
+    // 고객센터: the number of unread replies beside the entry, and a corner notice when one arrives.
+    private readonly Border _supportBadge = Ui.Badge("");
+
+    private void SupportNav()
+    {
+        var b = _navByKey["support"];
+        var line = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+        line.Children.Add(new TextBlock { Text = "✉   고객센터", VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+        line.Children.Add(_supportBadge);
+        b.Content = line;
+        Avalonia.Automation.AutomationProperties.SetName(b, "고객센터");
+        void Count()
+        {
+            var n = Support.Unread;
+            _supportBadge.IsVisible = n > 0;
+            if (_supportBadge.Child is TextBlock t) t.Text = n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        Count();
+        Support.Changed += Count;
+        // the same corner notice as the boost messages, and like them never over a broadcast
+        Support.ReplyArrived += subject =>
+        {
+            if (OperatingSystem.IsWindows() && _backend is WindowsBoostBackend win && win.Streaming) return;
+            new NoticeWindow($"고객센터에 답이 왔어요: {subject}").Show();
+        };
     }
 
     private void Go(string key)

@@ -67,13 +67,16 @@ internal static class Ui
     }
 
     /// Gray tag shown instead of a control while a feature is not available yet.
-    public static Border Pending()
+    public static Border Pending() => Tag("준비 중");
+
+    /// Gray tag for a quiet state (the orange Badge is for what needs a look).
+    public static Border Tag(string text)
     {
         return new Border
         {
             Background = new SolidColorBrush(Color.Parse("#232327")), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 4), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = "준비 중", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#8B8A88")) },
+            Child = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#8B8A88")) },
         };
     }
 }

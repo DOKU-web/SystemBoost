@@ -2,6 +2,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
+import { helpPage, support, supportAdmin, supportCounts, webhookRefund } from "./support.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
@@ -18,6 +19,7 @@ export { Stats } from "./stats.js";
 //                                and the app (polling /claim?session=<code>) pops it up
 //   GET  /check?id=<key id>      {revoked} - the app asks this at start (offline = keeps working)
 //   POST /ping                   usage statistics from a running app -> {next: seconds until the next ping}
+//   /support/*, GET /help        customer support and refund requests (src/support.js, src/help_page.js)
 //   GET  /admin                  owner dashboard (HTML); its API is /admin/api/* with
 //                                "Authorization: Bearer <ADMIN_TOKEN>"
 //
@@ -32,7 +34,8 @@ export { Stats } from "./stats.js";
 //   ADMIN_TOKEN           dashboard password, 6+ characters (unset = dashboard off; wrong tries lock out)
 // Vars (wrangler.toml [vars]): SALES_MODE ("off" | "test" | "live"), PUBLIC_URL. The Lemon Squeezy store and product
 // numbers are entered in the dashboard (the old LS_STORE_ID / LS_VARIANT_* vars are read when it has none).
-// KV namespace binding: LICENSES. Durable Object binding: STATS (stats.js). Cron: hourly download counts.
+// KV namespace binding: LICENSES. Durable Object binding: STATS (stats.js: usage numbers and the support feed).
+// Cron: hourly download counts.
 
 // SALES_MODE gate (default "off" = no checkout, no keys, whatever arrives):
 //   off  -> /checkout 503, webhooks acknowledged but ignored
@@ -95,13 +98,15 @@ async function payLinks(env) {
 //   paid       결제 확인 요청    buyer pressed "결제했어요" (manual payments: name/memo for matching)
 //   approved   승인            key issued (by the seller in /admin, or automatically by a verified webhook)
 //   rejected   거절            seller rejected it; the app shows the reason
+//   refunded   환불            money paid back: "환불 완료" on a refund request, or a card refund webhook that
+//                              closed one (src/support.js); the order's keys are blocked
 // Two payment methods can be open at the same time; the buyer picks one in the app:
 //   manual = seller's own payment links (bank transfer etc.), the seller approves in /admin
 //   card   = Lemon Squeezy card checkout (sales mode test/live). Monthly/yearly are card subscriptions:
 //            the card is saved and charged every period, renewals refresh the key automatically.
 //            The verified payment webhook approves the order and issues the key.
 const ORDER_TTL = 60 * 60 * 24 * 90;
-const ORDER_STATES = ["requested", "paid", "approved", "rejected"];
+const ORDER_STATES = ["requested", "paid", "approved", "rejected", "refunded"];
 async function getOrder(env, code) {
   const r = await env.LICENSES.getWithMetadata("ord:" + code);
   return r && r.value !== null && r.metadata ? { code, ...r.metadata } : null;
@@ -177,8 +182,12 @@ async function orderPaid(req, url, env) {
 const SESSION_TTL = 60 * 60 * 24 * 7;   // claim within 7 days
 const GRACE_DAYS = 3;                   // subscription key stays valid a bit past renewal
 
+// What src/support.js uses from here (passed in, so the two files do not import each other).
+// events: the support feed in the Stats Durable Object (stats.js), so the dashboard sees what buyers do.
+const SUPPORT = { getOrder, putOrder, revoke, audit, accounts, verifySig, unb64url, allRecords, state, keyId, events: (env, path, body) => stats(env, path, body) };
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     try {
       if (req.method === "POST" && url.pathname === "/checkout") return await checkout(url, env);
@@ -193,6 +202,8 @@ export default {
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
       if (url.pathname.startsWith("/account/")) return await account(req, url, env);
+      if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
+      if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -263,14 +274,15 @@ async function webhook(req, env) {
   const testOrder = body?.meta?.test_mode === true;
   const a = body?.data?.attributes || {};
   // refunds are handled in every mode: the key of that order, or of that subscription, is revoked
+  // and an open refund request naming that key is marked done (src/support.js)
   if (event === "order_refunded") {
     const id = await env.LICENSES.get("order:" + String(body?.data?.id));
-    if (id) await revoke(env, id, "환불", "webhook");
+    if (id) { await revoke(env, id, "환불", "webhook"); await webhookRefund(env, id, SUPPORT); }
     return json({ ok: true });
   }
   if (event === "subscription_payment_refunded") {
     const key = await env.LICENSES.get("sub:" + String(a.subscription_id));
-    if (key) await revoke(env, await keyId(key), "환불", "webhook");
+    if (key) { const id = await keyId(key); await revoke(env, id, "환불", "webhook"); await webhookRefund(env, id, SUPPORT); }
     return json({ ok: true });
   }
   const mode = await salesMode(env);
@@ -433,13 +445,17 @@ async function admin(req, url, env) {
     const r = await announce(env, route, body, (action, detail) => audit(env, "admin", action, detail));
     return json(r, r.status || 200, false);
   }
+  if (route === "GET /support" || route.startsWith("GET /support/") || route.startsWith("POST /support/")) {
+    const { status = 200, ...r } = await supportAdmin(env, route, body, url, SUPPORT);
+    return json(r, status, false);
+  }
   switch (route) {
     case "GET /summary": return json(await summary(env), 200, false);
     case "GET /keys": return json(await listKeys(env, url.searchParams.get("q") || "", url.searchParams.get("status") || "all"), 200, false);
     case "GET /log": return json(await listLog(env), 200, false);
     case "GET /stats": return json(await stats(env, "/read"), 200, false);
     case "POST /downloads": return json(await stats(env, "/downloads", body.releases), 200, false);
-    case "POST /issue": return json(await adminIssue(env, body), 200, false);
+    case "POST /issue": { const { status = 200, ...r } = await adminIssue(env, body); return json(r, status, false); }
     case "GET /members": {
       const r = await accounts(env, "admin/list", { q: url.searchParams.get("q") || "" });
       if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
@@ -511,6 +527,7 @@ async function admin(req, url, env) {
       const o = CODE_RE.test(body.code || "") ? await getOrder(env, body.code) : null;
       if (!o) return json({ error: "주문을 찾지 못했어요" }, 404, false);
       if (o.status === "approved") return json({ error: "이미 승인된 주문이에요" }, 409, false);
+      if (o.status === "refunded") return json({ error: "환불한 주문이에요" }, 409, false);
       const r = await adminIssue(env, { code: o.code, plan: o.plan, email: body.email, note: body.note || [o.payer, o.msg].filter(Boolean).join(" · ") });
       if (!r.error && o.ticket) await accounts(env, "ticket/used", { order: o.code });
       return json(r, r.error ? 400 : 200, false);
@@ -519,6 +536,7 @@ async function admin(req, url, env) {
       const o = CODE_RE.test(body.code || "") ? await getOrder(env, body.code) : null;
       if (!o) return json({ error: "주문을 찾지 못했어요" }, 404, false);
       if (o.status === "approved") return json({ error: "승인된 주문은 거절할 수 없어요. 키를 차단하세요" }, 409, false);
+      if (o.status === "refunded") return json({ error: "환불한 주문이에요" }, 409, false);
       o.status = "rejected"; o.reason = String(body.reason || "").trim().slice(0, 100) || "결제를 확인하지 못했어요";
       await putOrder(env, o);
       if (o.ticket) await accounts(env, "ticket/release", { order: o.code });
@@ -617,6 +635,7 @@ async function summary(env) {
   const op = await env.LICENSES.list({ prefix: "ord:", limit: 1000 });
   c.ordersOpen = op.keys.filter(k => ["requested", "paid"].includes(k.metadata?.status)).length;
   c.ordersPaid = op.keys.filter(k => k.metadata?.status === "paid").length;
+  Object.assign(c, await supportCounts(env));   // ticketsOpen, refundsOpen
   return { sales: await salesMode(env), autoReady: await cardPlans(env), cardLiveOpen: cardLiveOpen(env),
            salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c };
 }
@@ -768,6 +787,10 @@ async function adminIssue(env, b) {
   if (!note && !code) return { error: "주문 코드나 메모(발급 이유) 중 하나는 적어 주세요" };
   const seats = b.seats == null || b.seats === "" ? seatsOf(plan) : Math.floor(Number(b.seats));
   if (!(seats >= 1 && seats <= MAX_SEATS)) return { error: "키 개수는 1~" + MAX_SEATS + "개예요" };
+  // a refunded order stays refunded: issuing for its code again would set it back to approved and let /claim hand out
+  // a key for money that was paid back (status: the HTTP status for POST /issue)
+  if (code && (await getOrder(env, code))?.status === "refunded")
+    return { status: 409, error: "환불한 주문이에요. 이 주문 코드로는 키를 다시 발급하지 않아요. 다시 팔았다면 새 주문 코드로 발급하거나, 주문 코드 없이 메모를 적어 발급하세요" };
   const src = code ? "payment" : "manual";
   // the key's "plan": ultra also opens frame generation x6 and x8, biz adds the work and streaming features
   const tier = tierOf(plan) !== "premium" ? tierOf(plan) : TIERS.includes(b.tier) ? b.tier : "premium";

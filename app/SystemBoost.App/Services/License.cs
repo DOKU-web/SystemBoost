@@ -29,7 +29,7 @@ public enum PremiumFeature
     StartupApps,             // Biz: turn programs that start with Windows off and on
 }
 
-public sealed record LicenseInfo(string Plan, string Email, DateTime? Expires, string Source, string? Sub = null);
+public sealed record LicenseInfo(string Plan, string Email, DateTime? Expires, string Source, string? Sub = null, DateTime? Issued = null);
 
 public interface ISteamOwnership { bool OwnsPremiumDlc(); }
 
@@ -37,7 +37,7 @@ public static class License
 {
     // License server (server/license-worker).
     public const string ServerUrl = "https://systemboost-license.euning97.workers.dev";
-    private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    internal static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     // SubjectPublicKeyInfo (DER, base64) of the shop's signing key. TODO: replace.
     private const string PublicKeyB64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY8H/jVOrF8oTVDz8WRucglw4zrjLpBkic0VMbIs3gIFypN5xTnt8EPDf5h1hKFVz6z7Jp+O/E87cxU4CADvO2Q==";
 
@@ -171,9 +171,24 @@ public static class License
         var r = doc.RootElement;
         DateTime? exp = r.TryGetProperty("expires", out var e) && e.ValueKind == JsonValueKind.String ? DateTime.Parse(e.GetString()!).ToUniversalTime() : null;
         if (exp != null && exp < DateTime.UtcNow) { error = "기간이 끝난 키예요. 구독을 연장하세요"; return null; }
+        DateTime? issued = r.TryGetProperty("issued", out var i) && i.ValueKind == JsonValueKind.String && DateTime.TryParse(i.GetString(),
+                               System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal, out var at) ? at : null;
         return new LicenseInfo(r.GetProperty("plan").GetString() ?? "premium", r.TryGetProperty("email", out var m) ? m.GetString() ?? "" : "", exp, "key",
-                               r.TryGetProperty("sub", out var sb) ? sb.GetString() : null);
+                               r.TryGetProperty("sub", out var sb) ? sb.GetString() : null, issued);
     }
+
+    /// The key registered on this PC as it is stored, for the server calls that need the signed key itself
+    /// (the subscription portal). Null without one.
+    internal static string? KeyText()
+    {
+        try { return File.Exists(KeyFile) && File.ReadAllText(KeyFile).Trim() is { Length: > 0 } raw ? raw : null; }
+        catch (Exception) { return null; }
+    }
+
+    /// How the server names this PC's key ("lic:" + id): the first 16 hex of SHA-256 of the key text.
+    /// Also for a key that has run out. Null without a key.
+    public static string? KeyId => KeyText() is { } raw ? IdOf(raw) : null;
+    private static string IdOf(string raw) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)), 0, 8).ToLowerInvariant();
 
     // ---------------------------------------------------------- purchase flow
     // The seller takes payment on their own payment page (link set in the admin dashboard).
@@ -306,6 +321,14 @@ public static class License
                             RaiseChanged();
                             break;
                         }
+                        // a refund closed the order (support refund done, or a card refund): no key will come for it
+                        if (st == "pending" && doc.RootElement.TryGetProperty("order", out var os) && os.ValueKind == JsonValueKind.String && os.GetString() == "refunded")
+                        {
+                            ForgetPending();
+                            Notice = $"환불된 주문이에요 ({o.Code}). 이 주문의 키는 더 기다리지 않아요.";
+                            RaiseChanged();
+                            break;
+                        }
                     }
                     catch (Exception) { /* offline: keep waiting */ }
                     var fresh = DateTime.UtcNow - o.Created < TimeSpan.FromMinutes(15);
@@ -329,7 +352,7 @@ public static class License
             if (File.Exists(KeyFile))
             {
                 var raw = File.ReadAllText(KeyFile).Trim();
-                var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)), 0, 8).ToLowerInvariant();
+                var id = IdOf(raw);
                 using var doc = JsonDocument.Parse(await Http.GetStringAsync($"{ServerUrl}/check?id={id}"));
                 if (doc.RootElement.TryGetProperty("revoked", out var rv) && rv.ValueKind == JsonValueKind.True)
                 {
