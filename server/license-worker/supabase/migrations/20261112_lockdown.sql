@@ -12,6 +12,9 @@
 --   3. A login with an id that does not exist runs bcrypt too, so the reply time no longer tells which ids exist.
 --   4. "This id is taken" at sign-up: 20 an hour per address, then "busy" (it also tells which ids exist).
 --   5. The check at the end covers every table and every account_ function (before: accounts and account_call).
+--   6. A member id that was deleted (the member left, or the seller deleted it) cannot be signed up again: a new table
+--      account_gone keeps a one-way value of it made with the Worker's pepper (privacy review L7). Only a Worker that
+--      sends that value ("gone") gets this; an older one signs up and deletes as before.
 --   The rights themselves are re-stated unchanged: RLS on with no policy, nothing for public/anon/authenticated,
 --   execute for service_role only. The audit found them already so in the repository's SQL; the live project is
 --   not checked (see the query at the very end).
@@ -28,6 +31,12 @@ alter table public.accounts add column if not exists ticket_percent integer;
 alter table public.accounts add column if not exists ticket_expires timestamptz;
 alter table public.accounts add column if not exists ticket_order text;
 alter table public.accounts add column if not exists ticket_used timestamptz;
+
+-- 6. ids of members who left, as a one-way value (as in supabase/accounts.sql)
+create table if not exists public.account_gone (
+  h text primary key,
+  at timestamptz not null default now()
+);
 
 -- 1. helpers whose bodies already name every schema: only the search_path changes
 alter function public.account_fail(integer, text) set search_path = '';
@@ -52,7 +61,7 @@ begin
   return public.account_fail(401, 'wrong');
 end $$;
 
--- 2, 3, 4. the one entry point, a copy of the one in supabase/accounts.sql. Each call is one transaction.
+-- 2, 3, 4, 6. the one entry point, a copy of the one in supabase/accounts.sql. Each call is one transaction.
 create or replace function public.account_call(action text, b jsonb) returns jsonb
 language plpgsql set search_path = public, extensions as $$
 declare
@@ -84,6 +93,11 @@ begin
     end if;
     -- "taken" tells whether an id exists, so one address hears it a limited number of times an hour
     if exists (select 1 from accounts where id = b->>'id') then
+      perform account_count('taken:' || (b->>'ip'));
+      return account_fail(409, 'taken');
+    end if;
+    -- an id whose member left is not handed to somebody else (an older Worker sends no "gone": not checked then)
+    if b->>'gone' is not null and exists (select 1 from account_gone where h = b->>'gone') then
       perform account_count('taken:' || (b->>'ip'));
       return account_fail(409, 'taken');
     end if;
@@ -156,6 +170,7 @@ begin
       update accounts set recovery = b->>'proof', fails = 0, locked_until = null where id = b->>'id';
     else
       delete from accounts where id = b->>'id';
+      if b->>'gone' is not null then insert into account_gone (h) values (b->>'gone') on conflict (h) do nothing; end if;
     end if;
     return jsonb_build_object('ok', true);
   end if;
@@ -221,6 +236,7 @@ begin
       return jsonb_build_object('id', a.id);
     end if;
     delete from accounts where id = a.id;
+    if b->>'gone' is not null then insert into account_gone (h) values (b->>'gone') on conflict (h) do nothing; end if;
     return jsonb_build_object('ok', true);
   end if;
 
@@ -231,8 +247,9 @@ end $$;
 alter table public.accounts enable row level security;
 alter table public.account_sessions enable row level security;
 alter table public.account_hits enable row level security;
-revoke all on public.accounts, public.account_sessions, public.account_hits from public, anon, authenticated;
-grant select, insert, update, delete on public.accounts, public.account_sessions, public.account_hits to service_role;
+alter table public.account_gone enable row level security;
+revoke all on public.accounts, public.account_sessions, public.account_hits, public.account_gone from public, anon, authenticated;
+grant select, insert, update, delete on public.accounts, public.account_sessions, public.account_hits, public.account_gone to service_role;
 grant usage on schema extensions to service_role;
 
 do $$
@@ -254,7 +271,7 @@ declare
   t regclass;
   f regprocedure;
 begin
-  foreach t in array array['public.accounts', 'public.account_sessions', 'public.account_hits']::regclass[] loop
+  foreach t in array array['public.accounts', 'public.account_sessions', 'public.account_hits', 'public.account_gone']::regclass[] loop
     if has_table_privilege('anon', t, 'select,insert,update,delete,truncate,references,trigger')
        or has_table_privilege('authenticated', t, 'select,insert,update,delete,truncate,references,trigger')
        or not (select relrowsecurity from pg_class where oid = t)

@@ -67,6 +67,8 @@ async function secrets(env) {
     password: text => sha(pepper + "|password|" + text),
     proof: recovery => sha(pepper + "|recovery|" + String(recovery).replace(/[^A-Z0-9]/gi, "").toUpperCase()),
     ip: async ip => (await sha(pepper + "|ip|" + ip)).slice(0, 32),
+    // a member id that was deleted: kept in account_gone as this value only, so the id cannot be signed up again
+    gone: id => sha(pepper + "|gone|" + cleanId(id)),
   };
 }
 
@@ -87,6 +89,10 @@ export async function accounts(env, action, b) {
       return r.error ? r : { recovery };
     }
   }
+  if (action === "admin/delete") {   // the pepper is needed for "gone"; without it the id is deleted as before
+    const id = cleanId(b.id);
+    return db(env, action, { id, ...(hasPepper(env) ? { gone: await s.gone(id) } : {}) });
+  }
   if (ADMIN.includes(action)) return db(env, action, { id: cleanId(b.id), on: !!b.on, q: b.q });
 
   if (!TOKEN_RE.test(b.token || "")) return fail(401, "session");
@@ -106,7 +112,11 @@ export async function accounts(env, action, b) {
     case "logout": return db(env, action, { token });
     case "ticket": return db(env, "ticket", { token, order: b.order });
     case "password": return changePassword(env, s, token, b);
-    case "delete": return db(env, "delete", { token, pw: await s.password(String(b.password || "").slice(0, 100)), ip: await s.ip(b.ip) });
+    case "delete": {   // the session's id first, for "gone" (the database deletes by the session, as before)
+      const me = await db(env, "me", { token });
+      if (me.error) return me;
+      return db(env, "delete", { token, pw: await s.password(String(b.password || "").slice(0, 100)), ip: await s.ip(b.ip), gone: await s.gone(me.id) });
+    }
   }
   return fail(404, "not found");
 }
@@ -118,7 +128,8 @@ async function signup(env, s, b) {
   if (b.agree !== true || b.age14 !== true) return fail(400, "consent");
   const token = newToken(), recovery = newRecovery();
   const r = await db(env, "signup", { id, pw: await s.password(password), proof: await s.proof(recovery), session: await sha(token),
-                                      invite: String(b.invite || ""), ticket: !!b.ticket, ip: await s.ip(b.ip), consent: CONSENT + " " + new Date().toISOString() });
+                                      invite: String(b.invite || ""), ticket: !!b.ticket, ip: await s.ip(b.ip), consent: CONSENT + " " + new Date().toISOString(),
+                                      gone: await s.gone(id) });
   return r.error ? r : { id, token, recovery };
 }
 

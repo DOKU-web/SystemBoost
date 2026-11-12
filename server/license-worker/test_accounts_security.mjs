@@ -464,7 +464,7 @@ await check("SQL in ids and passwords is only data", async () => {
   }
   assert.equal((await send("/account/login", { id: "sec_store", password: "' OR '1'='1" })).error, "wrong");
   assert.equal(await count("SELECT COUNT(*) AS n FROM public.accounts"), before);
-  assert.ok((await adm("/members?q=' OR 1=1 --")).members.length === 0);
+  assert.ok((await adm("/members", { q: "' OR 1=1 --" })).members.length === 0);   // the search goes in the body
 });
 
 await check("without the signing key there is no pepper, so accounts stop instead of using a known one", async () => {

@@ -86,9 +86,31 @@ globalThis.caches = { default: {
     edge.set(String(u), { body: await res.text(), exp: Date.now() + age * 1000 });
   },
 } };
-const dayKey = () => "count:support:" + new Date().toISOString().slice(0, 10);
-const freshDay = () => { kv.delete(dayKey()); md.delete(dayKey()); };   // a new day for the support budget
-const dayCount = () => JSON.parse(kv.get(dayKey()) || "{}");
+// The day's support budget: counters in the Stats object (sup:<date>:w, ...), and while it is down one KV counter.
+const today = () => new Date().toISOString().slice(0, 10);
+const kvDayKey = () => "count:support:" + today();
+const freshDay = () => {   // a new day for the support budget
+  feedDb.prepare("DELETE FROM counters WHERE name LIKE 'sup:%' OR name LIKE 'rl:w48:%'").run();
+  kv.delete(kvDayKey()); md.delete(kvDayKey());
+};
+const dayCount = () => {   // the same shape the KV counter had: {w, c, r} and, once the buyers' lane is used, {vw, vc, vr, by}
+  const pre = "sup:" + today() + ":";
+  const rows = feedDb.prepare("SELECT name, n FROM counters WHERE name LIKE ? AND exp > ?").all(pre + "%", Date.now());
+  if (!rows.length) return {};
+  const v = Object.fromEntries(rows.map(r => [r.name.slice(pre.length), r.n]));
+  const o = { w: v.w || 0, c: v.c || 0, r: v.r || 0 };
+  if (v.vw || v.vc || v.vr) Object.assign(o, { vw: v.vw || 0, vc: v.vc || 0, vr: v.vr || 0,
+    by: Object.fromEntries(Object.entries(v).filter(([k]) => k.startsWith("by:")).map(([k, n]) => [k.slice(3), n])) });
+  return o;
+};
+const setDay = o => {   // set some of today's counts
+  const pre = "sup:" + today() + ":", exp = Date.now() + 2 * DAY * 1000, put = feedDb.prepare("INSERT OR REPLACE INTO counters (name, n, exp) VALUES (?, ?, ?)");
+  for (const [k, n] of Object.entries(o)) {
+    if (k === "by") for (const [who, m] of Object.entries(n)) put.run(pre + "by:" + who, m, exp);
+    else put.run(pre + k, n, exp);
+  }
+};
+const counterNames = like => feedDb.prepare("SELECT name, exp FROM counters WHERE name LIKE ?").all(like);
 
 const call = (path, init) => worker.fetch(new Request("https://lic.example" + path, init), env);
 const j = async (path, init) => { const r = await call(path, init); return { http: r.status, ...(await r.json()) }; };
@@ -199,9 +221,10 @@ let { r: t1, w } = await counted(() => create({ subject: "a\u0000b‮c", text: "
 assert.equal(t1.http, 201);
 assert.match(t1.id, ID_RE);
 assert.match(t1.token, /^[0-9a-f]{64}$/);
-assert.equal(w, 2, "a ticket costs two KV writes: the ticket and the day's budget counter");
-assert.deepEqual(dayCount(), { w: 2, c: 1, r: 0 }, "the budget counts its own write too");
-assert.equal(ttl.get(dayKey()), 2 * DAY);
+assert.equal(w, 1, "a ticket costs one KV write: the ticket (the day's budget is counted in the Stats object)");
+assert.deepEqual(dayCount(), { w: 1, c: 1, r: 0 }, "the budget counts KV writes only");
+assert.ok(Math.abs(counterNames("sup:" + today() + ":w")[0].exp - (Date.now() + 2 * DAY * 1000)) < 5000, "kept two days");
+assert.equal(kv.has(kvDayKey()), false, "no KV counter while the object is up");
 let s1 = stored(t1.id);
 assert.equal(s1.tokenHash, sha(t1.token));
 for (const [k, v] of kv) assert.ok(!String(v).includes(t1.token) && !k.includes(t1.token), "the token is never stored: " + k);
@@ -274,27 +297,45 @@ assert.deepEqual(await post("/support/ticket/reply", { id: t1.id, text: "코드 
 assert.deepEqual(await post("/support/ticket/close", { id: t1.id }), nf);
 assert.equal((await post("/support/ticket/reply", { id: t1.id.toLowerCase(), token: t1.token, text: "본문의 코드" })).http, 200, "the body carries id and token");
 
-// ---------------------------------------------------------------- per-IP limits: Cache API and memory, never KV
+// ---------------------------------------------------------------- per-IP limits: the Stats object; the Cache API and memory while it is down; never KV
 freshDay();
 const ipA = { "CF-Connecting-IP": "198.51.100.7" };
 for (let i = 0; i < LIMITS.createPerIp; i++) assert.equal((await create({}, ipA)).http, 201);
 let rl = await counted(() => create({}, ipA));
 assert.deepEqual(rl.r, BUSY_IP, "6th request in an hour from one IP");
-assert.equal(rl.w, 0, "a refused request writes nothing, the budget counter neither");
+assert.equal(rl.w, 0, "a refused request writes nothing");
 r429 = await call("/support/ticket", { method: "POST", headers: { "Content-Type": "application/json", ...ipA }, body: JSON.stringify(base) });
 const toHour = 3600 - Math.floor(Date.now() / 1000) % 3600, raIp = Number(r429.headers.get("Retry-After"));
 assert.deepEqual([r429.status, (await r429.json()).scope], [429, "ip"]);
 assert.ok(raIp >= 1 && raIp <= 3600 && Math.abs(raIp - toHour) <= 2, "ip: Retry-After = seconds to the end of this hour's count, " + raIp);
 assert.equal((await create({}, { "CF-Connecting-IP": "198.51.100.8" })).http, 201, "other IPs are not held up");
+_forgetMemory(); cacheOn = false;
+assert.deepEqual(await create({}, ipA), BUSY_IP, "another isolate, no cache: the object still counts");
+cacheOn = true;
+const rlRows = counterNames("rl:new:%");
+assert.ok(rlRows.length && rlRows.every(r => /^rl:new:[0-9a-f]{16}:\d{4}-\d\d-\d\dT\d\d$/.test(r.name) && r.exp <= Date.now() + 3600e3), "IP only as a 16-hex hash, kept an hour");
+// tries at once from one address are counted one by one (the object counts in one step)
+const ipE = { "CF-Connecting-IP": "198.51.100.12" };
+const burstE = await Promise.all(Array.from({ length: 12 }, () => create({}, ipE)));
+assert.equal(burstE.filter(x => x.http === 201).length, LIMITS.createPerIp, "12 at once: " + LIMITS.createPerIp + " get in");
+// while the object cannot be reached: the Cache API and this isolate's memory (approximate), and the KV day counter
+statsDown = true;
+const madeWhileDown = [];   // no feed row for these (the feed is in the object too); deleted below
+const ipD = { "CF-Connecting-IP": "198.51.100.11" };
+for (let i = 0; i < LIMITS.createPerIp; i++) { const t = await create({}, ipD); assert.equal(t.http, 201); madeWhileDown.push(t.id); }
+assert.deepEqual(await create({}, ipD), BUSY_IP, "object down: the fallback counts");
 _forgetMemory();
-assert.deepEqual(await create({}, ipA), BUSY_IP, "another isolate in the same place: the Cache API still knows");
+assert.deepEqual(await create({}, ipD), BUSY_IP, "another isolate in the same place: the Cache API still knows");
 cacheOn = false;   // *.workers.dev: the Cache API may keep nothing, so this isolate's memory counts alone
 const ipC = { "CF-Connecting-IP": "198.51.100.10" };
-for (let i = 0; i < LIMITS.createPerIp; i++) assert.equal((await create({}, ipC)).http, 201);
+for (let i = 0; i < LIMITS.createPerIp; i++) { const t = await create({}, ipC); assert.equal(t.http, 201); madeWhileDown.push(t.id); }
 assert.deepEqual(await create({}, ipC), BUSY_IP, "no cache: the memory path holds");
 cacheOn = true;
+assert.deepEqual(JSON.parse(kv.get(kvDayKey())), { w: 2 * LIMITS.createPerIp * 2, c: 2 * LIMITS.createPerIp, r: 0 }, "the KV counter took over the budget, its own writes counted");
+statsDown = false;
 assert.ok(![...kv.keys()].some(k => k.includes("rl:") || /^count:support:(new|reply|status|sub|day)/.test(k)), "no per-IP counter in KV");
-assert.deepEqual([...kv.keys()].filter(k => k.startsWith("count:support:")), [dayKey()], "one KV counter for support: the day's budget");
+assert.deepEqual([...kv.keys()].filter(k => k.startsWith("count:support:")), [kvDayKey()], "one KV counter for support, only while the object was down");
+for (const id of madeWhileDown) assert.equal((await adm("/support/delete", { id })).ok, true);
 const rlPuts = cachePuts.filter(p => p.u.includes("rl%3Anew%3A"));
 assert.ok(rlPuts.length && rlPuts.every(p => /^https:\/\/lic\.example\/__support-cache\/rl%3Anew%3A[0-9a-f]{16}%3A\d{4}-\d\d-\d\dT\d\d$/.test(p.u) && p.age === 3600),
           "IP only as a 16-hex hash, kept an hour");
@@ -317,29 +358,32 @@ assert.deepEqual(await create({}, { "CF-Connecting-IP": "::ffff:198.51.100.7" })
 // the day's caps: requests and replies each have their own, below the write budget
 freshDay();
 const tr = await create();
-kv.set(dayKey(), JSON.stringify({ w: 10, c: LIMITS.createsPerDay, r: 0 }));
+setDay({ w: 10, c: LIMITS.createsPerDay, r: 0 });
 assert.deepEqual(await create(), BUSY_DAY, LIMITS.createsPerDay + " new requests a day");
 assert.equal((await reply(tr.id, tr.token, "답장은 돼요")).http, 200, "replies have their own cap");
-kv.set(dayKey(), JSON.stringify({ w: 10, c: 0, r: LIMITS.repliesPerDay }));
+setDay({ w: 10, c: 0, r: LIMITS.repliesPerDay });
 rl = await counted(() => reply(tr.id, tr.token, "하루 답장 끝"));
 assert.deepEqual([rl.r, rl.w], [BUSY_DAY, 0], LIMITS.repliesPerDay + " replies a day");
 assert.equal((await create()).http, 201, "requests have their own cap");
+// neither the object nor the KV counter can count (KV's daily writes used up): nothing is written, try again later
+statsDown = true;
 const realPut = env.LICENSES.put;
-env.LICENSES.put = async (k, ...rest) => { if (k === dayKey()) throw new Error("KV PUT failed: 429 Too Many Requests"); return realPut(k, ...rest); };
+env.LICENSES.put = async (k, ...rest) => { if (k.startsWith("count:support:")) throw new Error("KV PUT failed: 429 Too Many Requests"); return realPut(k, ...rest); };
 rl = await counted(() => create());
-assert.deepEqual([rl.r, rl.w], [BUSY_IP, 0], "the counter could not be written: nothing else is either, try again in a moment");
+assert.deepEqual([rl.r, rl.w], [BUSY_IP, 0], "the count could not be written: nothing else is either, try again in a moment");
 env.LICENSES.put = realPut;
+statsDown = false;
 freshDay();
 
 // replies: 20 per IP an hour, 30 messages a ticket
 const ipB = { "CF-Connecting-IP": "198.51.100.9" };
 let rr = await counted(() => reply(tr.id, tr.token, "추가 1", ipB));
 assert.equal(rr.r.http, 200);
-assert.equal(rr.w, 2, "a reply costs two KV writes: the ticket and the budget counter");
-assert.deepEqual(dayCount(), { w: 2, c: 0, r: 1 });
+assert.equal(rr.w, 1, "a reply costs one KV write: the ticket");
+assert.deepEqual(dayCount(), { w: 1, c: 0, r: 1 });
 for (let i = 2; i <= LIMITS.repliesPerIp; i++) assert.equal((await reply(tr.id, tr.token, "추가 " + i, ipB)).http, 200);
 assert.deepEqual(await reply(tr.id, tr.token, "하나 더", ipB), BUSY_IP);
-assert.ok(cachePuts.some(p => /rl%3Areply%3A[0-9a-f]{16}%3A/.test(p.u) && p.age === 3600));
+assert.ok(counterNames("rl:reply:%").some(r => /^rl:reply:[0-9a-f]{16}:/.test(r.name)));
 while (stored(tr.id).messages.length < LIMITS.messages) assert.equal((await reply(tr.id, tr.token, "더", freshIp())).http, 200);
 assert.deepEqual(await reply(tr.id, tr.token, "31번째", freshIp()), { http: 409, error: "full" });
 assert.deepEqual(await reply(tr.id, tr.token, "", freshIp()), { http: 400, error: "text" });
@@ -435,7 +479,7 @@ sres = await counted(async () => { for (let i = 0; i < LIMITS.statusPerIp; i++) 
 assert.equal(sres.w, 0, LIMITS.statusPerIp + " polls, no KV write");
 assert.deepEqual(await st([{ id: tS.id, token: tS.token }], ipS), BUSY_IP, "121st poll in an hour from one IP");
 assert.equal((await st([{ id: tS.id, token: tS.token }])).http, 200, "other IPs are not held up");
-assert.deepEqual(dayCount(), { w: 2, c: 1, r: 0 }, "polling spends nothing of the day's budget");
+assert.deepEqual(dayCount(), { w: 1, c: 1, r: 0 }, "polling spends nothing of the day's budget");
 
 // ---------------------------------------------------------------- admin: list, filters, read, status, delete
 assert.equal((await j("/admin/api/support")).http, 401, "admin API needs the password");
@@ -467,10 +511,14 @@ const everything = (await adm("/support?status=all")).tickets;
 assert.equal(everything.length, allRows.length);
 const firstNotOpen = everything.findIndex(x => x.status !== "open");
 assert.ok(everything.slice(firstNotOpen).every(x => x.status !== "open"), "open ones first");
-assert.deepEqual((await adm("/support?status=all&q=" + encodeURIComponent("닫을"))).tickets.map(x => x.id), [tC.id], "search the subject");
-assert.deepEqual((await adm("/support?status=all&q=sb-abcd")).tickets.map(x => x.id), [t1.id], "search the order code");
-assert.deepEqual((await adm("/support?status=all&q=" + tA.id.toLowerCase())).tickets.map(x => x.id), [tA.id], "search the id");
-assert.deepEqual((await adm("/support?status=all&q=member01")).tickets.map(x => x.id), [tm.id], "search the member");
+// a search goes in a POST body: its words (order codes, member ids) stay out of addresses and logs
+const findT = q => adm("/support", { status: "all", q });
+assert.deepEqual((await findT("닫을")).tickets.map(x => x.id), [tC.id], "search the subject");
+assert.deepEqual((await findT("sb-abcd")).tickets.map(x => x.id), [t1.id], "search the order code");
+assert.deepEqual((await findT(tA.id.toLowerCase())).tickets.map(x => x.id), [tA.id], "search the id");
+assert.deepEqual((await findT("member01")).tickets.map(x => x.id), [tm.id], "search the member");
+assert.deepEqual(await adm("/support?status=all&q=member01"), { http: 400, error: "검색어는 POST 본문으로 보내요" }, "not in the address");
+assert.equal((await adm("/support", { status: "open" })).tickets.every(x => x.status === "open"), true, "POST without words: the list");
 assert.equal((await adm("/support?status=bogus")).tickets.every(x => x.status === "open"), true);
 let full = await adm("/support/ticket?id=" + td.id);
 assert.deepEqual(full.ticket.diag.app, "0.8.11");
@@ -497,8 +545,8 @@ md.get("lic:" + mkId).issued = ago(10);   // the key came 10 days ago
 let s0 = await adm("/summary");
 let rq = await counted(() => create({ cat: "refund", subject: "환불 요청", text: "쓰지 않게 됐어요", order: mo.code, refund: { reason: "change_mind" } }));
 assert.equal(rq.r.http, 201);
-assert.equal(rq.w, 3, "a refund request adds one write: the key index");
-assert.deepEqual(dayCount(), { w: 0, c: 0, r: 0, vw: 3, vc: 1, vr: 0, by: { ["o:" + mo.code]: 1 } }, "the code of an approved order: the buyers' lane");
+assert.equal(rq.w, 2, "a refund request adds one write: the key index");
+assert.deepEqual(dayCount(), { w: 0, c: 0, r: 0, vw: 2, vc: 1, vr: 0, by: { ["o:" + mo.code]: 1 } }, "the code of an approved order: the buyers' lane");
 const t9 = rq.r;
 let s9 = stored(t9.id);
 assert.deepEqual([s9.orderMatched, s9.owner, s9.keyId, s9.keyVerified], [true, "o:" + mo.code, undefined, undefined]);
@@ -591,9 +639,9 @@ const mo3 = await j("/order?plan=yearly&method=manual", { method: "POST" });
 const mk3 = await adm("/orders/approve", { code: mo3.code });
 md.get("lic:" + mk3.id).issued = ago(2);
 const tv3 = await counted(() => create({ cat: "refund", subject: "환불", text: "환불해 주세요", key: "  " + mk3.key + "\n", refund: { reason: "change_mind" } }));
-assert.deepEqual([tv3.r.http, Object.keys(tv3.r).sort(), tv3.w], [201, ["http", "id", "token"], 3], "the answer is only the id and the token");
+assert.deepEqual([tv3.r.http, Object.keys(tv3.r).sort(), tv3.w], [201, ["http", "id", "token"], 2], "the answer is only the id and the token");
 const sv3 = stored(tv3.r.id);
-assert.deepEqual([sv3.keyId, sv3.keyVerified, sv3.owner, sv3.orderMatched], [mk3.id, true, "k:" + mk3.id, undefined]);
+assert.deepEqual([sv3.keyId, sv3.keyVerified, sv3.owner, sv3.orderMatched], [mk3.id, true, "o:" + mo3.code, undefined], "a paid key's purchase is its order");
 for (const [k, v] of kv) if (/^(tk|count:support)/.test(k)) assert.ok(!String(v).includes(mk3.key) && !JSON.stringify(md.get(k) || "").includes(mk3.key), "the key text is not kept: " + k);
 assert.equal(kv.get("tkkey:" + mk3.id), tv3.r.id, "a shown key gets the webhook index");
 const pv3 = (await view(tv3.r.id, tv3.r.token)).ticket;
@@ -644,7 +692,7 @@ assert.equal((await j("/check?id=" + mk2.id)).revoked, false);
 // a refund request for something the server never issued: taken, no facts, no index entry
 let { r: tz, w: wz } = await counted(() => create({ cat: "refund", subject: "환불", text: "환불", keyId: "0123456789abcdef", refund: { reason: "other" } }));
 assert.equal(tz.http, 201);
-assert.equal(wz, 2, "no key index for a key the server does not know");
+assert.equal(wz, 1, "no key index for a key the server does not know");
 assert.deepEqual(stored(tz.id).refund.facts, {});
 assert.equal(stored(tz.id).refund.method, "unknown");
 assert.equal(kv.has("tkkey:0123456789abcdef"), false);
@@ -812,8 +860,8 @@ Date.now = () => realNow() + (LIMITS.portalCache + 1) * 1000;   // 30 minutes la
 assert.deepEqual(await portal(ck33), link33);
 Date.now = realNow;
 assert.equal(fetched.length, n0 + 2, "after 30 minutes Lemon Squeezy is asked again");
-const ipP = { "CF-Connecting-IP": "198.51.100.30" };
-for (let i = 0; i < LIMITS.subscriptionPerIp; i++) assert.equal((await portal(ck33, ipP)).http, 200);
+const ipP = { "CF-Connecting-IP": "198.51.100.30" };   // every call counts, refused keys too (each key also has a daily cap)
+for (let i = 0; i < LIMITS.subscriptionPerIp; i++) assert.equal((await portal("garbage." + i, ipP)).http, 404);
 assert.deepEqual(await portal(ck33, ipP), BUSY_IP, "21st call in an hour from one IP");
 edge.clear(); _forgetMemory();   // nothing kept: each answer below comes from Lemon Squeezy
 lsAnswer = () => new Response("{}", { status: 404 });
@@ -839,7 +887,7 @@ for (let i = 0; i < 100; i++) {   // a new IP for every call: no per-IP limit st
 }
 const spent = writes - w0;
 assert.ok(spent <= LIMITS.writesPerDay && spent >= LIMITS.writesPerDay - 2, "support wrote " + spent + " times in a day");
-assert.equal(dayCount().w, spent, "the counter counts every KV write support made, its own included");
+assert.equal(dayCount().w, spent, "the counter counts every KV write support made");
 assert.ok(made < 40 && refused > 60, made + " made, " + refused + " refused");
 assert.deepEqual(await create(), BUSY_DAY);
 assert.deepEqual(await reply(lastT.id, lastT.token, "더"), BUSY_DAY);
@@ -877,10 +925,11 @@ assert.ok(Math.abs(Number(r429.headers.get("Retry-After")) - toDay) <= 2, "day: 
 
 // The buyers' lane: a flood of anonymous tickets does not shut out somebody who shows a purchase.
 const moR = await j("/order?plan=yearly&method=manual", { method: "POST" });   // requested: anybody can make one
-let vt = await counted(() => create({ cat: "pay", subject: "키가 안 보여요", key: k9.key }));
-assert.deepEqual([vt.r.http, vt.w], [201, 2], "a signed key gets in while the anonymous lane is full");
+const k35 = (await j("/claim?session=SB-CRDG-2345")).key;   // a card subscription's key: its purchase is the subscription
+let vt = await counted(() => create({ cat: "pay", subject: "키가 안 보여요", key: k35 }));
+assert.deepEqual([vt.r.http, vt.w], [201, 1], "a paid key gets in while the anonymous lane is full");
 vt = vt.r;
-assert.equal(stored(vt.id).owner, "k:" + k9.id);
+assert.equal(stored(vt.id).owner, "s:35");
 assert.equal((await reply(vt.id, vt.token, "추가로 적어요")).http, 200, "its replies too");
 const vo = await create({ cat: "pay", subject: "주문 문의", order: mo9.code });
 assert.equal(vo.http, 201, "so does the code of an approved order");
@@ -889,13 +938,13 @@ assert.deepEqual(await create({ cat: "pay", subject: "주문 문의", order: moR
 assert.deepEqual(await create({ cat: "pay", subject: "키", keyId: k9.id }), BUSY_DAY, "nor a key id typed alone");
 assert.deepEqual(await reply(lastT.id, lastT.token, "익명 답장"), BUSY_DAY, "the anonymous lane stays full");
 let dc = dayCount();
-assert.deepEqual([dc.w, dc.vw, dc.vc, dc.vr, dc.by], [spent, 6, 2, 1, { ["k:" + k9.id]: 2, ["o:" + mo9.code]: 1 }]);
+assert.deepEqual([dc.w, dc.vw, dc.vc, dc.vr, dc.by], [spent, 3, 2, 1, { "s:35": 2, ["o:" + mo9.code]: 1 }]);
 // one purchase cannot fill the lane
-kv.set(dayKey(), JSON.stringify({ ...dc, by: { ...dc.by, ["k:" + k9.id]: LIMITS.perOwnerPerDay } }));
+setDay({ by: { "s:35": LIMITS.perOwnerPerDay } });
 assert.deepEqual(await reply(vt.id, vt.token, "또"), BUSY_DAY, LIMITS.perOwnerPerDay + " actions a day for one purchase");
 assert.equal((await reply(vo.id, vo.token, "다른 구매는 돼요")).http, 200, "another purchase still gets in");
 // and the lane has its own cap
-kv.set(dayKey(), JSON.stringify({ ...dayCount(), vw: LIMITS.vWritesPerDay - 1 }));
+setDay({ vw: LIMITS.vWritesPerDay });
 assert.deepEqual(await reply(vo.id, vo.token, "꽉 참"), BUSY_DAY, LIMITS.vWritesPerDay + " writes a day in the buyers' lane");
 freshDay();
 assert.equal((await reply(lastT.id, lastT.token, "다음 날")).http, 200, "a new day, a new budget");
@@ -925,6 +974,12 @@ await adm("/support/config", { ...cfg.config, open: false });
 assert.equal((await j("/support/info")).open, false);
 assert.deepEqual(await create(), { http: 503, error: "closed" }, "closed: no new requests");
 assert.equal((await reply(tA.id, tA.token, "닫혀 있어도 답장은 돼요")).http, 200, "existing requests still take replies");
+// a withdrawal (refund) request is never shut out by the seller's desk; the app and /help read "refunds"
+assert.equal((await j("/support/info")).refunds, true);
+const rClosed = await create({ cat: "refund", subject: "환불", text: "환불해 주세요", order: "SB-QQQQ-2345", refund: { reason: "change_mind" } });
+assert.equal(rClosed.http, 201, "closed: a refund request is still taken");
+assert.deepEqual(await create({ cat: "pay", subject: "결제" }), { http: 503, error: "closed" }, "a payment question is not");
+assert.equal((await adm("/support/delete", { id: rClosed.id })).ok, true);
 await adm("/support/config", { ...cfg.config, open: true });
 assert.equal((await create()).http, 201);
 
@@ -1037,14 +1092,16 @@ assert.ok(html.includes('<a id="privacyNav" href="/privacy" data-t="privacy"></a
   assert.ok(p3.includes("<td>{{OWNER_EMAIL}} &lt;서울&gt; (ap-northeast-2)</td>"), "the database location, escaped and not filled in again");
   assert.ok(p3.includes("시행일: 2026년 12월 14일") && !p3.includes(PRIVACY_EMPTY.ko));
   await adm("/support/config", { ...saved, seller: { ...saved.seller, name: "DOKKU", rep: "", email: "help@example.com" }, privacy: { dbRegion: "대한민국", effectiveDate: "2026-12-14" } });
-  assert.ok((await page()).html.includes("개인정보 보호책임자: DOKKU"), "no representative: the business name");
+  assert.ok((await page()).html.includes("개인정보 보호책임자: " + empty) && !(await page()).html.includes("개인정보 보호책임자: DOKKU"),
+            "no representative: the blank mark, never the business name (the officer is a person)");
 
   // ?lang=en: an English summary that says the Korean text is the policy, with the same blanks
   const pe = await page("?lang=en");
   assert.equal(pe.r.status, 200);
   assert.match(pe.html, /^<!DOCTYPE html>\s*<html lang="en">/);
   assert.ok(pe.html.includes("The Korean text is the policy") && pe.html.includes('<a href="/privacy" hreflang="ko">') && pe.html.includes('<a href="/help?lang=en">'));
-  assert.ok(pe.html.includes("Effective date: December 14, 2026") && pe.html.includes("Privacy officer: DOKKU") && pe.html.includes("Email: help@example.com") && pe.html.includes("Database location: 대한민국"));
+  assert.ok(pe.html.includes("Effective date: December 14, 2026") && pe.html.includes('Privacy officer: <span class="blank">' + PRIVACY_EMPTY.en + "</span>") &&
+            pe.html.includes("Email: help@example.com") && pe.html.includes("Database location: 대한민국"));
   assert.ok(p1.html.includes('<a href="/privacy?lang=en" hreflang="en">English summary</a>'));
   await adm("/support/config", { ...saved, privacy: { dbRegion: "", effectiveDate: "" } });
   assert.ok((await page("?lang=en")).html.includes("Effective date: <span class=\"blank\">" + PRIVACY_EMPTY.en + "</span>"));

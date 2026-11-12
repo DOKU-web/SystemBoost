@@ -38,33 +38,40 @@
 //   tk:<id>                 ticket JSON, metadata = the dashboard's list row (< 1024 bytes)
 //   tkkey:<keyId>           id of the newest refund ticket that names that key (the refund webhook reads only this);
 //                           only for a key the buyer showed they hold (a signed key, or the key of a found order)
-//   count:support:<date>    {w, c, r, vw?, vc?, vr?, by?}: the day's KV writes, new tickets and buyer replies, in two
-//                           lanes. w/c/r: anonymous tickets. vw/vc/vr: tickets of a shown purchase (owner: a signed
-//                           key, or the code of an approved or refunded order), by = actions per purchase, so a flood
-//                           of anonymous tickets cannot shut out paying buyers and one purchase cannot fill its lane.
-//                           Every public support action that writes checks its lane first and counts itself in it, so
-//                           support never takes more than LIMITS.writesPerDay + LIMITS.vWritesPerDay of the day's
-//                           writes. Orders, keys, webhooks and the dashboard never look at it. (Clearing the unread
-//                           flag is not counted: only a seller reply sets it.)
 //   config:support          seller info, the privacy policy's blanks, notice, refund days, FAQ, open (the dashboard edits it)
-// Per-IP limits, the portal link cache and the "unread mark seen" notes never write KV: they live in the Cache API
-// (per data center) and in the isolate's memory, both approximate. Cloudflare promises working Cache API calls only on
-// custom domains, so on *.workers.dev the memory copy is what holds; the daily KV budget is the backstop either way.
+// The day's write budget is counted in the Stats Durable Object (stats.js counters, SQLite: no KV write), in two lanes:
+//   sup:<date>:w / c / r    anonymous tickets: KV writes, new tickets, buyer replies
+//   sup:<date>:vw / vc / vr tickets of a shown purchase (owner: a paid key the server issued and still honours, or
+//                           the code of an approved or refunded order), and sup:<date>:by:<owner> = actions per
+//                           purchase, so a flood of anonymous tickets cannot shut out paying buyers and one purchase
+//                           cannot fill its lane.
+// Every public support action that writes takes its writes from its lane first (one atomic step, all counters or none),
+// so support never makes more than LIMITS.writesPerDay + LIMITS.vWritesPerDay KV writes a day (plus clearing unread
+// marks, which only a seller reply sets). While the object cannot be reached the same lanes are counted in one KV
+// counter, count:support:<date> (its own write included; see spend()). Orders, keys, webhooks and the dashboard never
+// look at it.
+// Per-IP limits are counted in the same object (rl:<what>:<tag>:<hour>, an hour). When it cannot be reached they fall
+// back to the Cache API (per data center) and the isolate's memory, both approximate (Cloudflare promises working Cache
+// API calls only on custom domains, so on *.workers.dev the memory copy is what holds). The portal link cache and the
+// "unread mark seen" notes live there too.
 // An IP address is used only as the first 16 hex of SHA-256(salt + "|" + address + "sb-support"), in the name of an
-// hour's counter (Cache API max-age 1 hour; memory: swept within a minute of its hour). IPv6 counts per /64. The salt is
-// SHA-256 of a fixed label and the server's LICENSE_PRIVATE_KEY secret, so without that secret nobody can hash every
-// IPv4 address back to the counter names. Without the secret (local tests only) the salt is empty.
+// hour's counter (an hour in the object or the Cache API; memory: swept within a minute of its hour). IPv6 counts per /64,
+// and anonymous writes also per /48 (LIMITS.anonPer48). The salt is SHA-256 of a fixed label and the server's
+// LICENSE_PRIVATE_KEY secret, so without that secret nobody can hash every IPv4 address back to the counter names.
+// Without the secret (local tests only) the salt is empty.
 import { HELP_HTML } from "./help_page.js";
 import { PRIVACY_HTML } from "./privacy_page.js";
 
 const DAY = 86400;
 export const LIMITS = {
   subject: 80, text: 2000, contact: 120, diag: 80, messages: 30, reason: 300,
-  createPerIp: 5, repliesPerIp: 20, statusPerIp: 120, subscriptionPerIp: 20,   // per IP an hour (Cache API / memory)
-  writesPerDay: 250, createsPerDay: 80, repliesPerDay: 80,                      // anonymous lane, all together a day (one KV counter)
-  vWritesPerDay: 150, vCreatesPerDay: 40, vRepliesPerDay: 60, perOwnerPerDay: 20,   // lane of shown purchases; one purchase's actions
+  createPerIp: 5, repliesPerIp: 20, statusPerIp: 120, subscriptionPerIp: 20,   // per IP an hour (Stats object; Cache API / memory)
+  anonPer48: 40,                                                                // anonymous writes per IPv6 /48 an hour
+  writesPerDay: 150, createsPerDay: 80, repliesPerDay: 80,                      // anonymous lane, KV writes a day (UTC)
+  vWritesPerDay: 100, vCreatesPerDay: 40, vRepliesPerDay: 60, perOwnerPerDay: 20,   // lane of shown purchases; one purchase's actions
   body: 64 * 1024, key: 4000,                                                   // request body bytes, licence key characters
-  statusBatch: 20, portalCache: 30 * 60,                                        // tickets per status call, portal link seconds
+  statusBatch: 20, statusMisses: 3, portalCache: 30 * 60, portalPerKey: 10,     // tickets per status call, KV misses read per call,
+                                                                                // portal link seconds, portal links per key a day
   reopenDays: 30,                                         // a closed ticket takes a reply this long
   keepLong: 1095 * DAY, keepShort: 365 * DAY,             // "pay" / "refund" 3 years, the rest 1 year; renewed by every write
   faq: 30, faqQ: 120, faqA: 1500, seller: 120, notice: 500,
@@ -210,7 +217,7 @@ function feedNote(env, h, ctx, kind, t) {
   if (ctx?.waitUntil) { try { ctx.waitUntil(p); return; } catch { /* awaited below */ } }
   return p;
 }
-const refused = why => why === "day" ? busy("day") : busy("ip", 2);
+const refused = why => why === "day" ? busy("day") : why === "ip" ? busy("ip") : busy("ip", 2);
 
 // The body as JSON, read no further than LIMITS.body bytes, so a huge body costs nothing past that.
 // BIG = too large, null = not JSON.
@@ -262,6 +269,8 @@ export function ipBucket(ip) {
   } else groups = ip.split(":");
   return groups.slice(0, 4).map(g => g.replace(/^0+(?=.)/, "") || "0").join(":") + "::/64";
 }
+// The /48 around an IPv6 /64 bucket (a site's whole allocation); "" for IPv4.
+export const bucket48 = b => /::\/64$/.test(b) ? b.split(":").slice(0, 3).join(":") + "::/48" : "";
 // Mixed with a value made from the signing key, like the member accounts' IP values, so a list of every IPv4 address
 // hashed by anyone else does not map a tag back to an address. Without the key (tests) the plain form is used.
 let ipSalt = null, ipSaltOf = null;
@@ -270,8 +279,12 @@ async function ipSaltFor(env) {
   if (ipSaltOf !== k) { ipSalt = k ? await sha("systemboost-support-ip|" + k) : ""; ipSaltOf = k; }
   return ipSalt;
 }
-const ipTag = async (req, env) =>
-  (await sha((await ipSaltFor(env)) + "|" + ipBucket(req.headers.get("CF-Connecting-IP")) + "sb-support")).slice(0, 16);
+const tagOf = async (env, bucket) => (await sha((await ipSaltFor(env)) + "|" + bucket + "sb-support")).slice(0, 16);
+const ipTag = async (req, env) => tagOf(env, ipBucket(req.headers.get("CF-Connecting-IP")));
+async function ipTag48(req, env) {
+  const b = bucket48(ipBucket(req.headers.get("CF-Connecting-IP")));
+  return b ? tagOf(env, b) : "";
+}
 
 // ---------------------------------------------------------------- limits and cache without KV writes
 const mem = new Map();   // name -> { v, exp }: this isolate's copy
@@ -296,9 +309,14 @@ async function keep(origin, name, v, seconds) {
   const c = edge();
   if (c) try { await c.put(cacheUrl(origin, name), new Response(v, { headers: { "Cache-Control": "max-age=" + seconds } })); } catch {}
 }
-// One more call from this IP this hour; true when it is over the limit.
-async function overIp(req, env, origin, what, max) {
+// One more call from this IP this hour; true when it is over the limit. The Stats object counts it atomically; while
+// it cannot be reached, memory and the Cache API do (approximate).
+async function overIp(req, env, h, origin, what, max) {
   const name = "rl:" + what + ":" + (await ipTag(req, env)) + ":" + now().slice(0, 13);
+  try {
+    const r = await h.stats(env, "/take", { items: [{ name, ttl: 3600, max }] });
+    if (typeof r?.ok === "boolean") return !r.ok;
+  } catch { /* the fallback below */ }
   const m = mem.get(name), mine = m && m.exp > Date.now() ? Number(m.v) || 0 : 0;
   let there = 0;
   const c = edge();
@@ -309,25 +327,52 @@ async function overIp(req, env, origin, what, max) {
   return false;
 }
 
-// The day's support write budget: one KV counter, checked before writing and counted together with the action's
-// own writes (writes = KV writes the action makes besides the counter). Two lanes on that counter: the anonymous one
-// (w, c, r) and the one of tickets whose buyer showed a purchase (vw, vc, vr; who = "k:<keyId>" or "o:<order code>",
-// with LIMITS.perOwnerPerDay actions each in by), so a flood of anonymous tickets cannot shut out paying buyers.
-// Returns "" = go ahead, "day" = that lane (or that purchase) is used up today, "retry" = the counter was not written.
-const budgetKey = () => "count:support:" + now().slice(0, 10);
+// The day's support write budget, in the Stats object (see the top of this file): checked and counted in one step
+// together with the action's own KV writes. Two lanes: the anonymous one (w, c, r) and the one of tickets whose buyer
+// showed a purchase (vw, vc, vr; who = "k:<keyId>", "s:<subscription>" or "o:<order code>", with
+// LIMITS.perOwnerPerDay actions each), so a flood of anonymous tickets cannot shut out paying buyers. An anonymous
+// write from IPv6 also counts against its /48 for the hour (LIMITS.anonPer48).
+// Returns "" = go ahead, "day" = that lane (or that purchase) is used up today (UTC), "ip" = this /48 is over its hour,
+// "retry" = the count could not be written (nothing else is written then: the budget fails closed).
+// While the object cannot be reached, the budget falls back to one KV counter, count:support:<date> (as before the
+// object held it): the same lanes and caps, the counter's own write counted in them, so even a day split between the
+// two stays under 2 x (writesPerDay + vWritesPerDay) writes. A buyer is not turned away because the object is down.
+export const budgetNames = (day = now().slice(0, 10)) => ({ w: `sup:${day}:w`, c: `sup:${day}:c`, r: `sup:${day}:r`,
+  vw: `sup:${day}:vw`, vc: `sup:${day}:vc`, vr: `sup:${day}:vr`, by: who => `sup:${day}:by:${who}` });
 const LANE = { "": { w: "w", c: "c", r: "r", max: { w: LIMITS.writesPerDay, c: LIMITS.createsPerDay, r: LIMITS.repliesPerDay } },
                v:  { w: "vw", c: "vc", r: "vr", max: { w: LIMITS.vWritesPerDay, c: LIMITS.vCreatesPerDay, r: LIMITS.vRepliesPerDay } } };
-async function today(env) {
+// true when the lane has no write left today
+async function laneFull(env, h, who) {
+  const L = LANE[who ? "v" : ""], name = budgetNames()[L.w];
+  try {
+    const r = await h.stats(env, "/peek", { names: [name] });
+    if (r?.n) return (Number(r.n[name]) || 0) >= L.max.w;
+  } catch { /* KV below */ }
+  return (await kvToday(env))[L.w] >= L.max.w;
+}
+async function spend(env, h, req, writes, kind = "", who = "") {
+  const L = LANE[who ? "v" : ""], n = budgetNames(), ttl = 2 * DAY;
+  const items = [{ name: n[L.w], ttl, max: L.max.w, by: writes }];
+  if (kind) items.push({ name: n[L[kind]], ttl, max: L.max[kind] });
+  if (who) items.push({ name: n.by(who), ttl, max: LIMITS.perOwnerPerDay });
+  const t48 = !who && req ? await ipTag48(req, env) : "";
+  if (t48) items.push({ name: "rl:w48:" + t48 + ":" + now().slice(0, 13), ttl: 3600, max: LIMITS.anonPer48, by: writes });
+  let r;
+  try { r = await h.stats(env, "/take", { items }); } catch { return kvSpend(env, writes, kind, who); }
+  if (r?.ok === true) return "";
+  return r?.ok === false ? (String(r.over || "").startsWith("rl:") ? "ip" : "day") : kvSpend(env, writes, kind, who);
+}
+const kvBudgetKey = () => "count:support:" + now().slice(0, 10);
+async function kvToday(env) {
   let d = {};
-  try { d = JSON.parse((await env.LICENSES.get(budgetKey())) || "{}") || {}; } catch {}
+  try { d = JSON.parse((await env.LICENSES.get(kvBudgetKey())) || "{}") || {}; } catch {}
   const o = {};
   for (const k of ["w", "c", "r", "vw", "vc", "vr"]) o[k] = Number(d[k]) || 0;
   o.by = d.by && typeof d.by === "object" && !Array.isArray(d.by) ? d.by : {};
   return o;
 }
-const laneFull = (d, who) => who ? d.vw >= LIMITS.vWritesPerDay : d.w >= LIMITS.writesPerDay;
-async function spend(env, writes, kind = "", who = "") {
-  const d = await today(env), L = LANE[who ? "v" : ""];
+async function kvSpend(env, writes, kind, who) {
+  const d = await kvToday(env), L = LANE[who ? "v" : ""];
   if (d[L.w] + writes + 1 > L.max.w) return "day";
   if (kind && d[L[kind]] >= L.max[kind]) return "day";
   if (who && (Number(d.by[who]) || 0) >= LIMITS.perOwnerPerDay) return "day";
@@ -335,7 +380,7 @@ async function spend(env, writes, kind = "", who = "") {
   if (kind) d[L[kind]]++;
   if (who) d.by[who] = (Number(d.by[who]) || 0) + 1;
   const next = { w: d.w, c: d.c, r: d.r, ...(d.vw || d.vc || d.vr ? { vw: d.vw, vc: d.vc, vr: d.vr, by: d.by } : {}) };
-  try { await env.LICENSES.put(budgetKey(), JSON.stringify(next), { expirationTtl: 2 * DAY }); } catch { return "retry"; }   // KV takes one write a second per key
+  try { await env.LICENSES.put(kvBudgetKey(), JSON.stringify(next), { expirationTtl: 2 * DAY }); } catch { return "retry"; }   // KV takes one write a second per key
   return "";
 }
 
@@ -417,10 +462,18 @@ function publicView(t) {
   return v;
 }
 function adminView(t) { const { tokenHash, ...rest } = t; return rest; }
-// The purchase a ticket's buyer showed, which decides its budget lane (set when the ticket is made): "k:<keyId>" for a
-// signed key, "o:<code>" for an order the seller approved (or refunded), "" for none. Anybody can make an order and
-// say it is paid, so a requested or "paid" order does not count here.
+// The purchase a ticket's buyer showed, which decides its budget lane (set when the ticket is made): a paid key the
+// server issued and still honours (its subscription "s:<id>", its order "o:<code>", else "k:<keyId>"), or an order the
+// seller approved (or refunded) "o:<code>"; "" for none. A referral or hand-made key is free to get, so it is not a
+// purchase here; nor is a requested or "paid" order (anybody can make an order and say it is paid), nor a blocked or
+// expired key, nor a key written any other way than the one the server issued (each spelling would be a new owner).
 const ownerOf = t => typeof t.owner === "string" ? t.owner : "";
+const PAID_SRC = ["payment", "subscription", "order"];
+function paidOwner(held) {
+  if (!held || !PAID_SRC.includes(held.meta?.src)) return "";
+  const sub = String(held.meta.sub || held.payload?.sub || ""), code = (NOTE_ORDER_RE.exec(held.meta.note || "") || [])[1] || "";
+  return /^\d{1,20}$/.test(sub) ? "s:" + sub : code ? "o:" + code : "k:" + held.id;
+}
 
 // What the server knows about the key and the order a refund names. The buyer's words are not checked against it;
 // the seller reads both and decides.
@@ -482,9 +535,11 @@ function cleanDiag(d) {   // filled in by the app, so cut rather than refused
 
 async function create(req, url, env, h, ctx) {
   const c = await supportConfig(env);
-  if (!c.open) return json({ error: "closed" }, 503);
   const b = await readBody(req);
   if (b === BIG) return tooLarge();
+  // Closing support stops questions, never a withdrawal (refund) request: the law lets the buyer withdraw whatever
+  // the seller's desk says (info() tells the app and /help that refunds stay open).
+  if (!c.open && b?.cat !== "refund") return json({ error: "closed" }, 503);
   if (!b || typeof b !== "object" || Array.isArray(b)) return bad("body");
   if (!CATEGORIES.some(x => x.id === b.cat)) return bad("cat");
   const cat = b.cat;
@@ -514,8 +569,8 @@ async function create(req, url, env, h, ctx) {
     if (!reason) return bad("reason");
   }
 
-  if (await overIp(req, env, url.origin, "new", LIMITS.createPerIp)) return busy("ip");
-  let keyVerified = false;
+  if (await overIp(req, env, h, url.origin, "new", LIMITS.createPerIp)) return busy("ip");
+  let keyVerified = false, held = null;
   if (key) {
     const [p, s] = key.split(".");
     if (!(await h.verifySig(env, p, s))) return bad("bad key");
@@ -523,16 +578,18 @@ async function create(req, url, env, h, ctx) {
     if (keyId && keyId !== id) return bad("keyId");
     keyId = id;
     keyVerified = true;
+    held = await h.heldKey(env, key);   // the purchase lane needs the key as issued, still honoured
+    if (held && held.id !== keyId) held = null;
   }
   const o = order ? await h.getOrder(env, order) : null;   // reads only, up to spend()
   const f = cat === "refund" ? await refundFacts(env, h, order, keyId, o) : null;
-  const owner = keyVerified ? "k:" + keyId : o?.status === "approved" || o?.status === "refunded" ? "o:" + order : "";
+  const owner = paidOwner(held) || (o?.status === "approved" || o?.status === "refunded" ? "o:" + order : "");
   // The refund webhook's index, only for a key the buyer showed they hold: the signed key itself, or a key the found
   // order points to (refundFacts takes the order's own key whenever an order was found). A key id typed alone could be
   // anybody's: it gets no entry, so a stranger's request cannot catch that key's card refund.
   const index = f?.key && ((keyVerified && f.key === keyId) || o) ? f.key : "";
-  // the ticket, the index, and the budget counter itself, in the lane of the purchase shown (if any)
-  const why = await spend(env, index ? 2 : 1, "c", owner);
+  // the ticket and the index, in the lane of the purchase shown (if any)
+  const why = await spend(env, h, req, index ? 2 : 1, "c", owner);
   if (why) return refused(why);
 
   const t = now(), token = hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -570,32 +627,39 @@ async function stillUnread(origin, t) {
   return !!t.unreadUser && (await recall(origin, seenKey(t))) !== t.updated;
 }
 
-async function read(req, url, env) {
+async function read(req, url, env, h) {
   const t = await opened(env, url.searchParams.get("id"), req.headers.get("X-Ticket-Token"));
   if (!t) return notFound();
   const view = publicView(t);   // still says unread, so the app can show what is new
   if (t.unreadUser) {
-    // Not counted in the budget: only a seller reply sets the flag. With the ticket's lane used up it stays set in KV.
-    if (!laneFull(await today(env), ownerOf(t))) { t.unreadUser = false; await save(env, t); }
+    // Not counted in the budget: only a seller reply sets the flag. With the ticket's lane used up (or not known) it
+    // stays set in KV.
+    if (!(await laneFull(env, h, ownerOf(t)))) { t.unreadUser = false; await save(env, t); }
     else if (!(await stillUnread(url.origin, t))) view.unreadUser = false;
     else await keep(url.origin, seenKey(t), t.updated, DAY);
   }
   return json({ ticket: view });
 }
 
-// The app's polling: many tickets in one call, nothing written, unread left as it is.
-async function statusBatch(req, url, env) {
+// The app's polling: many tickets in one call, nothing written, unread left as it is. A ticket that is not found (or
+// whose token is wrong) costs a KV read like a found one, so after LIMITS.statusMisses of them the call reads no
+// further: the tickets after that are left out of the answer (the app then keeps what it showed; null means gone).
+async function statusBatch(req, url, env, h) {
   const b = await readBody(req);
   if (b === BIG) return tooLarge();
   const list = b && typeof b === "object" && !Array.isArray(b) ? b.tickets : null;
   if (!Array.isArray(list) || list.length < 1 || list.length > LIMITS.statusBatch ||
       !list.every(x => x && typeof x === "object" && typeof x.id === "string" && typeof x.token === "string" && x.id.length <= 64 && x.token.length <= 128))
     return bad("tickets");
-  if (await overIp(req, env, url.origin, "status", LIMITS.statusPerIp)) return busy("ip");
+  if (await overIp(req, env, h, url.origin, "status", LIMITS.statusPerIp)) return busy("ip");
   const out = Object.create(null);   // any id, "__proto__" too, is just a key
+  let misses = 0;
   for (const x of list) {
     if (x.id in out) continue;
+    if (misses >= LIMITS.statusMisses) break;
+    const reads = TOKEN_RE.test(x.token) && ID_RE.test(String(x.id).trim().toUpperCase());   // what opened() reads KV for
     const t = await opened(env, x.id, x.token);
+    if (!t && reads) misses++;
     out[x.id] = t ? { status: t.status, updated: t.updated, n: t.messages.length, unread: await stillUnread(url.origin, t) } : null;
   }
   return json({ tickets: out });
@@ -611,8 +675,8 @@ async function reply(req, url, env, h, ctx) {
   if (!text || chars(text) > LIMITS.text) return bad("text");
   if (t.status === "closed" && Date.now() - Date.parse(t.closedAt || t.updated) > LIMITS.reopenDays * 864e5) return json({ error: "closed" }, 409);
   if (t.messages.length >= LIMITS.messages) return json({ error: "full" }, 409);
-  if (await overIp(req, env, url.origin, "reply", LIMITS.repliesPerIp)) return busy("ip");
-  const why = await spend(env, 1, "r", ownerOf(t));
+  if (await overIp(req, env, h, url.origin, "reply", LIMITS.repliesPerIp)) return busy("ip");
+  const why = await spend(env, h, req, 1, "r", ownerOf(t));
   if (why) return refused(why);
   const reopened = t.status === "closed";
   t.updated = now();
@@ -631,7 +695,7 @@ async function close(req, url, env, h, ctx) {
   const t = await opened(env, b?.id, b?.token);
   if (!t) return notFound();
   if (t.status !== "closed") {
-    const why = await spend(env, 1, "", ownerOf(t));
+    const why = await spend(env, h, req, 1, "", ownerOf(t));
     if (why) return refused(why);
     t.status = "closed"; t.closedAt = t.updated = now(); await save(env, t);
     await feedNote(env, h, ctx, "close", t);
@@ -640,25 +704,31 @@ async function close(req, url, env, h, ctx) {
 }
 
 // The customer portal of a card subscription: a pre-signed Lemon Squeezy link where the buyer can cancel or change
-// the card. A read-only call. The key's signature is checked first, so nobody can ask for someone else's; a blocked
-// key (refunded, shared) and a subscription that is no longer active (no sub:<id>) get the same 404 as a bad key.
+// the card. Only for a key the server issued and still honours, checked like /renew checks one (h.heldKey: the text
+// as issued, after the same clean-up as the app's; not revoked under either signature; not expired) and naming the
+// subscription in its record too. A key that is anything else, and a subscription that is no longer active (no
+// sub:<id>), get the same 404. Each key gets LIMITS.portalPerKey links a day (UTC; counted in the Stats object, so
+// none while it cannot be reached), and every link handed out leaves a line in the dashboard's 기록.
 // The link is kept 30 minutes per subscription, so pressing the button again does not call Lemon Squeezy again.
 async function subscription(req, url, env, h) {
-  if (await overIp(req, env, url.origin, "sub", LIMITS.subscriptionPerIp)) return busy("ip");
+  if (await overIp(req, env, h, url.origin, "sub", LIMITS.subscriptionPerIp)) return busy("ip");
   const b = await readBody(req);
   if (b === BIG) return tooLarge();
-  const key = typeof b?.key === "string" ? b.key.trim() : "";
-  const parts = key.split(".");
-  if (parts.length !== 2 || key.length > 4000 || !(await h.verifySig(env, parts[0], parts[1]))) return notFound();
-  let p;
-  try { p = JSON.parse(new TextDecoder().decode(h.unb64url(parts[0]))); } catch { return notFound(); }
-  const sub = String(p?.sub || "");
-  if (!/^\d{1,20}$/.test(sub)) return notFound();
-  if ((await env.LICENSES.get("revoked:" + (await h.keyId(key)))) !== null) return notFound();
+  const held = typeof b?.key === "string" && b.key.length <= LIMITS.key ? await h.heldKey(env, b.key) : null;
+  const sub = String(held?.payload?.sub || "");
+  if (!held || !/^\d{1,20}$/.test(sub) || String(held.meta?.sub || "") !== sub) return notFound();
   if ((await env.LICENSES.get("sub:" + sub)) === null) return notFound();
   if (!env.LS_API_KEY) return json({ error: "unavailable" }, 503);
+  let cap;
+  try { cap = await h.stats(env, "/take", { items: [{ name: "portal:" + now().slice(0, 10) + ":" + held.id, ttl: 2 * DAY, max: LIMITS.portalPerKey }] }); }
+  catch { return json({ error: "unavailable" }, 503); }
+  if (cap?.ok !== true) return busy("day");
+  const handed = async portal => {
+    try { await h.audit(env, "app", "구독 관리 링크", "구독 " + sub + " · " + held.id); } catch {}
+    return json({ portal });
+  };
   const cached = await recall(url.origin, "portal:" + sub);
-  if (cached) return json({ portal: cached });
+  if (cached) return handed(cached);
   let res;
   try {
     res = await fetch("https://api.lemonsqueezy.com/v1/subscriptions/" + sub, {
@@ -671,12 +741,13 @@ async function subscription(req, url, env, h) {
   const portal = (await res.json().catch(() => null))?.data?.attributes?.urls?.customer_portal;
   if (typeof portal !== "string" || !/^https:\/\/\S+$/.test(portal)) return json({ error: "unavailable" }, 503);
   await keep(url.origin, "portal:" + sub, portal, LIMITS.portalCache);
-  return json({ portal });
+  return handed(portal);
 }
 
+// refunds: true always: refund (withdrawal) requests are taken even while the seller has closed support ("open").
 async function info(url, env) {
   const c = await supportConfig(env), lang = lang2(url.searchParams.get("lang"));
-  return json({ open: c.open, seller: c.seller, notice: c.notice, refundDays: c.refundDays,
+  return json({ open: c.open, refunds: true, seller: c.seller, notice: c.notice, refundDays: c.refundDays,
                 faq: c.faq.length ? c.faq : DEFAULT_FAQ[lang], faqDefault: !c.faq.length,
                 categories: CATEGORIES, refundReasons: REFUND_REASONS, policy: ARTICLE_9[lang] });
 }
@@ -685,8 +756,9 @@ async function info(url, env) {
 // and nothing here answers OPTIONS (404), so such a page cannot post at all. The app and /help send JSON.
 const JSON_TYPE = /^\s*application\/json\s*(;|$)/i;
 
-// /support/* (h: helpers from index.js: getOrder, putOrder, revoke, audit, accounts, verifySig, unb64url, allRecords,
-// state, keyId, events; ctx: the request's context, for ctx.waitUntil)
+// /support/* (h: helpers from index.js: getOrder, putOrder, revoke, revokeSub, audit, accounts, verifySig, unb64url,
+// allRecords, state, keyId, canonicalKey, heldKey, events, stats, cancelSubscription;
+// ctx: the request's context, for ctx.waitUntil)
 export async function support(req, url, env, h, ctx) {
   // a ticket token in a URL is refused outright, so a client that still puts it there shows up at once
   if (url.searchParams.has("token")) return json({ error: "token in url" }, 400);
@@ -695,10 +767,10 @@ export async function support(req, url, env, h, ctx) {
   switch (route) {
     case "GET /support/info": return info(url, env);
     case "POST /support/ticket": return create(req, url, env, h, ctx);
-    case "GET /support/ticket": return read(req, url, env);
+    case "GET /support/ticket": return read(req, url, env, h);
     case "POST /support/ticket/reply": return reply(req, url, env, h, ctx);
     case "POST /support/ticket/close": return close(req, url, env, h, ctx);
-    case "POST /support/tickets/status": return statusBatch(req, url, env);
+    case "POST /support/tickets/status": return statusBatch(req, url, env, h);
     case "POST /support/subscription": return subscription(req, url, env, h);
   }
   return notFound();
@@ -721,11 +793,12 @@ export function helpPage(url) {
 export const PRIVACY_EMPTY = { ko: "판매자가 아직 입력하지 않았어요", en: "not entered by the seller yet" };
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const escHtml = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-// What fills each blank: the privacy officer is the representative, else the business name (as the dashboard says).
+// What fills each blank. The privacy officer is a person: the representative's name, never the business name in its
+// place; while it is empty the page shows the "not entered" mark and the dashboard warns in red.
 export function privacyBlanks(c, lang = "ko") {
   const s = c.seller || {}, p = c.privacy || {}, d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.effectiveDate || "");
   const day = !d ? "" : lang === "en" ? MONTHS[Number(d[2]) - 1] + " " + Number(d[3]) + ", " + d[1] : d[1] + "년 " + Number(d[2]) + "월 " + Number(d[3]) + "일";
-  return { OWNER_NAME: s.rep || s.name || "", OWNER_EMAIL: s.email || "", SUPABASE_REGION: p.dbRegion || "", EFFECTIVE_DATE: day };
+  return { OWNER_NAME: s.rep || "", OWNER_EMAIL: s.email || "", SUPABASE_REGION: p.dbRegion || "", EFFECTIVE_DATE: day };
 }
 export async function privacyPage(url, env) {
   const lang = lang2(url.searchParams.get("lang"));
@@ -742,20 +815,23 @@ export async function privacyPage(url, env) {
 
 // ---------------------------------------------------------------- dashboard
 const refundOpen =m => m?.rs === "requested" || m?.rs === "approved";
+// Up to 10 list pages (10,000 tickets); out.truncated says there were more, and the dashboard says so.
 async function rows(env) {
   const out = [];
+  out.truncated = true;
   let cursor;
   for (let i = 0; i < 10; i++) {
     const r = await env.LICENSES.list({ prefix: "tk:", cursor, limit: 1000 });
     for (const k of r.keys) if (k.metadata) out.push({ id: k.name.slice(3), ...k.metadata });
-    if (r.list_complete) break;
+    if (r.list_complete) { out.truncated = false; break; }
     cursor = r.cursor;
   }
   return out;
 }
-export async function supportCounts(env) {   // for the dashboard summary: one list call
+export async function supportCounts(env) {   // for the dashboard summary: one list call (ticketsMore: counted from the first 1,000)
   const r = await env.LICENSES.list({ prefix: "tk:", limit: 1000 });
-  return { ticketsOpen: r.keys.filter(k => k.metadata?.status === "open").length, refundsOpen: r.keys.filter(k => refundOpen(k.metadata)).length };
+  return { ticketsOpen: r.keys.filter(k => k.metadata?.status === "open").length, refundsOpen: r.keys.filter(k => refundOpen(k.metadata)).length,
+           ...(r.list_complete === false ? { ticketsMore: true } : {}) };
 }
 // names: ticket numbers the dashboard's feed shows but its list does not (another tab, older): their row comes back
 // in `named` from the same list call, so the feed costs no KV list of its own.
@@ -770,23 +846,37 @@ async function list(env, status, q, names = "") {
   pick.sort((a, b) => (b.status === "open") - (a.status === "open") || String(b.updated).localeCompare(String(a.updated)));
   const want = new Set(String(names).split(",").filter(id => ID_RE.test(id)).slice(0, 100)), named = {};
   for (const r of all) if (want.has(r.id)) named[r.id] = { subj: r.subj, cat: r.cat, status: r.status, ...(r.rs ? { rs: r.rs } : {}) };
-  return { tickets: pick.slice(0, 300), count, ...(want.size ? { named } : {}) };
+  // more: the filter matched more than the 300 shown; truncated: there are more than 10,000 tickets, some not looked at
+  return { tickets: pick.slice(0, 300), count, ...(pick.length > 300 ? { more: true } : {}), ...(all.truncated ? { truncated: true } : {}),
+           ...(want.size ? { named } : {}) };
 }
 
 // The keys a refund would block: every key of a manual order (a bundle has several, each note starts with the
-// order code), otherwise the one key of the request: the order's own key, or the key the buyer named when it
-// belongs to that order. A key of another purchase (facts.mismatch) is never blocked by this request.
-const keyRow = (m, h) => ({ id: m.id, plan: m.plan || "", issued: m.issued || "", expires: m.expires || "", state: h.state(m), note: m.note || "" });
+// order code); for a card subscription every key it was given (a plan change or a renewal gives a new one);
+// otherwise the one key of the request: the order's own key, or the key the buyer named when it belongs to that
+// order. A key of another purchase (facts.mismatch) is never blocked by this request.
+const keyRow = (m, h) => ({ id: m.id, plan: m.plan || "", issued: m.issued || "", expires: m.expires || "", state: h.state(m), note: m.note || "",
+                            ...(m.sub ? { sub: String(m.sub) } : {}) });
 // owned: the buyer showed they hold that key. It is the key they pasted (signature checked), or a key of the order
-// they named and the server found, or of the order a pasted key belongs to. A key id typed alone shows nothing:
-// anybody who once saw it could type it. o = the record of the request's order code, if any.
+// they named and the server found, or of the order a pasted key belongs to, or another key of the same card
+// subscription. A key id typed alone shows nothing: anybody who once saw it could type it. o = the record of the
+// request's order code, if any.
 function owns(t, k, o) {
   const f = t.refund?.facts || {}, codes = [];
   if (t.keyVerified && k.id === t.keyId) return true;
+  if (f.sub && !f.mismatch && (t.keyVerified || t.orderMatched) && String(k.sub || "") === String(f.sub)) return true;
   if (t.orderMatched && t.order) codes.push(t.order);
   if (t.keyVerified && !f.mismatch && f.order) codes.push(f.order);
   return codes.some(c => String(k.note || "").startsWith(c) || (o?.code === c && o.keyId === k.id));
 }
+async function subKeyIds(env, sub) {
+  const ids = new Set();
+  if (!/^\d{1,20}$/.test(sub)) return ids;
+  try { for (const id of JSON.parse((await env.LICENSES.get("subkeys:" + sub)) || "[]")) if (KEY_RE.test(id)) ids.add(id); } catch {}
+  return ids;
+}
+// shown: the buyer pasted this key in the request. That is all the server can say about a key's use: it does not
+// record which PC registered a key or when the app last checked it.
 async function keysFor(env, t, h) {
   const f = t.refund?.facts || {}, code = t.order || f.order || "";
   const o = code ? await h.getOrder(env, code) : null;
@@ -797,8 +887,13 @@ async function keysFor(env, t, h) {
     const id = f.keyId || (!f.mismatch && t.keyId) || o?.keyId || "";
     const m = await keyMeta(env, id);
     if (m) recs = [{ id, ...m }];
+    if (m?.sub) for (const sid of await subKeyIds(env, String(m.sub))) {
+      if (sid === id) continue;
+      const s = await keyMeta(env, sid);
+      if (s && String(s.sub || "") === String(m.sub)) recs.push({ id: sid, ...s });
+    }
   }
-  return recs.map(m => ({ ...keyRow(m, h), owned: owns(t, m, o) }));
+  return recs.map(m => ({ ...keyRow(m, h), owned: owns(t, m, o), ...(t.keyVerified && m.id === t.keyId ? { shown: true } : {}) }));
 }
 // For the dashboard's warning: the purchase the other key belongs to (all of its order's keys when they are known).
 async function otherKeys(env, t, h) {
@@ -825,7 +920,9 @@ async function dropClaims(env, code) {
 export async function supportAdmin(env, route, body, url, h) {
   const nf = { status: 404, error: "문의를 찾지 못했어요" };
   switch (route) {
-    case "GET /support": return list(env, url.searchParams.get("status") || "open", url.searchParams.get("q") || "", url.searchParams.get("names") || "");
+    // a search goes in a POST body (the words may be a buyer's order code or member id: not for addresses and logs)
+    case "GET /support": return list(env, url.searchParams.get("status") || "open", "", url.searchParams.get("names") || "");
+    case "POST /support": return list(env, String(body.status || "open"), String(body.q || ""), String(body.names || ""));
     case "GET /support/feed": {   // the Durable Object only, no KV
       const a = url.searchParams.get("after");
       if (a !== null && !/^\d{1,15}$/.test(a)) return { status: 400, error: "after는 숫자예요" };
@@ -923,10 +1020,17 @@ async function refundAction(env, t, body, h) {
     return { ticket: adminView(t) };
   }
   // done: the seller has paid the money back (by hand, or in Lemon Squeezy)
-  const keys = await keysFor(env, t, h), o = code ? await h.getOrder(env, code) : null;
-  if (!keys.length && o?.status !== "approved")
+  const all = await keysFor(env, t, h), o = code ? await h.getOrder(env, code) : null;
+  if (!all.length && o?.status !== "approved")
     return { status: 409, error: "이 요청에는 막을 키가 없고, 승인된(결제가 확인된) 주문도 아니에요. 주문 코드와 키를 확인해 주세요" +
                                  (r.facts?.mismatch ? ". 구매자가 적은 키는 다른 구매의 키예요" : "") + "." };
+  // keys: the ones to block when only part of a bundle is refunded (the seller ticks them); all of them when not given
+  let keys = all;
+  if (body.keys != null) {
+    if (!Array.isArray(body.keys) || !body.keys.length || body.keys.length > 100 || !body.keys.every(id => typeof id === "string" && all.some(k => k.id === id)))
+      return { status: 400, error: "막을 키를 이 요청의 키 중에서 하나 이상 골라 주세요" };
+    keys = all.filter(k => body.keys.includes(k.id));
+  }
   // A key the buyer did not show they hold is blocked only on a second, explicit yes from the seller: a stranger may
   // have typed somebody else's key id to get that key blocked.
   const doubt = body.revoke !== false ? keys.filter(k => k.state !== "revoked" && !k.owned).map(k => k.id) : [];
@@ -934,34 +1038,70 @@ async function refundAction(env, t, body, h) {
     return { status: 409, unverified: doubt,
              error: "키 소유 확인 안 됨: 구매자가 키 식별 번호만 적어서 이 키(" + doubt.join(", ") + ")가 구매자의 것인지 확인되지 않았어요. " +
                     "다른 사람의 키를 적었을 수도 있어요. 구매자의 키가 맞는지 확인한 뒤 한 번 더 확인하고 누르세요." };
-  const ids = [];
+  const ids = [], subs = [...new Set(keys.filter(k => k.sub).map(k => k.sub))], cancelled = [], cancelFailed = [];
   if (body.revoke !== false) {
+    // a card subscription: every key it was given goes off (h.revokeSub), and its renewals stop. Cancelling it in
+    // Lemon Squeezy (h.cancelSubscription) is the order code's part; called only where it exists.
+    const bySub = new Set();
+    for (const sub of subs) for (const id of (typeof h.revokeSub === "function" ? await h.revokeSub(env, sub, "환불", "admin") : [])) bySub.add(id);
     for (const k of keys) {
-      if (k.state !== "revoked") await h.revoke(env, k.id, "환불", "admin");
+      if (k.state !== "revoked" && !bySub.has(k.id)) await h.revoke(env, k.id, "환불", "admin");
       ids.push(k.id);
     }
+    for (const id of bySub) if (!ids.includes(id)) ids.push(id);
+    if (typeof h.cancelSubscription === "function")
+      for (const sub of subs) {
+        try { const r = await h.cancelSubscription(env, sub, "환불");   // {ok: false, reason} when it could not (or no API key)
+              (r === false || r?.ok === false) ? cancelFailed.push(sub) : cancelled.push(sub); }
+        catch { cancelFailed.push(sub); }
+      }
   }
-  await markRefunded(env, h, o);
-  if (code) await dropClaims(env, code);
+  // part of a bundle: the order stays approved and its keys claimable (the kept keys are still the buyer's)
+  const kept = body.revoke !== false ? all.filter(k => k.state !== "revoked" && !ids.includes(k.id)).map(k => k.id) : [];
+  if (!kept.length) {
+    await markRefunded(env, h, o);
+    if (code) await dropClaims(env, code);
+  }
   Object.assign(r, { status: "done", decidedAt: at });
   delete r.rejectReason;
   if (amount !== undefined) r.amount = amount;
   if (ids.length) r.revoked = ids;
+  if (kept.length) r.kept = kept; else delete r.kept;
   say(t, message || (ids.length ? SAY.doneKeys[lang] : SAY.done[lang]));
   t.status = "answered";
   await save(env, t);
-  await h.audit(env, "admin", "환불 완료", [...what, ids.length ? "키 " + ids.join(", ") : "키 그대로", doubt.length ? "소유 확인 안 된 키를 판매자가 확인함" : ""].filter(Boolean).join(" · "));
-  return { ticket: adminView(t), revoked: ids };
+  await h.audit(env, "admin", "환불 완료", [...what, ids.length ? "키 " + ids.join(", ") : "키 그대로", kept.length ? "남긴 키 " + kept.length + "개" : "",
+                                            cancelled.length ? "구독 해지 " + cancelled.join(", ") : "", cancelFailed.length ? "구독 해지 실패 " + cancelFailed.join(", ") : "",
+                                            doubt.length ? "소유 확인 안 된 키를 판매자가 확인함" : ""].filter(Boolean).join(" · "));
+  return { ticket: adminView(t), revoked: ids, ...(kept.length ? { kept } : {}), ...(subs.length ? { subs, cancelled, cancelFailed, cancelAvailable: typeof h.cancelSubscription === "function" } : {}) };
 }
 
 // Called by the Lemon Squeezy refund webhooks after they blocked keyId: the newest refund ticket naming that key
-// is marked done. One KV read when there is none. A key the buyer named from another purchase does not count.
-export async function webhookRefund(env, keyId, h) {
+// is marked done. A key the buyer named from another purchase does not count. When no ticket names that key and it
+// belongs to a card subscription, the subscription's other keys are tried too (a request may name the key before a
+// plan change or a renewal): two KV reads when the key has no subscription and there is no ticket.
+export async function webhookRefund(env, keyId, h, expand = true) {
+  if (await closeRefund(env, keyId, h, [keyId])) return true;
+  if (!expand || !KEY_RE.test(keyId || "")) return false;
+  const sub = String((await keyMeta(env, keyId))?.sub || "");
+  return sub ? (await webhookRefundSub(env, sub, h, [keyId])) > 0 : false;
+}
+// Called by revokeSub (index.js) after a refund webhook blocked a subscription's keys, also when the subscription was
+// cancelled first (then sub:<id> is gone and the refund webhook alone would not find the request): every refund ticket
+// naming one of its keys (ids and subkeys:<sub>) is marked done. -> how many were.
+export async function webhookRefundSub(env, sub, h, ids = []) {
+  const all = await subKeyIds(env, String(sub));
+  for (const id of ids) if (KEY_RE.test(id)) all.add(id);
+  let n = 0;
+  for (const id of all) if (await closeRefund(env, id, h, [...all])) n++;
+  return n;
+}
+async function closeRefund(env, keyId, h, revoked) {
   const id = await env.LICENSES.get("tkkey:" + keyId);
   const t = id ? await load(env, id) : null;
   const r = t?.refund, f = r?.facts || {};
   if (!r || r.status === "done" || (f.keyId !== keyId && (f.mismatch || t.keyId !== keyId))) return false;
-  Object.assign(r, { status: "done", decidedAt: now(), revoked: [keyId] });
+  Object.assign(r, { status: "done", decidedAt: now(), revoked: revoked.slice(0, 50) });
   delete r.rejectReason;
   if (r.method === "unknown") r.method = "card";
   const code = t.order || f.order || "";
