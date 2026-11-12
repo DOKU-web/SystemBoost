@@ -125,7 +125,7 @@ export const ARTICLE_9 = {
 export const DEFAULT_FAQ = {
   ko: [
     { q: "라이선스 키는 어디에 넣나요?",
-      a: "앱 왼쪽의 '★ 플랜' 화면에서 '라이선스 키' 칸에 키를 붙여 넣고 '등록'을 누르세요. 결제한 뒤에는 앱이 키를 기다리다가(앱을 껐다 켜도 14일까지) 키가 나오면 팝업으로 보여 줘요." },
+      a: "앱 왼쪽의 '★ 플랜' 화면에서 '라이선스 키' 칸에 키를 붙여 넣고 '등록'을 누르세요. 결제한 뒤에는 앱이 키를 기다리다가(앱을 껐다 켜도 90일까지) 키가 나오면 팝업으로 보여 줘요." },
     { q: "계좌이체 · 직접 결제는 어떻게 하나요?",
       a: "'★ 플랜'에서 '계좌이체 · 직접 결제'를 고르고 '결제하기'를 누르면 주문 코드(SB-XXXX-XXXX)와 판매자 결제 페이지가 열려요. 결제할 때 요청사항(메모)에 주문 코드를 적고, 결제를 마친 뒤 앱에 입금자명을 적어 '결제했어요'를 누르세요. 판매자가 결제를 확인하고 키를 보내요. 직접 결제로 산 키는 자동으로 결제되지 않아요(사용권 계약 제3조 제3항). 기간이 끝나기 전에 앱에서 다시 결제하면 새 키의 기간은 이 PC에 등록된 같거나 낮은 플랜의 키가 끝나는 날부터 이어서 세요(앱을 최신 버전으로 업데이트한 경우). 카드 구독은 결제한 날부터 시작해요." },
     { q: "카드 결제와 구독 해지는 어떻게 되나요?",
@@ -145,11 +145,11 @@ export const DEFAULT_FAQ = {
     { q: "회원 비밀번호를 잊었어요.",
       a: "회원 가입에는 메일을 받지 않아서, 가입할 때 받은 복구 코드로 비밀번호를 바꿔요. 앱의 '◈ 계정' 화면에서 '비밀번호 찾기'를 누르세요. 복구 코드도 잃었다면 문의 종류 '기타'로 문의해 주세요." },
     { q: "문의 내용은 얼마나 보관하나요?",
-      a: "문의 종류, 제목, 내용과 답변, 적은 연락처, 주문 코드와 키 식별 번호, '앱 정보 함께 보내기'를 고른 경우 그 앱 정보를 답변과 기록을 위해 보관해요. 회원으로 로그인한 앱에서 보내면 아이디도 함께 남아요. 환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명 등)도 붙어요. 키 전체를 보내도 키는 주인 확인에만 쓰고 저장하지 않아요. 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년이 지나면 지워져요. IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요." },
+      a: "문의 종류, 제목, 내용과 답변, 적은 연락처, 주문 코드와 키 식별 번호, '앱 정보 함께 보내기'를 고른 경우 그 앱 정보를 답변과 기록을 위해 보관해요. 회원으로 로그인한 앱에서 보내면 아이디도 함께 남아요. 환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명 등)도 붙어요. 키 전체를 보내도 키는 주인 확인에만 쓰고 저장하지 않아요. 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년이 지나면 지워져요. IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 판매자 서버에 1시간까지 둬요." },
   ],
   en: [
     { q: "Where do I enter my license key?",
-      a: "Paste the key into the 'License key' box on the '★ Plans' page on the left of the app and press 'Register'. After you pay, the app waits for the key (up to 14 days, even if you restart it) and shows it in a popup when it is issued." },
+      a: "Paste the key into the 'License key' box on the '★ Plans' page on the left of the app and press 'Register'. After you pay, the app waits for the key (up to 90 days, even if you restart it) and shows it in a popup when it is issued." },
     { q: "How do bank transfer and direct payment work?",
       a: "On '★ Plans', choose 'Bank transfer · direct payment', then press 'Pay': an order code (SB-XXXX-XXXX) and the seller's payment page open. Write the order code in the payment memo; after paying, type the payer's name in the app and press 'I have paid'. The seller checks the payment and sends the key. A key bought by direct payment is not charged automatically (license agreement, Article 3, Paragraph 3). If you pay again in the app before the period ends, the new key's period starts when the same- or lower-plan key registered on this PC ends (with the app updated to the latest version). A card subscription starts on the day you pay." },
     { q: "How do card payments and cancelling a subscription work?",
@@ -169,7 +169,7 @@ export const DEFAULT_FAQ = {
     { q: "I forgot my member password.",
       a: "Sign-up takes no email address, so the password is changed with the recovery code you got at sign-up. Open '◈ Account' in the app and press 'Forgot password'. If you lost the recovery code too, send a request with the category 'Other'." },
     { q: "How long are support requests kept?",
-      a: "The category, subject, message and replies, the contact you wrote, the order code and key ID, and, if you chose to send it, the app information are kept to answer you and keep a record. Sent from an app signed in as a member, the member ID is kept too. For a refund request the server also attaches the order and key details it holds (plan, date issued, payer name and more). If you send the full key, it is used only to check that it is yours and is not stored. Payment and refund requests are deleted 3 years after they last changed, other requests after 1 year. Your IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays in server memory and the Cloudflare cache for up to 1 hour." },
+      a: "The category, subject, message and replies, the contact you wrote, the order code and key ID, and, if you chose to send it, the app information are kept to answer you and keep a record. Sent from an app signed in as a member, the member ID is kept too. For a refund request the server also attaches the order and key details it holds (plan, date issued, payer name and more). If you send the full key, it is used only to check that it is yours and is not stored. Payment and refund requests are deleted 3 years after they last changed, other requests after 1 year. Your IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays on the seller's server for up to 1 hour." },
   ],
 };
 

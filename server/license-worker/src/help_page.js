@@ -131,6 +131,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       sellerEmpty: "판매자가 아직 입력하지 않았어요",
       sellerLabels: { name: "상호", rep: "대표자", address: "주소", bizNo: "사업자등록번호", mailOrderNo: "통신판매업 신고번호", email: "메일", phone: "전화", hours: "문의 받는 시간" },
       closed: "지금은 문의를 받지 않아요. 보낸 문의는 아래 '내 문의'에서 볼 수 있어요.",
+      closedRefunds: "지금은 일반 문의를 받지 않아요. 환불(청약철회) 요청은 그대로 받아요. 다른 문의는 이 페이지의 판매자 정보에 있는 연락처로 보내 주세요. 보낸 문의는 아래 '내 문의'에서 볼 수 있어요.",
       cat: "문의 종류", subject: "제목", text: "내용", reason: "환불 사유", refundNeeds: "환불 요청에는 주문 코드나 라이선스 키 중 하나가 필요해요.",
       order: "주문 코드 (선택)", orderNote: "앱의 '★ 플랜'에서 결제할 때 받은 코드예요. 적은 경우에만 보내요.",
       key: "라이선스 키 또는 키 식별 번호 (선택)",
@@ -138,7 +139,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       contact: "판매자가 따로 연락할 연락처 (선택, 메일 등)",
       contactNote: "적은 경우에만 보내고, 문의와 함께 보관해요. 답은 이 페이지의 '내 문의'에 와요.",
       consentTitle: "보관 안내 (필수)",
-      consentText: "보관하는 것: 문의 종류, 제목, 내용, 판매자의 답, 주문 코드와 키 식별 번호(적은 경우), 동의한 시각.\n왜: 문의에 답하고 결제와 환불 기록을 남기려고요.\n환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명 등)도 함께 붙어요.\n얼마나: 판매자 서버에 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년 동안 두고 지워요.\nIP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요.\n동의하지 않으면 문의를 보낼 수 없어요. 앱은 그대로 쓸 수 있어요.",
+      consentText: "보관하는 것: 문의 종류, 제목, 내용, 판매자의 답, 주문 코드와 키 식별 번호(적은 경우), 동의한 시각.\n왜: 문의에 답하고 결제와 환불 기록을 남기려고요.\n환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명 등)도 함께 붙어요.\n얼마나: 판매자 서버에 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년 동안 두고 지워요.\nIP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 판매자 서버에 1시간까지 둬요.\n동의하지 않으면 문의를 보낼 수 없어요. 앱은 그대로 쓸 수 있어요.",
       consent: "보관 안내를 읽었고 동의해요",
       count: "{n} / {max}",
       send: "보내기", sending: "보내는 중…",
@@ -175,6 +176,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       sellerEmpty: "Not entered by the seller yet",
       sellerLabels: { name: "Business name", rep: "Representative", address: "Address", bizNo: "Business registration no.", mailOrderNo: "Mail-order business no.", email: "Email", phone: "Phone", hours: "Support hours" },
       closed: "Requests are closed for now. Requests you sent can still be read under 'My requests'.",
+      closedRefunds: "General questions are closed for now. Refund (withdrawal) requests are still accepted. For anything else, use the contact details in the seller information on this page. Requests you sent can still be read under 'My requests'.",
       cat: "Category", subject: "Subject", text: "Message", reason: "Reason for the refund", refundNeeds: "A refund request needs an order code or a license key.",
       order: "Order code (optional)", orderNote: "The code you got when paying on '★ Plans' in the app. Sent only if you fill it in.",
       key: "License key or key ID (optional)",
@@ -182,7 +184,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       contact: "A contact the seller can use (optional, e.g. email)",
       contactNote: "Sent only if you fill it in, and kept with the request. Replies appear under 'My requests' on this page.",
       consentTitle: "How your request is kept (required)",
-      consentText: "What is kept: the category, subject, message, the seller's replies, the order code and key ID (if you give them), and the time you agreed.\nWhy: to answer you and keep a record of payments and refunds.\nFor a refund request the server also attaches the order and key details it holds (plan, date issued, payer name and more).\nHow long: on the seller's server, payment and refund requests for 3 years and other requests for 1 year, counted from the day the request last changed.\nYour IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays in server memory and the Cloudflare cache for up to 1 hour.\nIf you do not agree, you cannot send a request. You can still use the app.",
+      consentText: "What is kept: the category, subject, message, the seller's replies, the order code and key ID (if you give them), and the time you agreed.\nWhy: to answer you and keep a record of payments and refunds.\nFor a refund request the server also attaches the order and key details it holds (plan, date issued, payer name and more).\nHow long: on the seller's server, payment and refund requests for 3 years and other requests for 1 year, counted from the day the request last changed.\nYour IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays on the seller's server for up to 1 hour.\nIf you do not agree, you cannot send a request. You can still use the app.",
       consent: "I have read this and agree",
       count: "{n} / {max}",
       send: "Send", sending: "Sending…",
@@ -306,11 +308,17 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     if (!shown) dl.appendChild(el("dd", "m", TX.sellerEmpty));
     var cat = $("cat");
     cat.textContent = "";
-    (info.categories || []).forEach(function (c) { var o = el("option", "", c[L]); o.value = c.id; cat.appendChild(o); });
+    // closed for questions: withdrawal stays open (info.refunds), so the form offers the refund request only
+    var refundOnly = !info.open && info.refunds === true;
+    (info.categories || []).forEach(function (c) { if (refundOnly && c.id !== "refund") return; var o = el("option", "", c[L]); o.value = c.id; cat.appendChild(o); });
     var reason = $("reason");
     reason.textContent = "";
     (info.refundReasons || []).forEach(function (c) { var o = el("option", "", c[L]); o.value = c.id; reason.appendChild(o); });
-    if (!info.open) { $("form").hidden = true; $("closedNote").hidden = false; }
+    if (!info.open) {
+      $("closedNote").hidden = false;
+      if (refundOnly) { $("closedNote").setAttribute("data-t", "closedRefunds"); $("closedNote").textContent = TX.closedRefunds; }
+      else $("form").hidden = true;
+    }
     syncRefund();
   }
   function syncRefund() { $("refundBox").hidden = $("cat").value !== "refund"; }
@@ -347,7 +355,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       renderSaved();
     });
   });
-  $("sentNew").addEventListener("click", function () { $("sent").hidden = true; $("form").hidden = !(info && info.open); });
+  $("sentNew").addEventListener("click", function () { $("sent").hidden = true; $("form").hidden = !(info && (info.open || info.refunds === true)); });
 
   function renderTicket(t) {   // current (id + token) is set by openTicket; this only draws
     $("thread").hidden = false;

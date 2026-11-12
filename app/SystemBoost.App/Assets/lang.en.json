@@ -991,7 +991,7 @@
 "환불 요청이면 판매자 서버에 있는 주문 · 키 정보(플랜, 키를 받은 날, 입금자명 등)도 문의에 붙여 보관해요. 환불 요청에 함께 가는 키는 서버가 확인에만 쓰고 저장하지 않아요.": "For a refund request, the order and key details on the seller's server (plan, date the key was issued, payer name and more) are also attached to the request and kept. The key sent with a refund request is used by the server only to check it and is not stored.",
 "이유: 문의에 답하고 결제와 환불을 처리한 기록을 남기려고요.": "Why: to answer you and to keep a record of payments and refunds.",
 "기간: 결제 · 환불 문의는 3년, 그 밖의 문의는 1년 동안 판매자 서버에 보관해요. 기간은 문의가 마지막으로 바뀐 날부터 세요.": "How long: on the seller's server, payment and refund requests for 3 years and other requests for 1 year, counted from the day the request last changed.",
-"IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 서버 메모리와 Cloudflare 캐시에 1시간까지 둬요.": "Your IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays in server memory and the Cloudflare cache for up to 1 hour.",
+"IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 판매자 서버에 1시간까지 둬요.": "Your IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays on the seller's server for up to 1 hour.",
 "동의하지 않으면 문의를 보낼 수 없어요. 앱은 그대로 쓸 수 있어요.": "If you do not agree, you cannot send a request. You can still use the app.",
 "위 필수 항목을 보관하는 데 동의해요 (필수)": "I agree that the required items above are kept (required)",
 "연락처는 선택이에요. 적은 경우에만 보내고 문의와 같은 기간 보관해요. 답은 '내 문의'에만 와요.": "The contact is optional. It is sent only if you fill it in, and kept as long as the request. Replies appear only under 'My requests'.",

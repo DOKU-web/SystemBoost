@@ -356,7 +356,7 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
     <div class="mut" style="margin-top:4px">끄면 앱과 도움말 페이지에서 새 문의를 보낼 수 없어요. 환불(청약철회) 요청은 꺼 둬도 계속 받아요.</div>
     <p class="anSub">판매자 정보</p>
     <div class="sfGrid" id="sfSeller"></div>
-    <p class="mut" style="margin:8px 0 0">비워 둔 칸은 앱에 '판매 페이지 참고'로 보여요.</p>
+    <p class="mut" style="margin:8px 0 0">비워 둔 칸은 앱과 /help에 나오지 않아요. 모두 비우면 '판매자가 아직 입력하지 않았어요'로 보여요.</p>
     <div class="sfWarn bad hide" id="sfSellerWarn" role="alert"></div>
     <p class="anSub">개인정보 처리방침 (/privacy)</p>
     <div class="sfGrid">
@@ -755,7 +755,13 @@ const issueKey = tier => async () => {
   const label = TIER_KO[b.tier] + " · " + (b.plan === "days" ? (b.days || "?") + "일" : PERIOD_KO[b.plan]) + (b.seats > 1 ? " · 키 " + b.seats + "개 (PC마다 하나)" : "");
   if (!(await ask("키를 발급할까요?", `플랜: <b>${esc(label)}</b><br>주문 코드: ${esc(b.code) || "없음 (키를 직접 보내야 해요)"}<br>메일: ${esc(b.email) || "없음"}<br>메모: ${esc(b.note) || "없음"}<br><br>결제를 확인했을 때만 발급하세요.`, "발급"))) return;
   try {
-    const r = await api("/issue", b);
+    let r;
+    try { r = await api("/issue", b); }
+    catch (e) {
+      if (!(b.code && /^이미 키를 발급한 주문이에요/.test(e.message))) throw e;
+      if (!(await ask("재발급할까요?", `<code>${esc(b.code)}</code> — 이 주문으로 이미 키를 발급했어요. 재발급하면 새 키를 만들고 이 주문의 이전 키는 막아요. 이전 키를 쓰던 PC에는 새 키를 다시 넣어야 해요.<br><br>키를 다시 보내기만 하려면 '취소'를 누르고 키 목록의 '키 복사'를 쓰세요.`, "재발급"))) return;
+      r = await api("/issue", { ...b, reissue: true });
+    }
     if (r.error) { $("iMsg").textContent = r.error; $("iMsg").className = "err"; return; }
     const keys = r.keys || [r.key];
     $("iKey").value = keys.join("\n"); $("iKey").rows = Math.min(12, Math.max(4, keys.length * 2)); $("iKey").classList.remove("hide");
@@ -827,7 +833,8 @@ async function onClick(e) {
     // what the buyer said they paid, beside the code: the seller matches it against the bank or Toss record
     const facts = [["플랜", PLAN[o.plan] || o.plan || "—"], ["결제 방식", o.method === "card" || o.method === "auto" ? "카드" : "직접 결제"],
                    o.ticket && ["할인 티켓", o.ticket + "%"], ["입금자", o.payer || "적지 않음"], ["구매자 메모", o.msg || "없음"],
-                   o.paidAt && ["결제했다고 알린 시각", when(o.paidAt)]].filter(Boolean);
+                   o.paidAt && ["결제했다고 알린 시각", when(o.paidAt)],
+                   o.extendFrom && o.extendFrom.expires && ["기간 연장", "구매자의 지금 키(" + (o.extendFrom.id || "?") + ")가 끝나는 " + String(o.extendFrom.expires).slice(0, 10) + "부터 이어서 더해져요"]].filter(Boolean);
     if (!(await ask("결제를 승인할까요?", `<code>${esc(c)}</code><br>${facts.map(([k, v]) => `${esc(k)}: <b>${esc(v)}</b>`).join("<br>")}<br><br>결제가 실제로 들어온 걸 확인했을 때만 승인하세요. 승인하면 키가 무작위로 만들어져 구매자 앱에 바로 떠요.<br><br><input id="apEmail" placeholder="구매자 메일 (선택)"><div style="height:6px"></div><input id="apNote" placeholder="메모 (선택, 비우면 입금자명 사용)">`, "승인하고 키 발급"))) return;
     try {
       const r = await api("/orders/approve", { code: c, email: (document.getElementById("apEmail") || {}).value || "", note: (document.getElementById("apNote") || {}).value || "" });
@@ -1222,7 +1229,7 @@ function rfPanel(t) {
     <div style="margin-top:6px">구매자가 적은 키: <code>${esc(f.otherKeyId || "—")}</code>${f.otherOrder ? ` · 그 키의 주문 <code>${esc(f.otherOrder)}</code>` : ""}</div>
     <h4>그 키의 구매</h4>${tkOther && tkOther.length ? keyRows(tkOther) : '<div class="mut">서버에 없는 키예요.</div>'}
     <div style="margin-top:6px">어느 구매를 환불하는지 구매자에게 확인하세요. 다른 구매라면 그 구매로 새 요청을 받으세요.</div></div>`;
-  const note = how === "card" ? "카드 결제예요. Lemon Squeezy 대시보드에서 환불하고 구독도 해지하세요. Lemon Squeezy가 환불을 알려 오면 키는 자동으로 막히고 이 요청도 '환불 완료'로 바뀌어요. 여기서 '환불 완료'를 누르면 이 구독으로 나간 키(플랜을 바꾼 뒤의 키 포함)가 모두 막혀요. 결제는 Lemon Squeezy에서 구독을 해지해야 멈춰요."
+  const note = how === "card" ? "카드 결제예요. Lemon Squeezy 대시보드에서 환불하세요. Lemon Squeezy가 환불을 알려 오면 키는 자동으로 막히고, 서버가 구독 해지를 시도하고, 이 요청도 '환불 완료'로 바뀌어요. 여기서 '환불 완료'를 누르면 이 구독으로 나간 키(플랜을 바꾼 뒤의 키 포함)가 모두 막히고 서버가 구독 해지를 시도해요. 해지 결과는 다음 창에 나와요. 작업 기록에 '구독 해지 필요'가 보이면 Lemon Squeezy 대시보드에서 직접 해지하세요."
     : how === "manual" ? "계좌이체 · 직접 결제예요. 구매자에게 돈을 먼저 직접 돌려준 뒤 '환불 완료'를 누르세요. 그러면 키가 막히고 주문이 '환불됨'으로 바뀌어요."
     : "결제 방식을 알 수 없어요. 주문과 키를 먼저 확인하세요.";
   const acts = done ? "" : `<div class="acts">${rf.status !== "approved" ? '<button data-rf="approve">승인</button>' : ""}${rf.status !== "rejected" ? '<button class="d" data-rf="reject">거절</button>' : ""}<span class="sp"></span><button class="p" data-rf="done">환불 완료</button></div>`;
@@ -1324,7 +1331,7 @@ async function supClick(e) {
       ? `<div style="margin-top:12px"><b>막을 키</b> <span class="mut">(기본: 모두)</span></div>
          <div class="rfKeys">${tkKeys.map(k => `<label class="chk"><input type="checkbox" data-rfk="${esc(k.id)}" checked${k.state === "revoked" ? " disabled" : ""}><span><code>${esc(k.id)}</code>${k.state === "revoked" ? " (이미 차단)" : k.owned === false ? ' <span class="err">(소유 확인 안 됨)</span>' : ""}${keySeen(k)}</span></label>`).join("")}</div>
          <div style="margin-top:6px">고른 키는 더 동작하지 않아요. 앱이 인터넷에 연결된 상태로 켜질 때 유료 기능이 꺼져요. 일부만 고르면 나머지 키와 주문은 그대로 둬요. 모두 끄면 키는 그대로 두고 환불만 기록해요.` +
-         (tkKeys.some(k => k.sub) ? " 카드 구독 키를 고르면 그 구독으로 나간 키가 모두 막혀요. 결제는 Lemon Squeezy에서 구독을 해지해야 멈춰요." : "") + `<br>${esc(KEY_SEEN_NOTE)}</div>`
+         (tkKeys.some(k => k.sub) ? " 카드 구독 키를 고르면 그 구독으로 나간 키가 모두 막히고, 서버가 Lemon Squeezy 구독 해지를 시도해요. 해지 결과는 다음 창에 나와요." : "") + `<br>${esc(KEY_SEEN_NOTE)}</div>`
       : `<div style="margin-top:12px">막을 키를 찾지 못했어요. 필요하면 '발급된 키'에서 직접 막으세요.</div>`;
     if (!(await ask("환불 완료로 처리할까요?",
       (card ? "Lemon Squeezy에서 환불하고 구독을 해지했는지 먼저 확인하세요. 보통은 Lemon Squeezy가 환불을 알려 올 때 자동으로 처리돼요."
@@ -1410,7 +1417,7 @@ function sfPrivWarn() {
   $("sfPrivWarn").textContent = gaps.length ? `개인정보 처리방침(/privacy)에 아직 빈 칸이 있어요 (저장한 설정 기준): ${gaps.join(", ")}. 빈 칸은 처리방침에 '판매자가 아직 입력하지 않았어요'로 보여요.${repGap}` : "";
   $("sfPrivWarn").classList.toggle("hide", !gaps.length);
   const sellerGaps = SELLER_NEED.filter(([k]) => !String(s[k] || "").trim()).map(([, l]) => l);
-  $("sfSellerWarn").textContent = sellerGaps.length ? `판매자 정보에 빈 칸이 있어요 (저장한 설정 기준): ${sellerGaps.join(", ")}. 구매자에게는 '판매 페이지 참고'로 보여요.` : "";
+  $("sfSellerWarn").textContent = sellerGaps.length ? `판매자 정보에 빈 칸이 있어요 (저장한 설정 기준): ${sellerGaps.join(", ")}. 그 칸은 구매자 화면에 나오지 않아요.` : "";
   $("sfSellerWarn").classList.toggle("hide", !sellerGaps.length);
   // the same, at the top of the dashboard, until both are filled
   const top = [sellerGaps.length && `판매자 정보 ${sellerGaps.length}칸 (${sellerGaps.join(", ")})`, gaps.length && `개인정보 처리방침 ${gaps.length}칸 (${gaps.join(", ")})`].filter(Boolean);
