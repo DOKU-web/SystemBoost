@@ -15,6 +15,7 @@ public sealed class MacSystemPanel : UserControl
     private readonly TextBlock _lowPower = Ui.Text("—", "label");
     private readonly ListBox _apps = new() { Height = 260, Background = Avalonia.Media.Brushes.Transparent };
     private readonly TextBlock _status = Ui.Text("", "muted", wrap: true);
+    private readonly TextBlock _warning = Ui.Text("", "label", wrap: true);   // Time Machine left off, see MacBoostBackend
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(3) };
 
     public MacSystemPanel()
@@ -24,6 +25,9 @@ public sealed class MacSystemPanel : UserControl
 
         var st = new StackPanel();
         st.Children.Add(Ui.Text("지금 상태", "h2"));
+        _warning.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#FF7A1A"));
+        _warning.IsVisible = false;
+        st.Children.Add(_warning);
         st.Children.Add(Ui.Row("발열", "뜨거우면 macOS가 성능을 낮춰요. 통풍·거치대가 도움이 돼요", _thermal, first: true));
         st.Children.Add(Ui.Row("메모리 여유", "부족하면 무거운 앱을 닫으세요", _memory));
         st.Children.Add(Ui.Row("저전력 모드", "", _lowPower));
@@ -61,6 +65,9 @@ public sealed class MacSystemPanel : UserControl
 
     private async System.Threading.Tasks.Task RefreshStatus()
     {
+        var w = MacBoostBackend.Current?.Warning;
+        _warning.IsVisible = w != null;
+        _warning.Text = w ?? "";
         _thermal.Text = await MacBoostBackend.ThermalAsync();
         _memory.Text = await MacBoostBackend.MemoryPressureAsync();
         _lowPower.Text = await MacBoostBackend.LowPowerOnAsync() ? "켜짐 · 성능 낮음" : "꺼짐";

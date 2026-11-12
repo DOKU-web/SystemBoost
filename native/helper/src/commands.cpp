@@ -30,6 +30,7 @@ namespace {
 const wchar_t kGraphics[] = L"SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers";
 const wchar_t kIfeo[] = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\";
 const wchar_t kUpdate[] = L"SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings";
+const wchar_t kMemory[] = L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management";
 
 std::string ok(const std::string& data = "") { return "ok\t" + data; }
 std::string err(const std::string& why) { return "err\t" + why; }
@@ -61,6 +62,22 @@ std::string deleteValue(const std::wstring& key, const std::wstring& name) {
     r = RegDeleteValueW(k, name.c_str());
     RegCloseKey(k);
     return r == ERROR_SUCCESS || r == ERROR_FILE_NOT_FOUND ? ok() : win("delete", r);
+}
+
+// PagingFiles (REG_MULTI_SZ), read by Windows at the next start. The lines were checked by isPagefileList;
+// "none" writes an empty list. The key always exists, so it is opened, never created.
+std::string setPagingFiles(const std::vector<std::string>& f) {
+    std::wstring multi;
+    if (!(f.size() == 2 && f[1] == "none"))
+        for (size_t i = 1; i < f.size(); i++) { multi += widen(f[i]); multi.push_back(L'\0'); }
+    if (multi.empty()) multi.push_back(L'\0');
+    multi.push_back(L'\0');
+    HKEY k;
+    LONG r = RegOpenKeyExW(HKEY_LOCAL_MACHINE, kMemory, 0, KEY_SET_VALUE, &k);
+    if (r != ERROR_SUCCESS) return win("open", r);
+    r = RegSetValueExW(k, L"PagingFiles", 0, REG_MULTI_SZ, (const BYTE*)multi.data(), (DWORD)(multi.size() * sizeof(wchar_t)));
+    RegCloseKey(k);
+    return r == ERROR_SUCCESS ? ok() : win("write", r);
 }
 
 // Removes a key only when nothing is left in it, so other programs' values survive.
@@ -165,6 +182,9 @@ std::string dispatch(const std::vector<std::string>& f) {
     // Windows Update pause
     if (c == "wu.set" && n == 3 && sb::isWuName(f[1]) && sb::isIsoTime(f[2])) return setString(kUpdate, widen(f[1]), widen(f[2]));
     if (c == "wu.del" && n == 2 && sb::isWuName(f[1])) return deleteValue(kUpdate, widen(f[1]));
+
+    // virtual memory (page file), applied at the next start
+    if (c == "pf.set" && sb::isPagefileList(f, 1)) return setPagingFiles(f);
 
     // NVIDIA driver profile
     if (c == "nv.get" && n == 2 && sb::isExeName(f[1])) return nvGet(f[1]);

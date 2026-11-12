@@ -64,6 +64,44 @@ int main() {
     CHECK(isTempLimit("85") && !isTempLimit("88") && !isTempLimit("39"));
     CHECK(isPowerWatts("170") && !isPowerWatts("0") && !isPowerWatts("1001"));
 
-    printf(failed ? "helper validate: %d failed\n" : "helper validate: all passed\n", failed);
+    CHECK(isPagefileLine("?:\\pagefile.sys"));
+    CHECK(isPagefileLine("C:\\pagefile.sys"));
+    CHECK(isPagefileLine("c:\\PAGEFILE.SYS 0 0"));
+    CHECK(isPagefileLine("D:\\pagefile.sys 16384 32768"));
+    CHECK(isPagefileLine("D:\\pagefile.sys 1024 1024"));
+    CHECK(!isPagefileLine("?:\\pagefile.sys 0 0"));
+    CHECK(!isPagefileLine("D:\\pagefile.sys 32768 16384"));   // initial over maximum
+    CHECK(!isPagefileLine("D:\\pagefile.sys 0 1024"));
+    CHECK(!isPagefileLine("D:\\pagefile.sys 1024"));
+    CHECK(!isPagefileLine("D:\\pagefile.sys  1024 2048"));
+    CHECK(!isPagefileLine("D:\\pagefile.sys 1024 2048 "));
+    CHECK(!isPagefileLine("D:\\pagefile.sys -1 2048"));
+    CHECK(!isPagefileLine("D:\\pagefile.sys 1024 999999999"));
+    CHECK(!isPagefileLine("D:\\pagefile.sys 1024 16777217"));
+    CHECK(!isPagefileLine("D:\\other.sys"));
+    CHECK(!isPagefileLine("D:\\dir\\pagefile.sys"));
+    CHECK(!isPagefileLine("1:\\pagefile.sys"));
+    CHECK(!isPagefileLine("\\\\server\\pagefile.sys"));
+    CHECK(!isPagefileLine("D:\\pagefile.sys\t1 2"));
+    CHECK(!isPagefileLine(""));
+    {
+        std::vector<std::string> f = {"pf.set", "C:\\pagefile.sys 0 0", "D:\\pagefile.sys 1024 2048"};
+        CHECK(isPagefileList(f, 1));
+        f.push_back("c:\\pagefile.sys");
+        CHECK(!isPagefileList(f, 1));   // C: twice
+        CHECK(isPagefileList({"pf.set", "?:\\pagefile.sys"}, 1));
+        CHECK(!isPagefileList({"pf.set", "?:\\pagefile.sys", "C:\\pagefile.sys"}, 1));
+        CHECK(isPagefileList({"pf.set", "none"}, 1));
+        CHECK(!isPagefileList({"pf.set", "none", "C:\\pagefile.sys"}, 1));
+        CHECK(!isPagefileList({"pf.set"}, 1));
+        CHECK(!isPagefileList({"pf.set", ""}, 1));
+        std::vector<std::string> many = {"pf.set"};
+        for (char d = 'A'; d <= 'Z'; d++) many.push_back(std::string(1, d) + ":\\pagefile.sys");
+        CHECK(isPagefileList(many, 1));
+        many.push_back("A:\\pagefile.sys");
+        CHECK(!isPagefileList(many, 1));
+    }
+
+    printf(failed ?"helper validate: %d failed\n" : "helper validate: all passed\n", failed);
     return failed ? 1 : 0;
 }

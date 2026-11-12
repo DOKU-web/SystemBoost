@@ -40,7 +40,7 @@ public static class BoostCatalog
         new("gpu.driver", BoostCategory.Gpu, "드라이버 게임 프로필", "NVIDIA 공식 API로 게임의 전원 관리 모드를 '최대 성능 선호'로 · AMD·Intel은 아직 지원하지 않아요", true),
         new("gpu.oc", BoostCategory.Gpu, "오버클럭 / 전력 제한", "NVIDIA 전용. 앱이 켜져 있는 동안만 적용. 온도 초과·드라이버 오류 시 자동 복구, 기본 꺼짐", true, Needs: PremiumFeature.Overclock),
         // CPU
-        new("cpu.priority", BoostCategory.Cpu, "게임 우선순위 '높음'", "다음 게임 실행부터 Windows가 '높음'으로 시작해요. '실시간'은 쓰지 않아요", true),
+        new("cpu.priority", BoostCategory.Cpu, "게임 우선순위 '보통 이상'", "다음 게임 실행부터 Windows가 '보통 이상'으로 시작해요. '높음'·'실시간'은 쓰지 않아요", true),
         new("cpu.ecores", BoostCategory.Cpu, "백그라운드를 E코어로", "게임 중, 하이브리드 CPU, 방송·음성 프로그램은 제외", false),
         new("cpu.power", BoostCategory.Cpu, "고성능 전원 계획", "게임 중에만, 끝나면 원래 계획으로", false),
         // network
@@ -54,9 +54,9 @@ public static class BoostCatalog
         new("biz.stream", BoostCategory.Biz, "방송 모드", "OBS · Streamlabs · PRISM · XSplit이 켜져 있는 동안 방송 프로그램 우선순위를 '보통 이상'으로 올리고 Windows 알림을 꺼요. 방송 중에는 SystemBoost 알림 창을 띄우지 않고 '최근 동작'에 남기며, 다른 프로그램의 큰 전송을 알려요. 방송 프로그램이 꺼지면 원래대로", false, Needs: PremiumFeature.StreamMode),
         new("biz.work", BoostCategory.Biz, "업무 모드", "화상 회의(Zoom · Teams · Webex · Skype)와 아래에서 고른 업무 프로그램이 켜져 있는 동안 우선순위를 '보통 이상'으로 올려요. 꺼지면 원래대로", false, Needs: PremiumFeature.WorkMode),
         // macOS (MacBoostBackend)
-        new("mac.lowpower", BoostCategory.GameBoost, "저전력 모드 끄기", "켜져 있으면 CPU·GPU 성능이 크게 낮아져요", true, WindowsOnly: false, MacOnly: true),
-        new("mac.tm", BoostCategory.GameBoost, "Time Machine 자동 백업 멈추기", "게임 중 디스크·CPU를 쓰는 백업을 멈춰요. 끝나면 꼭 되돌리세요", true, WindowsOnly: false, MacOnly: true),
-        new("mac.spotlight", BoostCategory.GameBoost, "Spotlight 색인 멈추기", "게임 설치·업데이트 직후 색인 부하를 줄여요. 되돌리면 다시 색인해요", true, WindowsOnly: false, MacOnly: true),
+        new("mac.lowpower", BoostCategory.GameBoost, "저전력 모드 끄기", "켜져 있으면 CPU·GPU 성능이 크게 낮아져요. 되돌릴 때까지 꺼져 있어요 (SystemBoost를 꺼도 그대로)", true, WindowsOnly: false, MacOnly: true),
+        new("mac.tm", BoostCategory.GameBoost, "Time Machine 자동 백업 멈추기", "SystemBoost가 켜져 있는 동안 디스크·CPU를 쓰는 백업을 멈춰요. SystemBoost를 끌 때 관리자 암호를 물어 다시 켜요", true, WindowsOnly: false, MacOnly: true),
+        new("mac.spotlight", BoostCategory.GameBoost, "Spotlight 색인 멈추기", "게임 설치·업데이트 직후 색인 부하를 줄여요. 되돌릴 때까지 멈춰 있어서 그동안 새 파일은 검색에 나오지 않아요", true, WindowsOnly: false, MacOnly: true),
     };
 
     public static IEnumerable<BoostFeature> For(BoostCategory c) =>

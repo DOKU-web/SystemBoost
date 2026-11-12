@@ -181,7 +181,7 @@ public sealed class BackupPage : UserControl
     {
         var root = new StackPanel();
         root.Children.Add(Ui.Header("백업 · 되돌리기", Platform.IsMac
-            ? "SystemBoost가 바꾼 설정(저전력 모드, Time Machine, Spotlight)을 한 번에 원래대로 돌려요."
+            ? "SystemBoost가 바꾼 설정(저전력 모드, Time Machine, Spotlight)을 한 번에 원래대로 돌려요. 앱을 지우기 전에 꼭 눌러 주세요. 지운 뒤에는 SystemBoost가 되돌릴 수 없어요."
             : backend.Connected
                 ? "SystemBoost가 바꾼 설정(레지스트리, 전원 계획, 드라이버 프로필)을 한 번에 원래대로 돌려요. 앱을 지우기 전에도 눌러 주세요. 가상 메모리는 'RAM 확보' 화면의 '원래대로'로 되돌려요."
                 : "부스트 항목이 준비 중이라 아직 되돌릴 설정이 없어요. 가상 메모리는 'RAM 확보' 화면의 '원래대로'로 되돌려요."));
@@ -194,14 +194,21 @@ public sealed class BackupPage : UserControl
         if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend win)
         {
             var changed = Ui.Text("", "label", wrap: true);
+            // the uninstaller runs without administrator rights: it asks once, and what is refused there stays
+            var admin = Ui.Text("", "label", wrap: true);
+            admin.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#FF7A1A"));
             void Refresh()
             {
                 var items = win.ChangedItems();
                 changed.Text = items.Count == 0 ? "지금 바뀐 항목이 없어요." : "지금 바뀐 항목: " + string.Join(", ", items);
+                var left = win.AdminItemsLeft();
+                admin.IsVisible = left.Count > 0;
+                admin.Text = $"삭제 전에 '전체 되돌리기'를 눌러 주세요. 관리자 권한으로 바꾼 설정은 앱을 지울 때 한 번 묻고 되돌리는데, 그때 '아니요'를 누르면 그대로 남아요: {string.Join(", ", left)}";
             }
             Refresh();
             win.Changed += () => Dispatcher.UIThread.Post(Refresh);
             p.Children.Add(changed);
+            p.Children.Add(admin);
         }
         p.Children.Add(btn);
         p.Children.Add(result);

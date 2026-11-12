@@ -1,7 +1,9 @@
 // Windows boost features. Every change saves the previous value first
-// (boost-state.json) and can be undone one by one or all at once.
-// The game process itself is never opened or modified: games are recognised by
-// name in the process list, and per-game settings go through Windows or the driver.
+// (boost-state.json) and can be undone one by one or all at once. A value goes back
+// only while it still holds what was set here (RestoreRules); one the user changed since stays.
+// The game process itself is never opened with a right that could change it, and never modified:
+// games are recognised by name in the process list (and by path, read the way Task Manager reads it),
+// and per-game settings go through Windows or the driver.
 //   Stays until turned off   gpu.highperf, gpu.hags, gpu.driver, cpu.priority,
 //                            net.adapterpower, sys.gamemode, sys.dvr
 //   Only while a game runs   ram.standby, ram.workingset, cpu.ecores, cpu.power,
@@ -37,6 +39,8 @@ public sealed class BoostBackup
     public bool Existed { get; set; }
     public bool Dword { get; set; }
     public string Value { get; set; } = "";
+    public string ValueKind { get; set; } = "";   // hkcu: the registry type before (records from before this: Dword)
+    public string SetTo { get; set; } = "";       // what SystemBoost wrote; "" in records from before this
 }
 
 public sealed class BoostState
@@ -65,8 +69,11 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     private const string GraphicsDrivers = @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers";
     private const string Ifeo = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\";
     private const string UpdateUx = @"SOFTWARE\Microsoft\WindowsUpdate\UX\Settings";
-    private const int HighPriorityClass = 3;
+    // IFEO PerfOptions\CpuPriorityClass: 6 is "above normal". Never 3 (high) or 4 (realtime): voice, audio and
+    // input would suffer under a busy game, the same rule as the "자원 분배" page (ResourceManager.cs).
+    private const int AboveNormalPriorityClass = 6, HighPriorityClass = 3;
     private const int ExitWaitMs = 5000;
+    private const int UninstallWaitMs = 25000;   // Velopack ends the uninstall hook after 30 seconds
 
     private static readonly string[] GameTime = { "ram.standby", "ram.workingset", "cpu.ecores", "cpu.power", "net.monitor", "sys.focus", "boost.profiles" };
     private static readonly string[] PerGame = { "gpu.highperf", "cpu.priority", "gpu.driver" };
@@ -80,17 +87,31 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         ("PauseQualityUpdatesStartTime", "PauseQualityUpdatesEndTime"),
     };
     // Stay on all cores while a game runs: voice, streaming and capture need the speed, and
-    // whatever a launcher starts would inherit its affinity.
+    // whatever a launcher or a browser starts would inherit its affinity. A game started from a web page
+    // (Roblox's "참여" opens roblox-player: through the browser) would otherwise run on the E-cores only.
     private static readonly HashSet<string> KeepOnPCores = new(StringComparer.OrdinalIgnoreCase)
     {
         "obs64", "obs32", "obs", "Streamlabs Desktop", "Streamlabs OBS", "XSplit.Core", "PRISMLiveStudio",
         "Discord", "DiscordPTB", "DiscordCanary", "TeamSpeak", "ts3client_win64", "mumble", "Skype", "Zoom",
         "ms-teams", "Teams", "KakaoTalk", "NVIDIA Broadcast", "nvsphelper64", "NVIDIA Share", "SteelSeriesSonar",
-        "steam", "steamwebhelper", "EpicGamesLauncher", "Battle.net", "RiotClientServices", "GalaxyClient",
-        "upc", "UbisoftConnect", "EADesktop", "Origin", "XboxPcApp", "GameBarPresenceWriter", "Launcher",
+        "steam", "steamwebhelper", "EpicGamesLauncher", "EpicWebHelper", "Battle.net", "RiotClientServices", "Riot Client",
+        "RiotClientUx", "LeagueClient", "GalaxyClient", "upc", "UbisoftConnect", "EADesktop", "Origin", "XboxPcApp",
+        "GameBarPresenceWriter", "Launcher", "Playnite.DesktopApp", "Playnite.FullscreenApp", "Overwolf", "CurseForge",
+        "MinecraftLauncher", "itch", "Amazon Games UI", "NexonPlug", "STOVE",
+        // browsers: games and launchers start from links in them
+        "chrome", "msedge", "firefox", "whale", "opera", "brave", "vivaldi", "iexplore", "Arc", "zen",
+        // the launchers that install and start Roblox (the game itself is recognised by its folder)
+        "Bloxstrap", "Fishstrap", "RobloxPlayerLauncher", "RobloxPlayerInstaller",
     };
 
-    private readonly BoostHelper _helper = new();
+    private static bool KeepsAllCores(string name) =>
+        KeepOnPCores.Contains(name) || name.Contains("launcher", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("strap", StringComparison.OrdinalIgnoreCase);
+
+    // A program that just started may still turn out to be a game (its window is not up yet), so it is left alone for a while.
+    private const int NewProcessGraceSeconds = 60;
+
+    private readonly BoostHelper _helper = BoostHelper.Admin;
     private readonly BoostHelper _plainHelper = new(elevated: false);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
@@ -105,6 +126,17 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     private int _netHigh;
     private DateTime _netNotified = DateTime.MinValue;
     private Dictionary<int, long>? _netByProcess;
+
+    public WindowsBoostBackend() { BoostHelper.Deferred += OnDeferred; }
+
+    // An administrator prompt waited because a game was in front: one line in 최근 동작, not one every tick.
+    private DateTime _deferredLogged = DateTime.MinValue;
+    private void OnDeferred()
+    {
+        if (DateTime.UtcNow - _deferredLogged < TimeSpan.FromMinutes(1)) return;
+        _deferredLogged = DateTime.UtcNow;
+        Log("게임 화면이 앞에 있어서 관리자 확인 창을 띄우지 않았어요. 관리자 권한이 필요한 항목은 그동안 바뀌지 않아요");
+    }
 
     public bool Connected => true;
     /// Toggles or the list below them changed outside the page. May fire on any thread.
@@ -169,6 +201,21 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         var ids = _s.Backups.Select(b => b.Feature).Concat(_s.Enabled).Distinct().ToList();
         var titles = BoostCatalog.All.Where(f => ids.Contains(f.Id)).Select(f => f.Title).ToList();
         if (ids.Contains(StartupFeature)) titles.Add(StartupTitle);
+        if (ShareRecord.Any) titles.Add(ShareTitle);
+        return titles;
+    }
+
+    internal const string ShareTitle = "앱별 분배";
+    internal const string PagefileTitle = "가상 메모리 (페이징 파일)";
+    private static bool IsUninstallAdminKind(BoostBackup b) => b.Kind is "hags" or "ifeo" or "netpm" or "nv" or "wu";
+
+    /// Settings changed with administrator rights that are still changed. Uninstalling cannot put them back
+    /// without asking, so the backup page names them.
+    public IReadOnlyList<string> AdminItemsLeft()
+    {
+        var ids = _s.Backups.Where(IsUninstallAdminKind).Select(b => b.Feature).Distinct().ToList();
+        var titles = BoostCatalog.All.Where(f => ids.Contains(f.Id)).Select(f => f.Title).ToList();
+        if (VirtualMemory.HasBackup) titles.Add(PagefileTitle);
         return titles;
     }
 
@@ -183,7 +230,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         if (_s.Enabled.Except(_s.OneClickOwned).Any(id => id is "ram.standby" or "sys.focus" or "net.monitor"))
             await _helper.EnsureAsync();
         await _gate.WaitAsync();
-        try { await RecoverAsync(); Save(); }
+        try { await RecoverAsync(); await MovePriorityDownAsync(); Save(); }
         catch (Exception e) { Log("복구하지 못했어요: " + e.Message); }
         finally { _gate.Release(); }
         Publish();
@@ -192,21 +239,75 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         _ = Task.Run(async () => { await Eula.WhenAccepted; await WatchLoopAsync(); });
     }
 
-    // After a crash or a closed PC: what was only meant for the game goes back.
+    // After a crash or a closed PC: what was only meant for the game goes back. boost-state.json holds what
+    // was there before and what was set here (the power plan, the notification switch, the update pause),
+    // and each goes back only while it is still what was set here.
     private async Task RecoverAsync()
     {
+        try
+        {
+            var capped = ShareRecord.RecoverEarlierRuns();   // the "자원 분배" page of a run that is gone
+            if (capped.Count > 0)
+            {
+                var line = $"SystemBoost가 갑자기 꺼져서 {string.Join(", ", capped)}의 CPU 제한이 남아 있어요. 그 프로그램을 다시 켜면 풀려요";
+                Log(line);
+                Notice?.Invoke(line);
+            }
+        }
+        catch (Exception e) { Log("자원 분배를 되돌리지 못했어요: " + e.Message); }
         await PutGpuBackAsync();
         var stream = _s.Backups.Where(b => b.Feature == "biz.stream").ToList();
         if (stream.Count > 0) await RestoreAsync(stream);
         // the helper undoes it as it exits; a power cut leaves it
         if (Has(GameLimit)) await RestoreAsync(_s.Backups.Where(b => b.Feature == GameLimit).ToList());
         if (RunningGames(ProcessNames()) != null) return;
+        // an update pause that is over, or that someone changed since, needs nobody; one still on needs the helper once
+        DropSettledPause();
+        if (_s.Backups.Any(b => b.Kind == "wu" && b.SetTo.Length > 0) && !_helper.Running)
+        {
+            Log("지난번에 멈춘 Windows 업데이트를 다시 켜려고 관리자 권한을 물어봐요");
+            if (await _helper.EnsureAsync() != null) Log("Windows 업데이트 일시정지는 하루 안에 저절로 끝나요");
+        }
         if (_s.OneClick) await OneClickOffAsync();
         await EndGameTimeAsync();
     }
 
+    // Until this version a game's start priority was set to "높음" (3). With the helper up anyway (no extra prompt),
+    // a value that was set here and is still there moves to "보통 이상" (6).
+    private async Task MovePriorityDownAsync()
+    {
+        if (!_helper.Running) return;
+        var high = HighPriorityClass.ToString(CultureInfo.InvariantCulture);
+        var above = AboveNormalPriorityClass.ToString(CultureInfo.InvariantCulture);
+        foreach (var b in _s.Backups.Where(b => b.Kind == "ifeo" && b.SetTo != above).ToList())
+        {
+            if (b.Existed && b.Value == high) continue;   // the user had it so before
+            if (ReadMachineDword(Ifeo + b.Target + @"\PerfOptions", "CpuPriorityClass") != HighPriorityClass) continue;
+            if (await HelperError("ifeo.set", b.Target, above) != null) continue;
+            b.SetTo = above;
+            Log($"{b.Target}: 시작 우선순위를 '높음'에서 '보통 이상'으로 낮췄어요");
+        }
+    }
+
+    /// Update-pause records that need no helper to settle: values someone changed since, and a pause set here that
+    /// is over (Windows ignores a pause whose end has passed, so writing the old times back changes nothing).
+    /// Dropping them keeps a later restore from writing old times over a pause the user set themselves.
+    private void DropSettledPause()
+    {
+        var wu = _s.Backups.Where(b => b.Kind == "wu" && b.SetTo.Length > 0).ToList();
+        if (wu.Count == 0) return;
+        var changed = wu.Where(b => !RestoreRules.StillOurs(b.SetTo, ReadMachineString(UpdateUx, b.Name))).ToList();
+        var ours = wu.Except(changed).ToList();
+        var drop = changed.ToList();
+        if (ours.Count > 0 && RestoreRules.PauseOver(ours.Where(b => RestoreRules.IsPauseEnd(b.Name)).Select(b => b.SetTo), DateTime.UtcNow))
+            drop.AddRange(ours);
+        foreach (var b in drop) _s.Backups.Remove(b);
+        if (drop.Count > 0) Save();
+    }
+
     public void Dispose()
     {
+        BoostHelper.Deferred -= OnDeferred;
         _stop.Cancel();
         try
         {
@@ -228,22 +329,106 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         _plainHelper.Dispose();
     }
 
-    /// Velopack uninstall hook: no window and no elevation here, so this covers
-    /// the current user's settings. Admin-only ones stay until "전체 되돌리기".
+    /// Velopack uninstall hook. There is no app window and no elevation here, and Velopack ends the hook after
+    /// 30 seconds. First what this user may change, without any prompt: registry values, the power plan, startup
+    /// programs and the "자원 분배" changes. Then, if settings changed with administrator rights are left, one
+    /// message names them and offers to put them back (one administrator prompt) instead of leaving them silently.
+    /// No scheduled task or service is left behind to do it later.
     public static void RestoreUserSettings()
     {
-        var s = Load();
-        foreach (var b in Enumerable.Reverse(s.Backups))
+        WindowsBoostBackend? b = null;
+        try
+        {
+            b = new WindowsBoostBackend();
+            bool notifications = b.RestoreUserLevel();
+            try { ShareRecord.PutBackAll(); } catch (Exception) { }
+            b.DropSettledPause();
+            var left = b.AdminItemsLeft();
+            if (left.Count > 0 && Environment.UserInteractive && !ResourceManagers.FullscreenInFront() && AskBeforeUninstall(left))
+            {
+                var t = b.RestoreAdminForUninstallAsync();
+                if (!t.Wait(UninstallWaitMs) || t.Result != null) TellUninstall(t.IsCompleted ? t.Result : null);
+            }
+            if (notifications) RestartNotifications();   // last: it may take a few seconds, and sign-in applies it anyway
+        }
+        catch (Exception) { }
+        finally { b?.CloseForUninstall(); }
+    }
+
+    // The current user's part of the uninstall: no prompt needed.
+    private bool RestoreUserLevel()
+    {
+        bool notifications = false;
+        foreach (var b in Enumerable.Reverse(_s.Backups.ToList()))
         {
             try
             {
-                if (b.Kind == "hkcu") RestoreUserValue(b);
-                else if (b.Kind == "startup") RestoreStartup(b);
-                else if (b.Kind == "power" && Guid.TryParse(b.Value, out var g)) PowerSetActiveScheme(IntPtr.Zero, ref g);
+                switch (b.Kind)
+                {
+                    case "hkcu": RestoreUserValue(b); break;
+                    case "startup": RestoreStartup(b); break;
+                    case "power": if (RestorePower(b) != null) continue; break;
+                    default: continue;
+                }
+                notifications |= b.Key == PushNotifications;
+                _s.Backups.Remove(b);
             }
             catch (Exception) { }
         }
-        if (s.Backups.Any(b => b.Key == PushNotifications)) RestartNotifications();
+        Save();
+        return notifications;
+    }
+
+    private async Task<string?> RestoreAdminForUninstallAsync()
+    {
+        var e = await _helper.EnsureAsync();
+        if (e != null) return e;
+        var failed = await RestoreAsync(_s.Backups.Where(IsUninstallAdminKind).ToList());
+        Save();
+        if (VirtualMemory.HasBackup)
+        {
+            var r = await VirtualMemory.RevertAsync();
+            if (VirtualMemory.HasBackup) failed = (failed == null ? "" : failed + " · ") + r;
+        }
+        return failed;
+    }
+
+    private void CloseForUninstall()
+    {
+        BoostHelper.Deferred -= OnDeferred;
+        _helper.Dispose();
+        _plainHelper.Dispose();
+    }
+
+    // The uninstall hook runs before the app's own screen and language exist, so its two messages carry both languages here.
+    private static bool English => Lang.Saved() != Lang.Korean;
+    private static readonly Dictionary<string, string> UninstallTitlesEn = new()
+    {
+        ["하드웨어 가속 GPU 스케줄링"] = "Hardware-accelerated GPU scheduling",
+        ["게임 우선순위 '보통 이상'"] = "Game priority 'Above normal'",
+        ["드라이버 게임 프로필"] = "Driver game profile",
+        ["네트워크 어댑터 절전 끄기"] = "Network adapter power saving off",
+        ["게임 중 알림·업데이트 일시정지"] = "Pause notifications and updates during games",
+        [PagefileTitle] = "Virtual memory (paging file)",
+    };
+
+    private static bool AskBeforeUninstall(IReadOnlyList<string> items)
+    {
+        var list = string.Join("\n", items.Select(i => "· " + (English ? UninstallTitlesEn.GetValueOrDefault(i, i) : i)));
+        var text = English
+            ? $"These settings that SystemBoost changed with administrator rights are still in place:\n\n{list}\n\n"
+              + "Put them back before uninstalling? Choose Yes, then Yes in the Windows administrator prompt. Choose No to leave them as they are."
+            : $"SystemBoost가 관리자 권한으로 바꾼 설정이 아직 남아 있어요.\n\n{list}\n\n"
+              + "지우기 전에 원래대로 돌릴까요? '예'를 누른 뒤 Windows 관리자 확인 창에서도 '예'를 누르세요. '아니요'를 누르면 그대로 남아요.";
+        return MessageBoxW(IntPtr.Zero, text, "SystemBoost", MbYesNo | MbIconWarning | MbTopmost | MbSetForeground) == IdYes;
+    }
+
+    private static void TellUninstall(string? why)
+    {
+        var text = English
+            ? "Some settings could not be put back, so they stay as they are." + (why != null ? "\n\n" + why : "")
+            : "일부 설정을 원래대로 돌리지 못해서 그대로 남아요." + (why != null ? "\n\n" + why : "");
+        MessageBoxW(IntPtr.Zero, text, "SystemBoost", MbOk | MbIconWarning | MbTopmost | MbSetForeground);
     }
 
     // ------------------------------------------------------------ interface
@@ -285,14 +470,24 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             _s.Enabled.Clear();
             _profileItems.Clear();
             await EndAllBizModesAsync();
+            // the "자원 분배" page: its own run lifts its CPU caps, then everything recorded goes back
+            var capped = new List<string>();
+            try
+            {
+                if (ResourceManagers.Current != null) await ResourceManagers.Current.RestoreAllAsync();
+                capped = ShareRecord.PutBackAll();
+            }
+            catch (Exception) { }
+            var cappedNote = capped.Count > 0 ? $" · {string.Join(", ", capped)}의 CPU 제한은 그 프로그램을 다시 켜면 풀려요" : "";
+            DropSettledPause();
             if (_s.Backups.Any(IsAdminKind))
             {
                 var e = await _helper.EnsureAsync();
-                if (e != null) { await RestoreAsync(_s.Backups.Where(b => !IsAdminKind(b)).ToList()); Save(); return e; }
+                if (e != null) { await RestoreAsync(_s.Backups.Where(b => !IsAdminKind(b)).ToList()); Save(); return e + cappedNote; }
             }
             var failed = await RestoreAsync(_s.Backups.ToList());
             Save();
-            return failed == null ? $"{count}개 항목을 원래대로 돌렸어요" : $"일부를 되돌리지 못했어요: {failed}";
+            return (failed == null ? $"{count}개 항목을 원래대로 돌렸어요" : $"일부를 되돌리지 못했어요: {failed}") + cappedNote;
         }
         catch (Exception e) { return "실패했어요: " + e.Message; }
         finally { _gate.Release(); Publish(); }
@@ -421,12 +616,15 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         bool notifications = false;
         foreach (var b in Enumerable.Reverse(items))
         {
-            var e = await RestoreOneAsync(b);
+            // one value that cannot go back does not keep the others from going back
+            string? e;
+            try { e = await RestoreOneAsync(b); }
+            catch (Exception x) { e = $"{b.Feature}: {x.Message}"; }
             if (e != null) { failed = e; continue; }
             notifications |= b.Key == PushNotifications;
             _s.Backups.Remove(b);
         }
-        if (notifications) RestartNotifications();
+        if (notifications && !RestartNotifications()) Log("Windows 알림 설정은 다음 로그인부터 적용돼요");
         return failed;
     }
 
@@ -435,20 +633,45 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         switch (b.Kind)
         {
             case "hkcu": RestoreUserValue(b); return null;
-            case "power":
-                var g = Guid.Parse(b.Value);
-                return PowerSetActiveScheme(IntPtr.Zero, ref g) == 0 ? null : "전원 계획";
-            case "ecores": ClearCores(); return null;
+            case "power": return RestorePower(b);
+            case "ecores": ClearCores(b.Value); return null;
             case "hags": return await HelperError(b.Existed ? new[] { "hags.set", b.Value } : new[] { "hags.del" });
-            case "ifeo": return await HelperError(b.Existed ? new[] { "ifeo.set", b.Target, b.Value } : new[] { "ifeo.del", b.Target });
+            case "ifeo":
+                // a start priority someone changed since stays theirs
+                if (b.SetTo.Length > 0 && ReadMachineDword(Ifeo + b.Target + @"\PerfOptions", "CpuPriorityClass")?.ToString(CultureInfo.InvariantCulture) != b.SetTo) return null;
+                return await HelperError(b.Existed ? new[] { "ifeo.set", b.Target, b.Value } : new[] { "ifeo.del", b.Target });
             case "netpm": return await HelperError("net.pm.set", b.Target, "1");
             case "nv": return await HelperError("nv.restore", b.Target, b.Name, b.Value);
             case "nvlimit": return await EndLimitCallAsync(b);
             case "oc": return await RestoreGpuAsync(b);
-            case "wu": return await HelperError(b.Existed ? new[] { "wu.set", b.Name, b.Value } : new[] { "wu.del", b.Name });
+            case "wu":
+                if (!RestoreRules.StillOurs(b.SetTo, ReadMachineString(UpdateUx, b.Name))) return null;   // Windows or the user changed it since
+                return await HelperError(b.Existed ? new[] { "wu.set", b.Name, b.Value } : new[] { "wu.del", b.Name });
             case "startup": RestoreStartup(b); return null;
             default: return null;
         }
+    }
+
+    /// The plan that was active before, unless someone picked another plan since. Null when done (or nothing to do).
+    private static string? RestorePower(BoostBackup b)
+    {
+        if (!Guid.TryParse(b.Value, out var before)) return null;
+        if (ActivePlan() is Guid now)
+        {
+            if (now == before) return null;
+            // still the plan set here; records from before this kept no SetTo, and only a high-performance plan was ever set
+            bool ours = Guid.TryParse(b.SetTo, out var set) ? now == set : IsHighPerformance(now);
+            if (!ours) return null;
+        }
+        return PowerSetActiveScheme(IntPtr.Zero, ref before) == 0 ? null : "전원 계획";
+    }
+
+    private static Guid? ActivePlan()
+    {
+        if (PowerGetActiveScheme(IntPtr.Zero, out var ptr) != 0) return null;
+        var active = Marshal.PtrToStructure<Guid>(ptr);
+        LocalFree(ptr);
+        return active;
     }
 
     private async Task<string?> HelperError(params string[] request)
@@ -467,7 +690,10 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             var cur = k.GetValue(name);
             if (!HasEntry(id, "hkcu", "", key, name))
             {
-                _s.Backups.Add(new BoostBackup { Feature = id, Kind = "hkcu", Key = key, Name = name, Dword = true, Existed = cur != null, Value = Convert.ToString(cur, CultureInfo.InvariantCulture) ?? "" });
+                var kind = cur == null ? RegistryValueKind.DWord : k.GetValueKind(name);
+                _s.Backups.Add(new BoostBackup { Feature = id, Kind = "hkcu", Key = key, Name = name, Dword = kind == RegistryValueKind.DWord,
+                                                 ValueKind = kind.ToString(), Existed = cur != null, Value = RegText(cur),
+                                                 SetTo = value.ToString(CultureInfo.InvariantCulture) });
                 Save();
             }
             k.SetValue(name, value, RegistryValueKind.DWord);
@@ -476,13 +702,47 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         return string.Join(", ", report);
     }
 
+    // A registry value as text that RestoreUserValue can turn back into the same type.
+    private static string RegText(object? v) => v switch
+    {
+        null => "",
+        byte[] bytes => Convert.ToHexString(bytes),
+        string[] lines => string.Join("\0", lines),
+        _ => Convert.ToString(v, CultureInfo.InvariantCulture) ?? "",
+    };
+
+    /// Puts a current-user value back, in the type it had, only while it still holds what was set here.
     private static void RestoreUserValue(BoostBackup b)
     {
         using var k = Registry.CurrentUser.CreateSubKey(b.Key);
-        if (!b.Existed) k.DeleteValue(b.Name, false);
-        else if (b.Dword) k.SetValue(b.Name, int.Parse(b.Value, CultureInfo.InvariantCulture), RegistryValueKind.DWord);
-        else k.SetValue(b.Name, b.Value, RegistryValueKind.String);
+        if (b.Key == GpuPreferences) { RestoreGpuValue(k, b); return; }
+        if (!RestoreRules.StillOurs(b.SetTo, k.GetValue(b.Name) is { } now ? RegText(now) : null)) return;   // changed since: theirs now
+        if (!b.Existed) { k.DeleteValue(b.Name, false); return; }
+        var kind = Enum.TryParse<RegistryValueKind>(b.ValueKind, out var vk) ? vk : b.Dword ? RegistryValueKind.DWord : RegistryValueKind.String;
+        switch (kind)
+        {
+            case RegistryValueKind.DWord when int.TryParse(b.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d):
+                k.SetValue(b.Name, d, RegistryValueKind.DWord); break;
+            case RegistryValueKind.QWord when long.TryParse(b.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var q):
+                k.SetValue(b.Name, q, RegistryValueKind.QWord); break;
+            case RegistryValueKind.Binary: k.SetValue(b.Name, Convert.FromHexString(b.Value), RegistryValueKind.Binary); break;
+            case RegistryValueKind.MultiString: k.SetValue(b.Name, b.Value.Split('\0'), RegistryValueKind.MultiString); break;
+            case RegistryValueKind.ExpandString: k.SetValue(b.Name, b.Value, RegistryValueKind.ExpandString); break;
+            default: k.SetValue(b.Name, b.Value, RegistryValueKind.String); break;   // also an old record whose "DWORD" was text
+        }
     }
+
+    // gpu.highperf: only the GpuPreference part goes back, the other settings Windows keeps in the value stay.
+    private static void RestoreGpuValue(RegistryKey k, BoostBackup b)
+    {
+        var before = b.Existed ? RestoreRules.GpuToken(b.Value) : null;
+        var (write, v) = RestoreRules.GpuBack(k.GetValue(b.Name) as string, before, b.SetTo.Length > 0 ? b.SetTo : HighPerformanceGpu);
+        if (!write) return;
+        if (v == null) k.DeleteValue(b.Name, false);
+        else k.SetValue(b.Name, v, RegistryValueKind.String);
+    }
+
+    private const string HighPerformanceGpu = "2";
 
     private static int? ReadMachineDword(string key, string name)
     {
@@ -509,11 +769,11 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             var cur = k.GetValue(game) as string;
             if (!HasEntry("gpu.highperf", "hkcu", game, GpuPreferences, game))
             {
-                _s.Backups.Add(new BoostBackup { Feature = "gpu.highperf", Kind = "hkcu", Target = game, Key = GpuPreferences, Name = game, Existed = cur != null, Value = cur ?? "" });
+                _s.Backups.Add(new BoostBackup { Feature = "gpu.highperf", Kind = "hkcu", Target = game, Key = GpuPreferences, Name = game,
+                                                 Existed = cur != null, Value = cur ?? "", SetTo = HighPerformanceGpu });
                 Save();
             }
-            var others = (cur ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries).Where(t => !t.StartsWith("GpuPreference=", StringComparison.OrdinalIgnoreCase));
-            k.SetValue(game, string.Concat(others.Select(t => t + ";")) + "GpuPreference=2;");
+            k.SetValue(game, RestoreRules.WithGpuToken(cur, HighPerformanceGpu));
             done++;
         }
         return $"게임 {done}개를 고성능 GPU로 지정했어요. 다음 실행부터 적용돼요";
@@ -546,16 +806,16 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             var exe = Path.GetFileName(game);
             var key = Ifeo + exe + @"\PerfOptions";
             var cur = ReadMachineDword(key, "CpuPriorityClass");
+            var above = AboveNormalPriorityClass.ToString(CultureInfo.InvariantCulture);
             if (!HasEntry("cpu.priority", "ifeo", exe))
-            {
                 _s.Backups.Add(new BoostBackup { Feature = "cpu.priority", Kind = "ifeo", Target = exe, Existed = cur != null, Value = cur?.ToString(CultureInfo.InvariantCulture) ?? "" });
-                Save();
-            }
-            var failed = await HelperError("ifeo.set", exe, HighPriorityClass.ToString(CultureInfo.InvariantCulture));
+            foreach (var b in _s.Backups.Where(b => b.Feature == "cpu.priority" && b.Kind == "ifeo" && b.Target == exe)) b.SetTo = above;
+            Save();
+            var failed = await HelperError("ifeo.set", exe, above);
             if (failed != null) return "실패했어요: " + failed;
             report.Add($"{exe} {cur?.ToString() ?? "없음"} → {MachineText(key, "CpuPriorityClass")}");
         }
-        return string.Join(", ", report) + ". 다음 실행부터 적용돼요";
+        return string.Join(", ", report) + ". 다음 실행부터 '보통 이상' 우선순위로 시작해요";
     }
 
     // ------------------------------------------------------------ room for frame generation
@@ -787,7 +1047,12 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             case "cpu.power": return ApplyPowerPlan();
             case "sys.focus": return await PauseInterruptionsAsync();
             case "cpu.ecores":
-                if (!HasEntry(id, "ecores", "")) { _s.Backups.Add(new BoostBackup { Feature = id, Kind = "ecores" }); Save(); }
+                if (!HasEntry(id, "ecores", ""))
+                {
+                    _ecoreSince = DateTime.UtcNow.Ticks;
+                    _s.Backups.Add(new BoostBackup { Feature = id, Kind = "ecores", Value = RestoreRules.FormatMoved(_ecoreSince, _onECores) });
+                    Save();
+                }
                 return $"백그라운드 프로그램 {MoveToEfficientCores()}개를 E코어로 옮겼어요";
             case "ram.workingset": return Trim();
             case "ram.standby": return $"여유 메모리가 {_s.StandbyLimitMB} MB 아래로 떨어지면 정리해요";
@@ -812,6 +1077,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
 
     private async Task EndGameTimeAsync()
     {
+        DropSettledPause();
         foreach (var id in GameTime)
         {
             // still streaming: the stream mode keeps the notifications off
@@ -938,16 +1204,25 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         return e == 0 ? null : (Environment.ProcessorCount - e, e);
     }
 
-    // Processes this put on the E-cores. Locked by _gate like everything else here.
-    private readonly HashSet<int> _onECores = new();
+    // Processes this put on the E-cores (pid -> start time in UTC ticks) and when this run began moving them.
+    // Locked by _gate like everything else here. Kept in the cpu.ecores record too, so a later start finds them.
+    private readonly Dictionary<int, long> _onECores = new();
+    private long _ecoreSince;
+    private readonly HashSet<int> _ecoreChecked = new();   // games whose cores were looked at once
 
+    // Anything that looks like a game is never opened with a right that could change it, not even to undo a move
+    // made before it looked like one: that stays, and the user is told. The window in front is never moved (it may
+    // be a game a launcher started under another name); only a program this moved earlier gets its cores back
+    // there. A program that started less than a minute ago is left alone too (a game's window may not be up yet),
+    // and so are launchers and browsers, whose children take the setting over.
     private int MoveToEfficientCores()
     {
         var mask = EfficientMask();
         if (mask == 0) return 0;
+        LoadMoved();
         int moved = 0, session = Process.GetCurrentProcess().SessionId;
-        // The window in front is never opened: it is the game, or a game a launcher started
-        // under another name. Only what this moved earlier gets its cores back there.
+        bool changed = false;
+        var settled = DateTime.UtcNow.AddSeconds(-NewProcessGraceSeconds).Ticks;
         GetWindowThreadProcessId(GetForegroundWindow(), out var front);
         foreach (var p in Process.GetProcesses())
         {
@@ -955,52 +1230,125 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             {
                 if (p.SessionId != session || p.Id == Environment.ProcessId) continue;
                 var name = p.ProcessName;
-                bool game = p.Id == front || KeepOnPCores.Contains(name) || ResourceManagers.LooksLikeGame(p.Id, name);
-                if (game)
+                if (ResourceManagers.LooksLikeGame(p.Id, name))
                 {
-                    if (_onECores.Remove(p.Id)) AllCores(p.Id, mask);
+                    if (_onECores.Remove(p.Id)) { changed = true; TellOnECores(name); }
+                    else WarnIfOnECores(p.Id, name, mask, front);
                     continue;
                 }
+                if (p.Id == front || KeepsAllCores(name))
+                {
+                    if (_onECores.Remove(p.Id)) { AllCores(p.Id, mask); changed = true; }
+                    continue;
+                }
+                long start = WinResourceManager.StartTicks(p.Id);
+                if (start == 0) continue;
+                if (_onECores.TryGetValue(p.Id, out var was))
+                {
+                    if (was == start) { moved++; continue; }
+                    _onECores.Remove(p.Id);   // the number belongs to another program now
+                    changed = true;
+                }
+                if (start > settled) continue;
                 var h = OpenProcess(ProcessSetInformation | ProcessQueryLimited, false, p.Id);
                 if (h == IntPtr.Zero) continue;
-                // a process that limited itself keeps its own setting
-                if (GetProcessAffinityMask(h, out var own, out var system))
+                try
                 {
-                    if ((ulong)own == mask) moved++;
-                    else if (own == system && SetProcessAffinityMask(h, (UIntPtr)mask)) { moved++; _onECores.Add(p.Id); }
+                    // a process that limited itself keeps its own setting
+                    if (GetProcessAffinityMask(h, out var own, out var system))
+                    {
+                        if ((ulong)own == mask) moved++;
+                        else if (own == system && SetProcessAffinityMask(h, (UIntPtr)mask)) { moved++; _onECores[p.Id] = start; changed = true; }
+                    }
                 }
-                CloseHandle(h);
+                finally { CloseHandle(h); }
             }
             catch (Exception) { }
             finally { p.Dispose(); }
         }
+        if (changed) SaveMoved();
         return moved;
     }
 
-    private void ClearCores()
+    // The game itself (in front, on the list, or the one frame generation is on): if it runs on the E-cores only,
+    // it took that over from whatever started it. It is read once, the way Task Manager reads it, never changed.
+    private void WarnIfOnECores(int pid, string name, ulong mask, int front)
     {
-        var mask = EfficientMask();
-        if (mask == 0) return;
-        int session = Process.GetCurrentProcess().SessionId;
-        foreach (var p in Process.GetProcesses())
-        {
-            try
-            {
-                // what this moved; after a restart, what still sits on exactly the E-cores, games left out
-                if (_onECores.Contains(p.Id) || (p.SessionId == session && !ResourceManagers.LooksLikeGame(p.Id, p.ProcessName)))
-                    AllCores(p.Id, mask);
-            }
-            catch (Exception) { }
-            finally { p.Dispose(); }
-        }
-        _onECores.Clear();
+        bool theGame = ResourceManagers.Games.Contains(name) || string.Equals(name, ResourceManagers.GameProcess, StringComparison.OrdinalIgnoreCase) ||
+                       (pid == front && !ResourceManagers.Protected.Contains(name));
+        if (!theGame || !_ecoreChecked.Add(pid)) return;
+        var h = OpenProcess(ProcessQueryLimited, false, pid);
+        if (h == IntPtr.Zero) return;
+        try { if (GetProcessAffinityMask(h, out var own, out _) && (ulong)own == mask) TellOnECores(name); }
+        finally { CloseHandle(h); }
     }
 
+    private void TellOnECores(string name)
+    {
+        var line = $"{name}이(가) E코어에서만 돌고 있어요. 게임으로 보이는 프로그램은 SystemBoost가 바꾸지 않으니, 느리면 그 프로그램을 다시 켜 주세요";
+        Log(line);
+        Notice?.Invoke(line);
+    }
+
+    // A run that starts during a game picks up what the earlier run moved.
+    private void LoadMoved()
+    {
+        if (_ecoreSince != 0) return;
+        var rec = _s.Backups.FirstOrDefault(b => b.Kind == "ecores");
+        var (since, moved) = RestoreRules.ParseMoved(rec?.Value);
+        _ecoreSince = since != 0 ? since : DateTime.UtcNow.Ticks;
+        foreach (var kv in moved) _onECores.TryAdd(kv.Key, kv.Value);
+    }
+
+    private void SaveMoved()
+    {
+        var rec = _s.Backups.FirstOrDefault(b => b.Kind == "ecores");
+        if (rec == null) _s.Backups.Add(rec = new BoostBackup { Feature = "cpu.ecores", Kind = "ecores" });
+        rec.Value = RestoreRules.FormatMoved(_ecoreSince, _onECores);
+        Save();
+    }
+
+    // What this moved, and what started after the moving began and so inherited it, gets all cores back. What
+    // already sat on the E-cores before was put there by the user or another tool and stays (RestoreRules.GiveCoresBack).
+    private void ClearCores(string record)
+    {
+        var mask = EfficientMask();
+        var (since, moved) = RestoreRules.ParseMoved(record);
+        foreach (var kv in _onECores) moved[kv.Key] = kv.Value;
+        if (mask != 0)
+        {
+            int session = Process.GetCurrentProcess().SessionId;
+            GetWindowThreadProcessId(GetForegroundWindow(), out var front);
+            foreach (var p in Process.GetProcesses())
+            {
+                try
+                {
+                    if (p.SessionId != session || p.Id == Environment.ProcessId) continue;
+                    if (_gameRunning && p.Id == front) continue;   // may be the game under another name
+                    if (ResourceManagers.LooksLikeGame(p.Id, p.ProcessName)) continue;   // never opened to change, not even to undo
+                    if (RestoreRules.GiveCoresBack(p.Id, WinResourceManager.StartTicks(p.Id), since, moved)) AllCores(p.Id, mask);
+                }
+                catch (Exception) { }
+                finally { p.Dispose(); }
+            }
+        }
+        _onECores.Clear();
+        _ecoreChecked.Clear();
+        _ecoreSince = 0;
+    }
+
+    // Read first; a program is opened with the right to change it only when it sits on exactly the E-cores.
     private static void AllCores(int pid, ulong mask)
     {
+        var q = OpenProcess(ProcessQueryLimited, false, pid);
+        if (q == IntPtr.Zero) return;
+        bool onE;
+        try { onE = GetProcessAffinityMask(q, out var own, out _) && (ulong)own == mask; }
+        finally { CloseHandle(q); }
+        if (!onE) return;
         var h = OpenProcess(ProcessSetInformation | ProcessQueryLimited, false, pid);
         if (h == IntPtr.Zero) return;
-        if (GetProcessAffinityMask(h, out var own, out var system) && (ulong)own == mask) SetProcessAffinityMask(h, system);
+        if (GetProcessAffinityMask(h, out var mine, out var system) && (ulong)mine == mask) SetProcessAffinityMask(h, system);
         CloseHandle(h);
     }
 
@@ -1020,7 +1368,9 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         if (IsHighPerformance(active)) return $"이미 고성능 계획을 쓰고 있어요 ({PlanName(active)})";
         var target = FindHighPlan();
         if (target == null) return "이 PC에는 고성능 전원 계획이 없어요";
-        if (!HasEntry("cpu.power", "power", "")) { _s.Backups.Add(new BoostBackup { Feature = "cpu.power", Kind = "power", Value = active.ToString() }); Save(); }
+        if (!HasEntry("cpu.power", "power", "")) _s.Backups.Add(new BoostBackup { Feature = "cpu.power", Kind = "power", Value = active.ToString() });
+        foreach (var b in _s.Backups.Where(b => b.Feature == "cpu.power" && b.Kind == "power")) b.SetTo = target.Value.ToString();
+        Save();   // before the plan changes, so a crash in between still finds it
         var g = target.Value;
         if (PowerSetActiveScheme(IntPtr.Zero, ref g) != 0)
         {
@@ -1087,13 +1437,16 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
                 {
                     foreach (var (name, time) in new[] { (start, now), (end, until) })
                     {
-                        if (!HasEntry("sys.focus", "wu", "", "", name))
+                        var text = time.ToString(RestoreRules.PauseTimeFormat, CultureInfo.InvariantCulture);
+                        var rec = _s.Backups.FirstOrDefault(b => b.Feature == "sys.focus" && b.Kind == "wu" && b.Name == name);
+                        if (rec == null)
                         {
                             var old = ReadMachineString(UpdateUx, name);
-                            _s.Backups.Add(new BoostBackup { Feature = "sys.focus", Kind = "wu", Name = name, Existed = old != null, Value = old ?? "" });
-                            Save();
+                            _s.Backups.Add(rec = new BoostBackup { Feature = "sys.focus", Kind = "wu", Name = name, Existed = old != null, Value = old ?? "" });
                         }
-                        var failed = await HelperError("wu.set", name, time.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture));
+                        rec.SetTo = text;   // kept before writing, so a crash in between still finds it
+                        Save();
+                        var failed = await HelperError("wu.set", name, text);
                         if (failed != null) return string.Join(", ", done) + ". 업데이트 일시정지는 실패했어요: " + failed;
                     }
                 }
@@ -1103,26 +1456,33 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         return string.Join(", ", done);
     }
 
-    // The setting is read when this per-user service starts.
-    private static void RestartNotifications()
+    // The setting is read when this per-user service starts. False when it could not be restarted
+    // (a standard user often may not): the setting then applies from the next sign-in.
+    private static bool RestartNotifications()
     {
+        bool ok = true;
         try
         {
             foreach (var s in ServiceController.GetServices().Where(s => s.ServiceName.StartsWith("WpnUserService_", StringComparison.OrdinalIgnoreCase)))
             {
                 using (s)
                 {
-                    if (s.Status == ServiceControllerStatus.Running)
+                    try
                     {
-                        s.Stop();
-                        s.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(5));
+                        if (s.Status == ServiceControllerStatus.Running)
+                        {
+                            s.Stop();
+                            s.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(5));
+                        }
+                        s.Start();
+                        s.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(5));
                     }
-                    s.Start();
-                    s.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(5));
+                    catch (Exception) { ok = false; }
                 }
             }
         }
-        catch (Exception) { /* the setting still applies from the next sign-in */ }
+        catch (Exception) { ok = false; }
+        return ok;
     }
 
     // ------------------------------------------------------------ network
@@ -1179,6 +1539,10 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
 
     // ------------------------------------------------------------ Win32
     private const uint ProcessSetQuota = 0x0100, ProcessSetInformation = 0x0200, ProcessQueryLimited = 0x1000;
+    private const uint MbOk = 0x0, MbYesNo = 0x4, MbIconWarning = 0x30, MbSetForeground = 0x10000, MbTopmost = 0x40000;
+    private const int IdYes = 6;
+
+    [DllImport("user32", CharSet = CharSet.Unicode)] private static extern int MessageBoxW(IntPtr owner, string text, string caption, uint type);
 
     [DllImport("kernel32", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
     [DllImport("kernel32")] private static extern bool CloseHandle(IntPtr h);

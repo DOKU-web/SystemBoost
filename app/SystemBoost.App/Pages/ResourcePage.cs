@@ -135,7 +135,12 @@ public sealed class ResourcePage : UserControl
             ? "우선: CPU 우선순위를 조금 올려요 · 낮춤: 우선순위·메모리 우선순위를 낮추고 효율 모드, 다음 실행부터 내장 GPU · 제한: CPU 최대 사용량을 고정해요"
             : "macOS에서는 '낮춤'(백그라운드 모드)만 바꿀 수 있어요. GPU·메모리는 사용량만 보여 줘요. 다른 앱을 '우선'으로 올리는 것은 macOS가 허용하지 않아요.",
             "muted", wrap: true));
-        listCard.Children.Add(Ui.Text("게임은 '보통'으로 두세요. 바꾼 설정은 SystemBoost를 끄면 원래대로 돌아가요.", "muted", wrap: true));
+        listCard.Children.Add(Ui.Text(Platform.IsWindows
+            ? "게임은 '보통'으로 두세요. 바꾼 설정은 SystemBoost를 끄면 원래대로 돌아가요. 앱이 갑자기 꺼졌다면 다음에 켤 때 되돌려요. 다만 CPU 제한은 그 앱을 다시 켜야 풀려요."
+            : "게임은 '보통'으로 두세요. 바꾼 설정은 SystemBoost를 끄면 원래대로 돌아가요. 앱이 갑자기 꺼졌다면 백그라운드 모드는 그 앱을 다시 켜야 풀려요.",
+            "muted", wrap: true));
+        // "전체 되돌리기" on the backup page puts the apps back too
+        ResourceManagers.Restored += () => Dispatcher.UIThread.Post(() => { _levels.Clear(); _rowKey = ""; Redraw(); });
         listCard.Children.Add(_rows);
         listCard.Children.Add(_status);
         root.Children.Add(Ui.Card(listCard));

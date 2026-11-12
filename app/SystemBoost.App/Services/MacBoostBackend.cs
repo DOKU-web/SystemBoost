@@ -1,11 +1,14 @@
 // macOS boost features that the OS actually allows and that have a measurable
 // effect. Every change saves the previous state first (mac-backup.json) and can
 // be undone one by one or all at once.
-//   mac.lowpower   Low Power Mode off            (pmset, admin)
-//   mac.tm         Time Machine auto backup off  (tmutil, admin)
-//   mac.spotlight  Spotlight indexing paused     (mdutil, admin)
-// Not possible on macOS (closed by the OS): RAM purging that helps games,
-// GPU clocks, process priority boost, core affinity.
+//   mac.lowpower   Low Power Mode off            (pmset, admin)  stays until undone; goes back per power source
+//   mac.tm         Time Machine auto backup off  (tmutil, admin) only while SystemBoost runs: it is turned back on
+//                  when the app quits, and a run that ended without that (a crash, a refused prompt) is caught
+//                  at the next start. Backups are never left off without the user being asked.
+//   mac.spotlight  Spotlight indexing paused     (mdutil, admin) stays until undone; only the volumes that were
+//                  being indexed are paused and later turned back on
+// Each administrator prompt says what it is for. Not possible on macOS (closed by the OS): RAM purging that
+// helps games, GPU clocks, process priority boost, core affinity.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,6 +16,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SystemBoost.App.Services;
@@ -22,20 +26,75 @@ public sealed record AppUsage(int Pid, string Name, double Cpu, double MemMB)
     public override string ToString() => $"{Name}  ·  CPU {Cpu:0}%  ·  메모리 {MemMB:0} MB";
 }
 
-public sealed class MacBoostBackend : IBoostBackend
+public sealed class MacBoostBackend : IBoostBackend, IDisposable
 {
     private string BackupFile => Path.Combine(Platform.DataDir, "mac-backup.json");
     private Dictionary<string, string> _backup = new();
+    private readonly SemaphoreSlim _gate = new(1, 1);   // the page, the start-up check and quitting can overlap
+    private const int ExitWaitMs = 60000;   // time to answer the prompt as the app quits
+
+    /// The instance of this app run, for the status panel.
+    public static MacBoostBackend? Current { get; private set; }
+
+    /// Set while Time Machine's automatic backup is still off because turning it back on was refused.
+    public string? Warning { get; private set; }
+
+    private const string TimeMachineStillOff =
+        "Time Machine 자동 백업이 아직 꺼져 있어요. 'Time Machine 자동 백업 멈추기'를 되돌리거나 '백업 · 되돌리기'에서 다시 켜세요.";
 
     public MacBoostBackend()
     {
         try { if (File.Exists(BackupFile)) _backup = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(BackupFile)) ?? new(); }
         catch (Exception) { _backup = new(); }
+        Current = this;
+        if (OperatingSystem.IsMacOS() && _backup.ContainsKey("mac.tm")) _ = Task.Run(RecoverTimeMachineAsync);
     }
 
     public bool Connected => true;
 
     private void SaveBackup() => File.WriteAllText(BackupFile, JsonSerializer.Serialize(_backup));
+
+    // An earlier run ended with Time Machine's automatic backup still off: it crashed, was forced to quit, or the
+    // prompt as it quit was refused. Turned back on now, with a prompt that says why; refused again, the panel says so.
+    private async Task RecoverTimeMachineAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            if (!_backup.ContainsKey("mac.tm")) return;
+            if (await TimeMachineAutoOnAsync()) { _backup.Remove("mac.tm"); SaveBackup(); return; }   // someone turned it on since
+            var r = await Admin("tmutil enable", "지난번에 SystemBoost가 멈춘 Time Machine 자동 백업을 다시 켜요.");
+            if (r == null) { _backup.Remove("mac.tm"); SaveBackup(); Warning = null; }
+            else Warning = TimeMachineStillOff;
+        }
+        catch (Exception) { Warning = TimeMachineStillOff; }
+        finally { _gate.Release(); }
+    }
+
+    /// As the app quits: Time Machine's automatic backup goes back on (one prompt). Refused or unanswered,
+    /// the record stays and the next start asks again.
+    public void Dispose()
+    {
+        if (!_backup.ContainsKey("mac.tm")) return;
+        try
+        {
+            Task.Run(async () =>
+            {
+                await _gate.WaitAsync();
+                try
+                {
+                    if (!_backup.ContainsKey("mac.tm")) return;
+                    if (await Admin("tmutil enable", "SystemBoost를 끄기 전에, 멈춰 둔 Time Machine 자동 백업을 다시 켜요.") == null)
+                    {
+                        _backup.Remove("mac.tm");
+                        SaveBackup();
+                    }
+                }
+                finally { _gate.Release(); }
+            }).Wait(ExitWaitMs);
+        }
+        catch (Exception) { }
+    }
 
     // ------------------------------------------------------------ status
     public async Task<bool> IsAppliedAsync(string id) => id switch
@@ -67,64 +126,103 @@ public sealed class MacBoostBackend : IBoostBackend
     // ------------------------------------------------------------ apply / revert
     public async Task<string> ApplyAsync(string id)
     {
+        await _gate.WaitAsync();
+        try { return await ApplyCoreAsync(id); }
+        finally { _gate.Release(); }
+    }
+
+    private async Task<string> ApplyCoreAsync(string id)
+    {
         switch (id)
         {
             case "mac.lowpower":
             {
                 if (!await LowPowerOnAsync()) return "저전력 모드가 이미 꺼져 있어요";
-                var r = await Admin("pmset -a lowpowermode 0");
+                // what each power source (battery, charger) had, so each goes back to its own
+                var (_, custom) = await Sh("/usr/bin/pmset", "-g custom");
+                var record = RestoreRules.LowPowerRecord(RestoreRules.LowPowerBySource(custom));
+                var r = await Admin("pmset -a lowpowermode 0", "SystemBoost가 저전력 모드를 끄려고 해요. 되돌릴 때까지 꺼져 있어요.");
                 if (r != null) return r;
-                _backup[id] = "1"; SaveBackup();
-                return "저전력 모드를 껐어요 (되돌리면 다시 켜져요)";
+                _backup[id] = record; SaveBackup();
+                return "저전력 모드를 껐어요. 되돌릴 때까지 꺼져 있어요 (SystemBoost를 꺼도 그대로)";
             }
             case "mac.tm":
             {
                 if (!await TimeMachineAutoOnAsync()) return "Time Machine 자동 백업이 이미 꺼져 있어요";
-                var r = await Admin("tmutil disable");
+                var r = await Admin("tmutil disable", "SystemBoost가 Time Machine 자동 백업을 멈추려고 해요. SystemBoost를 끌 때 다시 켜요.");
                 if (r != null) return r;
                 _backup[id] = "1"; SaveBackup();
-                return "게임하는 동안 Time Machine 자동 백업을 멈췄어요";
+                return "Time Machine 자동 백업을 멈췄어요. SystemBoost를 끌 때 다시 켜요 (관리자 암호를 한 번 물어요)";
             }
             case "mac.spotlight":
             {
                 if (!await SpotlightOnAsync()) return "Spotlight 색인이 이미 꺼져 있어요";
-                var r = await Admin("mdutil -a -i off");
+                // only the volumes being indexed now; one that was off stays off when this is undone
+                var (_, status) = await Sh("/usr/bin/mdutil", "-a -s");
+                var on = RestoreRules.SpotlightOn(status);
+                var cmd = on.Count == 0 ? "mdutil -a -i off" : string.Join(" ; ", on.Select(v => "mdutil -i off " + RestoreRules.ShellQuote(v)));
+                var r = await Admin(cmd, "SystemBoost가 Spotlight 색인을 멈추려고 해요. 되돌릴 때까지 멈춰 있어요.");
                 if (r != null) return r;
-                _backup[id] = "1"; SaveBackup();
-                return "Spotlight 색인을 멈췄어요 (되돌리면 다시 색인해요)";
+                _backup[id] = on.Count == 0 ? AllVolumes : string.Join("\n", on); SaveBackup();
+                return "Spotlight 색인을 멈췄어요. 되돌릴 때까지 멈춰 있고, 그동안 새 파일은 검색에 나오지 않아요";
             }
             default: return "macOS에서는 지원하지 않는 항목이에요";
         }
     }
 
+    private const string AllVolumes = "*";
+
+    /// The command that puts one recorded item back. Records from before kept "1" for each.
+    private static string? RestoreCommand(string id, string record) => id switch
+    {
+        "mac.lowpower" => RestoreRules.LowPowerRestoreCommand(record),
+        "mac.tm" => "tmutil enable",
+        "mac.spotlight" => record is "1" or AllVolumes
+            ? "mdutil -a -i on"
+            : string.Join(" ; ", record.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(v => "mdutil -i on " + RestoreRules.ShellQuote(v))),
+        _ => null,
+    };
+
+    private const string RevertPrompt = "SystemBoost가 바꾼 설정을 원래대로 돌리려고 해요.";
+
     public async Task<string> RevertAsync(string id)
     {
-        if (!_backup.ContainsKey(id)) return "변경한 적이 없어요";
-        string? r = id switch
+        await _gate.WaitAsync();
+        try
         {
-            "mac.lowpower" => await Admin("pmset -a lowpowermode 1"),
-            "mac.tm" => await Admin("tmutil enable"),
-            "mac.spotlight" => await Admin("mdutil -a -i on"),
-            _ => null,
-        };
-        if (r != null) return r;
-        _backup.Remove(id); SaveBackup();
-        return "원래대로 돌렸어요";
+            if (!_backup.TryGetValue(id, out var record)) return "변경한 적이 없어요";
+            var cmd = RestoreCommand(id, record);
+            if (cmd != null)
+            {
+                var r = await Admin(cmd, RevertPrompt);
+                if (r != null) return r;
+            }
+            _backup.Remove(id); SaveBackup();
+            if (id == "mac.tm") Warning = null;
+            return "원래대로 돌렸어요";
+        }
+        finally { _gate.Release(); }
     }
 
     public async Task<string> RevertAllAsync()
     {
-        if (_backup.Count == 0) return "변경된 것이 없어요";
-        // one admin prompt for everything
-        var cmds = new List<string>();
-        if (_backup.ContainsKey("mac.lowpower")) cmds.Add("pmset -a lowpowermode 1");
-        if (_backup.ContainsKey("mac.tm")) cmds.Add("tmutil enable");
-        if (_backup.ContainsKey("mac.spotlight")) cmds.Add("mdutil -a -i on");
-        var r = await Admin(string.Join(" ; ", cmds));
-        if (r != null) return r;
-        int n = _backup.Count;
-        _backup.Clear(); SaveBackup();
-        return $"{n}개 항목을 원래대로 돌렸어요";
+        await _gate.WaitAsync();
+        try
+        {
+            if (_backup.Count == 0) return "변경된 것이 없어요";
+            // one admin prompt for everything
+            var cmds = _backup.Select(kv => RestoreCommand(kv.Key, kv.Value)).Where(c => c != null).ToList();
+            if (cmds.Count > 0)
+            {
+                var r = await Admin(string.Join(" ; ", cmds), RevertPrompt);
+                if (r != null) return r;
+            }
+            int n = _backup.Count;
+            _backup.Clear(); SaveBackup();
+            Warning = null;
+            return $"{n}개 항목을 원래대로 돌렸어요";
+        }
+        finally { _gate.Release(); }
     }
 
     // ------------------------------------------------------------ monitoring
@@ -183,10 +281,11 @@ public sealed class MacBoostBackend : IBoostBackend
     }
 
     // ------------------------------------------------------------ helpers
-    /// Runs a command as admin through the standard macOS password dialog. null = ok, else message.
-    private static async Task<string?> Admin(string cmd)
+    /// Runs a command as admin through the standard macOS password dialog, which shows why (prompt). null = ok, else message.
+    private static async Task<string?> Admin(string cmd, string prompt)
     {
-        var script = $"do shell script \"{cmd.Replace("\\", "\\\\").Replace("\"", "\\\"")}\" with administrator privileges";
+        static string Quoted(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        var script = $"do shell script {Quoted(cmd)} with prompt {Quoted(Lang.T(prompt))} with administrator privileges";
         var psi = new ProcessStartInfo("/usr/bin/osascript") { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
         psi.ArgumentList.Add("-e");
         psi.ArgumentList.Add(script);
