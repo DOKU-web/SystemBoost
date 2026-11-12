@@ -349,7 +349,7 @@ public static class Support
     {
         0 => Offline,
         429 => Str(body, "scope") == "day" ? DayFull : Busy,
-        503 => "지금은 앱에서 문의를 받지 않아요. 판매 페이지에 있는 연락처로 문의해 주세요",
+        503 => "지금은 앱에서 문의를 받지 않아요. 고객센터에 적힌 판매자 연락처로 문의해 주세요",
         404 when Str(body, "error") == "not found" => "서버에서 이 문의를 찾지 못했어요. 지워졌거나 보관 기간이 끝났어요",
         409 when Str(body, "error") == "full" => $"한 문의에는 글을 {MaxMessages}개까지 쓸 수 있어요. 새 문의를 남겨 주세요",
         409 => "닫은 지 30일이 지난 문의라 다시 열 수 없어요. 새 문의를 남겨 주세요",

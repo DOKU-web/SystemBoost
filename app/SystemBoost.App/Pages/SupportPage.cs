@@ -351,7 +351,7 @@ public sealed class SupportPage : UserControl
         FillReasons();
         ShowSeller();
         _askSend.IsEnabled = _info.Open && !_askSending;
-        _rfSend.IsEnabled = _info.Open && !_rfSending;
+        _rfSend.IsEnabled = !_rfSending;   // withdrawal is never closed: the server takes refund requests even then
         if (_tab == Tab.Faq) _body.Content = FaqPanel();
         else if (_tab == Tab.Mine) ShowTab();   // kind names may have come with the answer
     }
@@ -363,7 +363,7 @@ public sealed class SupportPage : UserControl
             lines.Add("서버에 연결하지 못했어요. 문의를 보내거나 답을 보려면 인터넷 연결이 필요해요. 자주 묻는 질문은 앱에 들어 있는 기본 도움말을 보여 줘요.");
         else
         {
-            if (!_info.Open) lines.Add("지금은 앱에서 문의를 받지 않아요. 판매 페이지에 있는 연락처로 문의해 주세요");
+            if (!_info.Open) lines.Add("지금은 앱에서 일반 문의를 받지 않아요. 환불(청약철회) 요청은 그대로 받아요. 다른 문의는 고객센터에 적힌 판매자 연락처로 보내 주세요");
             if (_info.Notice.Trim().Length > 0) lines.Add(_info.Notice.Trim());
         }
         _banner.IsVisible = lines.Count > 0;
@@ -570,7 +570,7 @@ public sealed class SupportPage : UserControl
                                                                          typed?.Key ?? (License.KeyText() is { } own ? License.Canonical(own) : null),
                                                                          typed?.Id ?? License.KeyId, reason.Id));
             _rfSending = false;
-            _rfSend.IsEnabled = _info.Open;
+            _rfSend.IsEnabled = true;
             if (id == null) { _rfMsg.Text = error ?? ""; return; }
             _rfKey.Text = "";   // the key is a secret: it does not stay on screen after the request went
             _rfKey.RevealPassword = false;
