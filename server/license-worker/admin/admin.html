@@ -560,7 +560,7 @@ async function loadKeys() {
     <td>${TIER_KO[k.plan] || "프로"} · ${k.expires ? (k.sub ? "구독" : "기간제") : "평생"}<div class="mut">${{ order: "자동 결제", subscription: "자동 구독", payment: "직접 결제", manual: "수동 발급" }[k.src] || ""}</div></td>
     <td class="m">${day(k.issued)}</td><td class="m">${k.expires ? day(k.expires) : "없음"}</td>
     <td><span class="tag t-${k.state}">${ST[k.state]}</span></td>
-    <td style="text-align:right"><button data-copy="${esc(k.id)}">키 복사</button> ${k.revoked ? `<button data-unrev="${esc(k.id)}">해제</button>` : `<button class="d" data-rev="${esc(k.id)}">차단</button>`}</td></tr>`).join("")
+    <td style="text-align:right"><button data-copy="${esc(k.id)}">키 복사</button> ${k.revoked ? `<button data-unrev="${esc(k.id)}">해제</button>` : `<button class="d" data-rev="${esc(k.id)}" data-sub="${esc(k.sub || "")}">차단</button>`}</td></tr>`).join("")
     : `<tr><td colspan="7" class="empty">키가 없어요</td></tr>`;
   $("more").textContent = more ? "500개까지만 보여요. 검색으로 좁혀 보세요." : "";
 }
@@ -798,8 +798,16 @@ async function onClick(e) {
   } else if (t.dataset.copy) {
     const { key } = await api("/key?id=" + t.dataset.copy); key ? copy(key) : toast("서버에 키 원문이 없어요");
   } else if (t.dataset.rev) {
-    if (!(await ask("이 키를 차단할까요?", `<code>${esc(t.dataset.rev)}</code><br>앱이 인터넷에 연결된 상태로 켜질 때 유료 기능이 꺼져요. 카드 구독의 결제는 Lemon Squeezy에서 해지해야 멈춰요.<br><br><input id="why" placeholder="사유 (예: 환불, 공유 발견)">`, "차단"))) return;
-    await api("/revoke", { id: t.dataset.rev, reason: (document.getElementById("why") || {}).value || "관리자 차단" }); toast("차단했어요"); loadAll();
+    // a card subscription's key: the block can also cancel the subscription at Lemon Squeezy (POST /revoke cancel: true).
+    // The box follows the reason until it is clicked: on for 환불, off otherwise (공유: the buyer may still want to pay).
+    const sub = t.dataset.sub || "";
+    const asked = ask("이 키를 차단할까요?", `<code>${esc(t.dataset.rev)}</code><br>앱이 인터넷에 연결된 상태로 켜질 때 유료 기능이 꺼져요. 카드 구독의 결제는 Lemon Squeezy에서 해지해야 멈춰요.<br><br><input id="why" placeholder="사유 (예: 환불, 공유 발견)">` +
+      (sub ? `<br><label style="display:block;margin-top:8px"><input type="checkbox" id="revCancel"> 카드 구독 ${esc(sub)}도 Lemon Squeezy에서 해지해 더 결제되지 않게 하기</label>` : ""), "차단");
+    if (sub) { let touched = false; $("revCancel").onchange = () => { touched = true; }; $("why").oninput = () => { if (!touched) $("revCancel").checked = /환불/.test($("why").value); }; }
+    if (!(await asked)) return;
+    const cancel = !!(sub && $("revCancel").checked);
+    const r = await api("/revoke", { id: t.dataset.rev, reason: (document.getElementById("why") || {}).value || "관리자 차단", ...(cancel ? { cancel: true } : {}) });
+    toast(!cancel ? "차단했어요" : r.cancelled?.ok ? "차단하고 카드 구독도 해지했어요" : "차단했어요. 구독 해지는 확인하지 못했어요: 작업 기록을 보고 필요하면 Lemon Squeezy에서 해지하세요"); loadAll();
   } else if (t.dataset.unrev) {
     if (await ask("차단을 풀까요?", `<code>${esc(t.dataset.unrev)}</code>`, "해제")) { await api("/unrevoke", { id: t.dataset.unrev }); loadAll(); }
   } else if (t.dataset.s) {
@@ -818,7 +826,7 @@ $("look").onclick = async () => {
   $("lOut").innerHTML = (r.valid ? '<span class="okc">서명 확인: 우리가 만든 키예요</span>' : '<span class="err">서명이 맞지 않아요: 위조됐거나 다른 키로 만든 키예요</span>') +
     `<br>키 식별 번호 <code>${esc(r.id)}</code> · ${r.registered ? "발급 목록에 있음" : "발급 목록에 없음 (오프라인 도구로 만든 키)"}` +
     `<br>메일 ${esc(p.email) || "없음"} · 등급 ${TIER_KO[p.plan] || "프로"} · 발급 ${day(p.issued)} · 만료 ${p.expires ? day(p.expires) : "없음"}${p.test ? " · 테스트 키" : ""}` +
-    (r.revoked ? `<br><span class="err">차단됨: ${esc(r.revoked)}</span> <button data-unrev="${esc(r.id)}">해제</button>` : (r.valid ? ` <button class="d" data-rev="${esc(r.id)}">차단</button>` : ""));
+    (r.revoked ? `<br><span class="err">차단됨: ${esc(r.revoked)}</span> <button data-unrev="${esc(r.id)}">해제</button>` : (r.valid ? ` <button class="d" data-rev="${esc(r.id)}" data-sub="${esc(p.sub || "")}">차단</button>` : ""));
 };
 $("reload").onclick = () => { loadAll(); loadStats(); feedPoll(); };
 $("goAnn").onclick = () => $("annTop").scrollIntoView();

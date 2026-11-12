@@ -37,9 +37,14 @@ globalThis.fetch = async (url, init = {}) => {
     dbCalls.push({ action, b });
     return new Response(JSON.stringify(action === "code" ? { member: false } : { id: b.id }), { status: 200 });
   }
+  if (/^https:\/\/api\.lemonsqueezy\.com\/v1\/subscriptions\/\d+$/.test(String(url)) && init.method === "DELETE") {   // a refund cancels
+    cancels.push(String(url).split("/").pop());
+    return new Response("{}", { status: 200 });
+  }
   assert.equal(String(url), "https://api.lemonsqueezy.com/v1/checkouts", "only the fake Lemon Squeezy may be called: " + url);
   return new Response(JSON.stringify({ data: { attributes: { url: "https://shop.example/checkout/x" } } }), { status: 201 });
 };
+const cancels = [];
 
 const call = (path, init = {}, ip = "10.0.0.1") =>
   worker.fetch(new Request("https://lic.example" + path, { ...init, headers: { "CF-Connecting-IP": ip, ...(init.headers || {}) } }), env);
@@ -240,6 +245,7 @@ const k22r = kv.get("sub:22");
 await hook("subscription_payment_refunded", { type: "subscription-invoices", id: "2", attributes: { subscription_id: 22 } });
 assert.equal(await revoked(k22r), true);
 assert.equal(await revoked(k22), true);
+assert.deepEqual(cancels, ["20", "21", "22"], "each refunded subscription is cancelled at Lemon Squeezy, so it is not charged again");
 // expiry, status: every subscription key carries its end
 for (const k of [k10, k10r, k20, k21, k22]) assert.ok(payload(k).expires, "subscription keys expire");
 // a test-mode key lasts a day
@@ -273,7 +279,7 @@ assert.equal((await renew(10, k10)).status, "inactive", "a revoked key renews no
 // ------------------------------------------------------------ 7. orders: the client cannot pay for itself
 assert.equal((await j("/order?plan=yearly&method=manual&code=SB-AAAA-AAAA", { method: "POST" })).code === "SB-AAAA-AAAA", false, "the server picks the code");
 const codes = new Set();
-for (let i = 0; i < 40; i++) codes.add((await j("/order?plan=yearly&method=manual", { method: "POST" })).code);
+for (let i = 0; i < 40; i++) codes.add((await j("/order?plan=yearly&method=manual", { method: "POST" }, "10.4.0." + i)).code);   // 20 an hour per address
 assert.equal(codes.size, 40);
 for (const c of codes) assert.match(c, /^SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
 for (const p of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf", ""])

@@ -36,7 +36,7 @@ public partial class App : Application
 
     private static void StartOnline(MainWindow main)
     {
-        _ = Services.License.RenewIfNeededAsync();   // revoked keys off; subscriptions: renewed key
+        Services.License.StartChecks();              // revoked keys off; subscriptions: next key (at start, every 6 h, on wake and network)
         Services.License.WatchPending();              // an order paid while the app was closed
         Services.Updater.Start();                     // direct-download builds: check GitHub Releases
         Services.Telemetry.Start(main.UsageNow);      // usage statistics, unless turned off in Settings

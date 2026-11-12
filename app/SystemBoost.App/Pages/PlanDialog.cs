@@ -59,7 +59,11 @@ public sealed class PlanDialog : Window
         ShowCards();
 
         if (PlanStatus.Rank > 0)
-            p.Children.Add(Ui.Text("업그레이드 키를 등록하면 지금 키를 대신해요. 지금 키의 남은 기간은 이어지지 않아요.", "muted", wrap: true));
+            p.Children.Add(Ui.Text(License.SubscriptionActive
+                ? "카드 구독을 쓰는 중이면 새로 결제하지 않고 지금 구독의 플랜을 바꿔요. 구독이 하나 더 생기지 않아요."
+                : PlanStatus.CanExtend
+                ? "계좌이체로 1대용 키를 사면 지금 키가 끝나는 날부터 이어서 새 기간이 더해져요. 카드 구독은 결제한 날부터 시작하고 지금 키의 남은 기간은 더해지지 않아요."
+                : "업그레이드 키를 등록하면 지금 키를 대신해요. 지금 키의 남은 기간은 이어지지 않아요.", "muted", wrap: true));
         var close = Ui.Button("닫기", "ghost");
         close.HorizontalAlignment = HorizontalAlignment.Right;
         close.Click += (_, _) => Close();
