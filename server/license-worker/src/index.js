@@ -146,8 +146,27 @@ async function openPlans(env) {   // plans the app may sell right now, per metho
 const isPlan = p => typeof p === "string" && Object.hasOwn(PLANS, p);
 
 // Calls per IP address an hour on the public routes that write KV or call Lemon Squeezy (src/iplimit.js: no KV writes
-// for the counting). Approximate; the daily caps (orders 300, referral gifts REF_DAILY) stay the backstop.
+// for the counting). Approximate; the day's share of KV writes (PUBLIC_KV_DAY) and REF_DAILY stay the backstop.
 const IP_LIMIT = { order: 20, paid: 30, checkout: 20, change: 10, referral: 30 };
+
+// The Workers free plan allows 1,000 KV writes a day (UTC) for the whole worker; past that every put fails until
+// 09:00 KST, approvals and card webhooks included. Requests anyone can make share PUBLIC_KV_DAY of them: new orders,
+// "I paid" notes and referral / invite gifts (support has its own 150 + 100, support.js LIMITS). The count lives in
+// the Stats object, so counting writes no KV. The seller's actions, keys of approved orders and Lemon Squeezy
+// webhooks are never counted or refused: at least 350 writes a day stay for them. While the object cannot be reached
+// the old KV caps hold (300 orders, REF_DAILY gifts), as before the object counted.
+const PUBLIC_KV_DAY = 400;
+const pubName = () => "kv:pub:" + now().slice(0, 10);
+// cap = true: "" counted, "full" today's share would be passed (nothing counted); "down": the object did not answer.
+// cap = false: counted whatever the total (after the checks were made), "" or "down".
+async function takePublic(env, writes, more = [], cap = true) {
+  try {
+    const r = await stats(env, "/take", { items: [{ name: pubName(), ttl: 2 * 86400, by: writes, ...(cap ? { max: PUBLIC_KV_DAY } : {}) }, ...more] });
+    if (r?.ok === true) return "";
+    if (r?.ok === false) return "full";
+  } catch { /* below */ }
+  return "down";
+}
 const PAID_EDITS = 5;   // payer / memo changes an order takes after its first "I paid"
 const TIER_RANK = { premium: 1, ultra: 2, biz: 3 };
 
@@ -176,9 +195,13 @@ async function order(req, url, env) {
   if (!["card", "manual"].includes(method) || !methods[method].includes(plan)) return json({ error: "sales closed" }, 503);
   if (await overIp(req, env, "order", IP_LIMIT.order)) return json({ error: "busy" }, 429);
   const extendFrom = method === "manual" && seatsOf(plan) === 1 ? await extendable(env, (await readJson(req)).key, plan) : null;
-  const n = Number((await env.LICENSES.get("count:orders:" + now().slice(0, 10))) || 0);
-  if (n >= 300) return json({ error: "busy" }, 429);   // cheap cap on junk orders per day
-  await env.LICENSES.put("count:orders:" + now().slice(0, 10), String(n + 1), { expirationTtl: 60 * 60 * 48 });
+  const pub = await takePublic(env, 1);   // the order's own write (ord:)
+  if (pub === "full") return json({ error: "busy" }, 429);
+  if (pub === "down") {   // the object cannot count: the old KV cap on junk orders per day
+    const n = Number((await env.LICENSES.get("count:orders:" + now().slice(0, 10))) || 0);
+    if (n >= 300) return json({ error: "busy" }, 429);
+    await env.LICENSES.put("count:orders:" + now().slice(0, 10), String(n + 1), { expirationTtl: 60 * 60 * 48 });
+  }
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", r = crypto.getRandomValues(new Uint8Array(8));
   const c = [...r].map(b => A[b % A.length]).join("");
   const code = "SB-" + c.slice(0, 4) + "-" + c.slice(4);
@@ -217,6 +240,7 @@ async function orderPaid(req, url, env) {
     if ((o.edits || 0) >= PAID_EDITS) return json({ error: "too many changes", status: "paid" }, 429);
     o.edits = (o.edits || 0) + 1;
   } else o.paidAt = now();
+  if (await takePublic(env, 1) === "full") return json({ error: "busy" }, 429);   // the day's share is used up (KV free plan)
   o.status = "paid";
   o.payer = payer;
   o.msg = msg;
@@ -1097,7 +1121,8 @@ async function listLog(env) {
 // rewarded by hand, from the use count on the dashboard.
 const REF_RE = /^[A-Z0-9]{4,16}$/;
 const REF_DEVICE_TTL = 60 * 60 * 24 * 90;
-const REF_DAILY = 300;   // keys a day, whatever the codes say
+const REF_DAILY = 60;    // gifts a day (referral codes and member invites together), whatever the codes say
+const GIFT_WRITES = 3;  // KV writes of one gift: refdev:, lic: and the code's ref: (an invite writes 2; counted as 3)
 
 async function getRef(env, code) {
   const v = REF_RE.test(code) ? await env.LICENSES.get("ref:" + code) : null;
@@ -1105,12 +1130,19 @@ async function getRef(env, code) {
 }
 async function putRef(env, r) { await env.LICENSES.put("ref:" + r.code, JSON.stringify(r), { metadata: r }); }
 
-const refDay = () => "count:ref:" + now().slice(0, 10);
+const refDay = () => "count:ref:" + now().slice(0, 10);   // KV: only while the Stats object cannot be reached
+const refName = () => "kv:ref:" + now().slice(0, 10);     // the Stats object's count of today's gifts
 const REF_DEVICE = /^[0-9a-f]{32}$/;
 
 // What stops a device from taking a gift; null when nothing does.
 async function refBlocked(env, device) {
-  if (Number((await env.LICENSES.get(refDay())) || 0) >= REF_DAILY) return { status: 429, error: "busy" };
+  let full = false;
+  try {
+    const r = await stats(env, "/peek", { names: [refName(), pubName()] });
+    full = (Number(r?.n?.[refName()]) || 0) >= REF_DAILY || (Number(r?.n?.[pubName()]) || 0) + GIFT_WRITES > PUBLIC_KV_DAY;
+  } catch { /* the KV count below */ }
+  // the KV count is read too: it holds the gifts of a day the object could not count (and of the day of the update)
+  if (full || Number((await env.LICENSES.get(refDay())) || 0) >= REF_DAILY) return { status: 429, error: "busy" };
   if (await env.LICENSES.get("refdev:" + device)) return { status: 409, error: "already" };
   return null;
 }
@@ -1120,8 +1152,11 @@ function refClosed(r) {
 }
 async function grant(env, code, device, plan, days) {
   await env.LICENSES.put("refdev:" + device, code, { expirationTtl: REF_DEVICE_TTL });
-  const day = refDay();
-  await env.LICENSES.put(day, String(Number((await env.LICENSES.get(day)) || 0) + 1), { expirationTtl: 60 * 60 * 48 });
+  // refBlocked checked the caps; this only counts (a race may pass them by one or two)
+  if (await takePublic(env, GIFT_WRITES, [{ name: refName(), ttl: 2 * 86400 }], false) === "down") {
+    const day = refDay();
+    await env.LICENSES.put(day, String(Number((await env.LICENSES.get(day)) || 0) + 1), { expirationTtl: 60 * 60 * 48 });
+  }
   const key = await makeKey(env, { plan, email: "", expires: addDays(now(), days), src: "referral", note: "추천 코드 " + code });
   await audit(env, "app", "추천 코드 사용", code + " · " + (TIER_KO[plan] || "프로") + " " + days + "일");
   return { key, plan, days };
@@ -1133,7 +1168,7 @@ async function useRef(env, r, device) {
 }
 
 async function referral(req, env) {
-  if (await overIp(req, env, "referral", IP_LIMIT.referral)) return json({ error: "busy" }, 429);   // a gift is 5 KV writes
+  if (await overIp(req, env, "referral", IP_LIMIT.referral)) return json({ error: "busy" }, 429);   // a gift is 3 KV writes
   const b = await readJson(req);
   const code = String(b.code || "").trim().toUpperCase(), device = String(b.device || "");
   if (!REF_RE.test(code) || !REF_DEVICE.test(device)) return json({ error: "bad request" }, 400);
