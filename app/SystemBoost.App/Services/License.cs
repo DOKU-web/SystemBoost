@@ -557,12 +557,12 @@ public static class License
     }
 
     // ---------------------------------------------------------- orders
-    // 기간 연장: a bank-transfer order for one PC carries the key this PC holds when it still runs and is of the same or a
-    // lower plan; the server then counts the new period from that key's end (servers before this ignore it).
+    // 기간 연장: a bank-transfer order for one PC carries the key this PC holds when it still runs and is of the same
+    // plan tier; the server then counts the new period from that key's end (servers before this ignore it).
     private static string? KeyToExtend(string plan, string method)
     {
         if (method != "manual" || plan.Contains("_x") || Info is not { Expires: not null } cur || !KeyActive) return null;
-        if (Rank(cur) > RankOfPlan(plan)) return null;
+        if (Rank(cur) != RankOfPlan(plan)) return null;   // an upgrade starts on approval, as the server does it
         return KeyText() is { } raw ? Canonical(raw) : null;
     }
     /// The end of this PC's key when an order for `plan` paid by `method` would continue from it (기간 연장), else null.

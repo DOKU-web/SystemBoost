@@ -14,7 +14,7 @@ Effective date: {{EFFECTIVE_DATE}}
 
 ## What is processed
 
-- Starting an app with a registered key: the key ID (16 characters computed from the key), to check whether the key was blocked. Not stored.
+- Starting an app with a registered key, and at most once every 20 hours while it runs: the key ID (16 characters computed from the key), to check whether the key was blocked. Not stored.
 - Renewing a subscription key: the subscription number and the key in use (only checked against that subscription). Not stored.
 - Bank transfer and direct payment: the order code, plan, status and times, the payer name and payment memo you type, a discount ticket's percentage; when approved, the key ID and an email address the seller may enter; a rejection reason or refund time.
 - Card payment: from Lemon Squeezy, the payment email, subscription number, order number, payment (invoice) number, plan, next payment date and whether it is a test payment. Other details in Lemon Squeezy's notice (such as the name) are not stored.
@@ -26,7 +26,7 @@ Effective date: {{EFFECTIVE_DATE}}
 - Abuse limits: hashes made from IP addresses with a value only the server knows (sign-up, login, support), and the plain IP address of a wrong dashboard password, for 15 minutes after the last miss.
 - The seller's activity log: what the seller did and automatic steps, with details such as order codes, key IDs, email addresses, key notes and member IDs.
 - If the seller turns on Cloudflare's logs: request addresses and server error records, for the period Cloudflare sets.
-- Background checks by the running app: while an order waits (up to 14 days after ordering), its order code every 5 seconds for the first 15 minutes, then every minute, until the key arrives or the order is rejected or refunded; while a support request waits for the seller's answer (changed in the last 14 days), its number and access code every 30 minutes (up to every 2 hours when the server is busy). Neither check leaves a new record on the server.
+- Background checks by the running app: while an order waits (up to 90 days after ordering), its order code every minute for the first hour, every 15 minutes for the first day, then hourly (a card checkout every 10 seconds for its first 10 minutes), until the key arrives or the order is rejected, refunded or deleted; an order the app stopped waiting for (cancelled in the app, or older than 90 days) is asked about again when the '★ Plans' page opens, for up to 40 days and at most hourly; a subscription key, from 7 days before its end until 45 days after it, every 6 hours (and after the PC wakes or the network returns), with its subscription number and the key in use, to fetch the next period's key (once a day after the server answered that the subscription ended); while a support request waits for the seller's answer (changed in the last 14 days), its number and access code every 30 minutes (up to every 2 hours when the server is busy). None of these checks leaves a new record on the server.
 
 ## How long
 

@@ -363,9 +363,10 @@ let a = await adm("/orders/approve", { code: o.code });
 assert.equal(a.extendedFrom, heldEnd);
 assert.equal(payload(a.key).expires, new Date(Date.parse(heldEnd) + 369 * 864e5).toISOString().replace(/\.\d+Z$/, "Z"), "old end + 366 days + 3 days grace");
 assert.ok((await log()).some(l => l.action === "키 발급" && l.detail.includes("부터 이어서")));
-// a lower tier held, a higher tier bought: continues (the days left count at the new tier)
+// a lower tier held, a higher tier bought: starts today (days left of the cheaper plan do not become days of the dearer one)
 o = await manualOrder("ultra_yearly", held);
-assert.equal(o.extends, heldEnd);
+assert.equal(o.extends, undefined);
+assert.equal((await order(o.code)).extendFrom, undefined);
 // a higher tier held, a lower tier bought: starts today
 const ultraKey = (await adm("/issue", { tier: "ultra", plan: "yearly", note: "held ultra" })).key;
 o = await manualOrder("monthly", ultraKey);
@@ -443,10 +444,12 @@ assert.ok(page.includes(k60), "right after the payment: the key");
 assert.ok(page.includes("1시간"));
 assert.ok(!page.includes("메일 주소로도 저장돼"), "the old wording that read as 'also e-mailed' is gone");
 assert.ok(page.includes("메일로 보내지 않아요"));
+assert.ok(page.includes("구매 확인서") && page.includes("플랜: 프로 월간") && page.includes("청약철회") && page.includes("미성년자"), "the purchase confirmation to keep");
 md.set("session:" + code, { at: new Date(Date.now() - 2 * 3600e3).toISOString() });
 page = await (await call("/thanks?session=" + code)).text();
 assert.ok(!page.includes(k60), "two hours later: no key in a page whose address stays in the history");
 assert.ok(page.includes(code) && page.includes("주문 코드로 키 받기"), "the page says how to get it");
+assert.ok(page.includes("구매 확인서") && !page.includes(k60.split(".")[1]), "the confirmation stays, without the key");
 md.set("session:" + code, null);
 assert.ok(!(await (await call("/thanks?session=" + code)).text()).includes(k60), "a record from before (no time): no key");
 assert.equal((await j("/claim?session=" + code)).key, k60, "the app still claims it");

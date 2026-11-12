@@ -4,6 +4,7 @@ import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
 import { helpPage, privacyPage, support, supportAdmin, supportCounts, webhookRefund } from "./support.js";
 import { overIp } from "./iplimit.js";
+import { purchaseNote } from "./purchase_note.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
@@ -167,15 +168,16 @@ async function heldKey(env, key) {
 }
 
 // Early renewal (기간 연장): the app (from the release after 0.8.11) sends the key this PC holds with a bank-transfer order for one PC.
-// A key that still runs, of the same or a lower tier than the plan bought and not a test key, is noted on the order
+// A key that still runs, of the same tier as the plan bought and not a test key, is noted on the order
 // as extendFrom {id, expires}; adminIssue then counts the new period from that key's end instead of from the approval.
-// Anything else (no key: apps up to 0.8.11, a higher tier, a card or bundle order) leaves the order as before.
+// Anything else (no key: apps up to 0.8.11, another tier, a card or bundle order) leaves the order as before. Only the
+// same tier: days left of a cheaper plan must not turn into days of a dearer one (premium yearly + ultra monthly).
 async function extendable(env, key, plan) {
   const h = await heldKey(env, key);
   if (!h || h.payload.test) return null;
   const end = Date.parse(h.payload.expires || "");
   if (!(end > Date.now())) return null;   // no end date (nothing to add to) or over already (counts from now anyway)
-  if ((TIER_RANK[h.payload.plan] || 1) > TIER_RANK[tierOf(plan)]) return null;
+  if ((TIERS.includes(h.payload.plan) ? h.payload.plan : "premium") !== tierOf(plan)) return null;
   return { id: h.id, expires: new Date(end).toISOString().replace(/\.\d+Z$/, "Z") };
 }
 
@@ -576,10 +578,10 @@ async function thanks(url, env) {
   const keep = `키는 메일로 보내지 않아요. 잃어버리면 앱의 '고객센터'나 <a href="/help" style="color:#ff7a1a">도움말 페이지</a>에서 ${code ? "주문 코드 " + code + "를 적어 " : ""}문의해 주세요. 판매자는 결제한 메일 주소로도 키를 찾을 수 있어요.`;
   const body = fresh
     ? `<h1>결제가 완료됐어요</h1><p>SystemBoost가 켜져 있으면 키가 자동으로 등록돼요. 아니라면 아래 키를 복사해 '★ 플랜 → 라이선스 키'(0.8.9 이하는 '★ 프리미엄')에 넣으세요.</p>
-       <textarea readonly onclick="this.select()">${escapeHtml(key)}</textarea><p class="m">이 화면은 결제 뒤 1시간 동안만 키를 보여 줘요. ${keep}</p>`
+       <textarea readonly onclick="this.select()">${escapeHtml(key)}</textarea><p class="m">이 화면은 결제 뒤 1시간 동안만 키를 보여 줘요. ${keep}</p>${await purchaseNote(env, key)}`
     : key !== null
     ? `<h1>결제가 완료됐어요</h1><p>키는 SystemBoost 앱에 자동으로 등록돼요. 이 화면은 결제 뒤 1시간이 지나면 키를 보여 주지 않아요.</p>
-       ${code ? `<p>앱이 키를 받지 못했다면 '★ 플랜 → 주문 코드로 키 받기'에 주문 코드 <b>${code}</b>를 넣으세요.</p>` : ""}<p class="m">${keep}</p>`
+       ${code ? `<p>앱이 키를 받지 못했다면 '★ 플랜 → 주문 코드로 키 받기'에 주문 코드 <b>${code}</b>를 넣으세요.</p>` : ""}<p class="m">${keep}</p>${await purchaseNote(env, key)}`
     : `<h1>결제를 확인하는 중이에요</h1><p>보통 몇 초 걸려요. 이 페이지는 자동으로 새로고침돼요.</p><script>setTimeout(()=>location.reload(),3000)</script>`;
   return new Response(`<!DOCTYPE html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SystemBoost</title><style>body{background:#0b0b0c;color:#e8e6e3;font-family:system-ui,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;line-height:1.6}

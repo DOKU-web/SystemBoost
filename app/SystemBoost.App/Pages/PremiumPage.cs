@@ -240,8 +240,7 @@ public sealed class PremiumPage : UserControl
         buy.Children.Add(_bundleNote);
         _ticketBox.Click += (_, _) => ShowPrice();
         buy.Children.Add(_ticketBox);
-        buy.Children.Add(Ui.Text("월간·연간은 그 기간 동안 써요. " +
-            $"스팀에서 받았다면 스팀 상점의 'SystemBoost Premium'({PriceSteamDlc}, 한 번 결제)으로 구매하세요.", "muted", wrap: true));
+        buy.Children.Add(Ui.Text("월간·연간은 그 기간 동안 써요.", "muted", wrap: true));   // no Steam edition is sold (README)
         // payment method: card (saved card, automatic) or bank transfer / direct payment (seller approves)
         _methodBox.Child = _methodP;
         _methodBox.Classes.Add("segbox");
@@ -503,7 +502,8 @@ public sealed class PremiumPage : UserControl
             if (License.ExtendsFrom(PlanId, "manual") is DateTime end)
                 note += " " + $"지금 키가 끝나는 {end.ToLocalTime():yyyy-MM-dd}부터 이어서 새 기간이 더해져요.";
             else if (_seats == 1)
-                note += " 키의 기간은 판매자가 승인한 날부터 시작해요.";
+                note += PlanStatus.Rank > 0 ? " 키의 기간은 판매자가 승인한 날부터 시작해요. 지금 키의 남은 기간은 더해지지 않아요."
+                                            : " 키의 기간은 판매자가 승인한 날부터 시작해요.";
             if (License.SubscriptionActive) note += " " + License.SubscriptionGoesOn;
             _methodNote.Text = note;
         }
@@ -650,7 +650,7 @@ public sealed class PremiumPage : UserControl
         if (License.IsPremium)
         {
             _state.Text = PlanStatus.Rank switch { 3 => "산업 사용 중 ★", 2 => "울트라 사용 중 ★", _ => "프로 사용 중 ★" };
-            _stateSub.Text = info?.Expires is DateTime e ? $"{e.ToLocalTime():yyyy-MM-dd}까지 · {info.Email}" : "스팀 DLC 또는 기간 없는 키";
+            _stateSub.Text = info?.Expires is DateTime e ? $"{e.ToLocalTime():yyyy-MM-dd}까지 · {info.Email}" : "기간 없는 키";
         }
         else
         {
