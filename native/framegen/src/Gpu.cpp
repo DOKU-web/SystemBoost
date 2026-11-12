@@ -136,12 +136,10 @@ void CreateDevice(IDXGIAdapter1* adapter, ComPtr<ID3D11Device>& dev, ComPtr<ID3D
 // made 35 to 135. With its own class raised, that little work runs when it is due and the game
 // keeps the rest. Only this process is changed, never the game's. These are the calls OBS makes for
 // the same reason (libobs-d3d11, set_priority), with its rule: the realtime class has hung GPUs
-// under hardware-accelerated GPU scheduling, so high is used there.
-static bool HardwareGpuScheduling() {
-    DWORD mode = 0, size = sizeof mode;
-    return RegGetValueW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers", L"HwSchMode",
-                        RRF_RT_REG_DWORD, nullptr, &mode, &size) == ERROR_SUCCESS && mode == 2;
-}
+// under hardware-accelerated GPU scheduling. Auto never asks for more than high: the HwSchMode value
+// in the registry is what the next boot uses, not what runs now (right after HAGS is switched off it
+// reads off while it is still on), and realtime needs administrator rights anyway, so an ordinary
+// start always got high. Only a test asks for realtime itself (--gpu-priority 5).
 
 GpuPriority RaiseGpuPriority(ID3D11Device* dev, int wanted) {
     GpuPriority p;
@@ -151,8 +149,8 @@ GpuPriority RaiseGpuPriority(ID3D11Device* dev, int wanted) {
     HMODULE gdi = LoadLibraryW(L"gdi32.dll");
     const auto set = gdi ? reinterpret_cast<SetFn>(GetProcAddress(gdi, "D3DKMTSetProcessSchedulingPriorityClass")) : nullptr;
     const auto get = gdi ? reinterpret_cast<GetFn>(GetProcAddress(gdi, "D3DKMTGetProcessSchedulingPriorityClass")) : nullptr;
-    constexpr int kNormal = 2, kHigh = 4, kRealtime = 5;
-    const int first = wanted >= 0 ? wanted : HardwareGpuScheduling() ? kHigh : kRealtime;
+    constexpr int kNormal = 2, kHigh = 4;
+    const int first = wanted >= 0 ? wanted : kHigh;
     const int last = wanted >= 0 ? wanted : kNormal + 1;    // auto: the highest class Windows grants
     for (int c = first; set && c >= last; --c) {
         if (set(GetCurrentProcess(), c) < 0) continue;      // NTSTATUS: negative = refused

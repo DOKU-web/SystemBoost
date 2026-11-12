@@ -32,6 +32,7 @@ struct Settings {
     bool alwaysActive = false;         // tests only: keep generating when the window is not in front
     bool showInCapture = false;        // tests only: let screenshots see the overlay
     int gpuPriority = kGpuPriorityAuto; // this process's GPU scheduling class: auto, off, or 0..5 (tests)
+    uint32_t parentPid = 0;            // the app: when its process ends, so does this one (0 = stdin only)
     std::string shaderDir;             // default: <exe dir>\shaders
 
     // Pipeline parameters derived from quality (mirror ref PARAMS)
@@ -94,6 +95,10 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
             else if (*v == "off") s.gpuPriority = kGpuPriorityOff;
             else if (v->size() == 1 && (*v)[0] >= '0' && (*v)[0] <= '5') s.gpuPriority = (*v)[0] - '0';
             else return "bad --gpu-priority " + *v;
+        } else if (k == "--parent-pid") {
+            const unsigned long long pid = std::strtoull(v->c_str(), nullptr, 10);
+            if (pid == 0 || pid > 0xFFFFFFFFull) return "bad --parent-pid " + *v;
+            s.parentPid = uint32_t(pid);
         } else if (k == "--stats-ms") s.statsMs = std::max(100, std::atoi(v->c_str()));
         else if (k == "--shader-dir") s.shaderDir = *v;
         else return "unknown option " + k;

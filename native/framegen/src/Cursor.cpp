@@ -26,6 +26,8 @@ void InstallCursorSafety() {
     SetUnhandledExceptionFilter(CrashFilter);
 }
 
+void RestoreCursorState() { RestoreSystemCursors(); }
+
 static HCURSOR BlankCursor() {
     BYTE andMask[32 * 4];
     BYTE xorMask[32 * 4];

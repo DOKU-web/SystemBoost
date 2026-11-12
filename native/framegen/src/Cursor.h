@@ -45,4 +45,8 @@ private:
 // Process-wide emergency restore (console close / unhandled exception).
 void InstallCursorSafety();
 
+// Puts back what this process changed (system cursor scheme, cursor clip), from any thread. For the
+// watchdog in main.cpp, which ends the process when its main loop cannot.
+void RestoreCursorState();
+
 }  // namespace sbfg
