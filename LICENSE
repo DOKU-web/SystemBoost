@@ -1,11 +1,20 @@
-Copyright (c) 2026 DOKKU. All rights reserved.
+SystemBoost 사용 고지 / Notice
 
-이 저장소의 코드, 셰이더, 디자인, 문서에 대한 권리는 DOKKU에게 있습니다.
-코드가 공개되어 있어도 사용, 복제, 수정, 배포를 허락하는 것은 아닙니다.
-별도의 서면 허락 없이 이 코드를 사용, 복제, 수정, 재배포, 판매할 수 없습니다.
+만든 사람: DOKKU
+만든 방법: 코드, 셰이더, 문서는 AI 코딩 도구(Anthropic Claude Code)를 써서 만들었고,
+로고는 AI 이미지 생성 도구로 만들었습니다.
+AI 도구로 만든 부분에 저작권이 생기는지, 생긴다면 누구에게 있는지는 확인하지 않았습니다.
+이 고지로 저작권을 주장하지 않습니다.
 
-외부 구성 요소는 각자의 라이선스를 따릅니다. THIRD_PARTY_NOTICES.txt를 보세요.
+이 고지는 사용을 허락하는 라이선스가 아닙니다. 프로그램을 쓰는 조건은 사용권 계약
+(앱의 eula.txt)을 따릅니다.
 
-This repository is proprietary. Its visibility grants no permission to use,
-copy, modify, distribute or sell it. Third-party components stay under their
-own licenses, listed in THIRD_PARTY_NOTICES.txt.
+외부 구성 요소는 각 권리자의 것이며 각자의 라이선스를 따릅니다. THIRD_PARTY_NOTICES.txt를 보세요.
+
+Made by DOKKU. The code, shaders and documents were made with an AI coding tool
+(Anthropic Claude Code); the logo was made with an AI image generator. Whether
+copyright exists in the AI-made parts, and who would hold it, has not been
+checked, and this notice does not claim it. This notice is not a licence: using
+the program is governed by its licence agreement (eula.en.txt). Third-party
+components belong to their owners and stay under their own licences, listed in
+THIRD_PARTY_NOTICES.txt.

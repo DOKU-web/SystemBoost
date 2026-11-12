@@ -229,6 +229,7 @@
 "앱이 켜져 있는 동안 무작위 설치 번호, 앱 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 게임 부스트 사용 여부를 판매자 서버로 보내요.": "While running, the app sends a random install number, app version, operating system, plan, frame generation multiplier, and whether One-Click Game Boost is on to the seller's server.",
 "서버는 접속한 국가를 함께 기록하고 IP 주소는 저장하지 않아요. 키, 메일, 게임 이름, 하드웨어 정보는 보내지 않아요. 끄면 이 PC의 설치 번호도 지워요.": "The server also records the country of the connection and does not store IP addresses. Keys, email, game names and hardware details are not sent. Turning this off also deletes this PC's install number.",
 "저작권과 오픈소스 고지": "Copyright and open source notices",
+"만든 사람: DOKKU · 코드와 로고는 AI 도구로 만들었어요": "Made by DOKKU · the code and logo were made with AI tools",
 "SystemBoost에는 오픈소스 구성 요소가 들어 있어요. 각 구성 요소의 저작권은 해당 권리자에게 있고, 각자의 라이선스를 따라요.": "SystemBoost includes open source components. Each belongs to its copyright holders and follows its own license.",
 "윈도우 게임 기능은 Wine (LGPL-2.1-or-later), DXVK-macOS (zlib), MoltenVK (Apache-2.0)를 처음 쓸 때 내려받아요. Wine 소스: https://gitlab.winehq.org/wine/wine": "The Windows Games feature downloads Wine (LGPL-2.1-or-later), DXVK-macOS (zlib) and MoltenVK (Apache-2.0) on first use. Wine source: https://gitlab.winehq.org/wine/wine",
 "전문 파일을 찾을 수 없어요. 앱을 다시 설치해 주세요.": "The license text file is missing. Please reinstall the app.",
