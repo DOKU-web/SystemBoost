@@ -4,6 +4,7 @@
 #include "Capture.h"
 #include <dwmapi.h>
 #include <inspectable.h>
+#include <cstdio>
 #include <windows.graphics.capture.interop.h>
 #include <windows.graphics.directx.direct3d11.interop.h>
 #include <winrt/Windows.Foundation.h>
@@ -117,14 +118,17 @@ private:
     ComPtr<ID3D11Texture2D> tex_;
 };
 
-std::unique_ptr<ICapture> CreateWgcCapture(ID3D11Device* dev, HWND hwnd, bool cursor) {
+std::unique_ptr<ICapture> CreateWgcCapture(ID3D11Device* dev, HWND hwnd, bool cursor, std::string* why) {
+    char buf[128] = "";
     try {
         return std::make_unique<WgcCapture>(dev, hwnd, cursor);
-    } catch (const winrt::hresult_error&) {
-        return nullptr;  // caller falls back to DXGI capture
-    } catch (const HrError&) {
-        return nullptr;
+    } catch (const winrt::hresult_error& e) {
+        std::snprintf(buf, sizeof buf, "hr=0x%08lX", static_cast<unsigned long>(e.code().value));
+    } catch (const HrError& e) {
+        std::snprintf(buf, sizeof buf, "%s hr=0x%08lX", e.what, static_cast<unsigned long>(e.hr));
     }
+    if (why) *why = buf;
+    return nullptr;  // the caller stops and the app asks the user (no switch to DXGI behind their back)
 }
 
 }  // namespace sbfg

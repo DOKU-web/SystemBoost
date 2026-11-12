@@ -21,6 +21,8 @@ std::string nvSet(const std::string& exe);
 std::string nvRestore(const std::string& exe, const std::string& old);
 std::string nvLimitSet(const std::string& exe, unsigned fps);
 std::string nvLimitRestore(const std::string& exe, const std::string& old);
+std::string nvLimitGet(const std::string& exe);
+std::string nvLimitUndo(const std::string& exe, unsigned ours, const std::string& old);
 void nvLimitShutdown();
 
 // gpuoc.cpp: power limit and clock offsets through NVML, with automatic undo

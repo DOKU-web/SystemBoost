@@ -35,7 +35,8 @@ std::unique_ptr<ICapture> CreateDxgiCapture(ID3D11Device* dev, HWND hwnd);
 #ifdef SBFG_WITH_WGC
 // Windows.Graphics.Capture of the window. `dev` can be on any adapter; the OS
 // delivers frames to it (this is the preferred path for dual GPU).
-std::unique_ptr<ICapture> CreateWgcCapture(ID3D11Device* dev, HWND hwnd, bool cursor);
+// Null on failure, with the reason in *why. The caller does not switch to DXGI by itself.
+std::unique_ptr<ICapture> CreateWgcCapture(ID3D11Device* dev, HWND hwnd, bool cursor, std::string* why = nullptr);
 #endif
 
 // Copies frames from a texture on one adapter to a texture on another

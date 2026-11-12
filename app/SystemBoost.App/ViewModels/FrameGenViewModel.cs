@@ -280,8 +280,16 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             }
             if (string.IsNullOrEmpty(ResourceManagers.GameProcess)) { _limitNote = ""; return; }   // the game's window is gone
             var exe = ResourceManagers.GameProcess + ".exe";
+            // on the disk before in the driver: a crash or a power cut in between cannot leave the game limited
+            var (recordError, recorded) = await FrameGenEngine.RecordDriverLimitAsync(exe, fps);
+            if (recordError != null) { _limitNote = recordError; return; }
             var error = await limiter.LimitGameAsync(exe, fps);
-            if (error != null) { _limitNote = error; return; }
+            if (error != null)
+            {
+                if (recorded) await FrameGenEngine.ForgetDriverLimitAsync(exe, fps);
+                _limitNote = error;
+                return;
+            }
             _limitFps = fps;
             _limitExe = exe;
             _limitSteps++;
@@ -305,10 +313,24 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private async Task EndLimitAsync()
     {
         if (_limitFps == 0 || Limiter is not { } limiter) return;
+        var exe = _limitExe;
         _limitFps = _limitSteps = 0;
         _limitExe = "";
         _limitWaitsRestart = false;
         await limiter.EndGameLimitAsync();
+        // and checked against the record: what this game's profile still holds of ours goes back, then the record goes
+        var failed = await FrameGenEngine.RestoreDriverSettingsAsync(onlyExe: exe);
+        if (failed != null) Status = string.Format(LimitNotRestored, failed);
+    }
+
+    private const string LimitNotRestored =
+        "알림: 게임의 드라이버 프레임 제한을 되돌리지 못했어요 ({0}). 앱을 다시 켤 때 다시 해 봐요. 바로 풀려면 NVIDIA 앱에서 이 게임의 '최대 프레임 속도'를 끄세요";
+
+    // What an earlier run left in a driver profile (the app crashed, the PC lost power): back at the start.
+    private async Task RestoreLimitAtStartAsync()
+    {
+        var failed = await FrameGenEngine.RestoreAtStartup();
+        if (failed != null) Status = string.Format(LimitNotRestored, failed);
     }
 
     private const string StoppedReason =
@@ -345,7 +367,9 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
 
     public FrameGenViewModel()
     {
+        if (Platform.IsWindows) _ = RestoreLimitAtStartAsync();
         _engine.Stats += OnStats;
+        _engine.Stalled += () => Status = "오류: " + StalledText;
         _engine.FitStopped += () => { _fitStopped = _stoppedInSession = true; _ = MakeRoomAsync(); };
         _statsWatch.Tick += (_, _) => ClearStaleStats();
         _engine.Ready += r =>
@@ -404,9 +428,22 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private bool _waitNotice, _listing;
     private string _runLine = "";
 
+    // Window capture did not start. The engine does not switch to screen capture by itself: there its window
+    // has to be hidden from capture, which is what a cheat overlay looks like. The user decides.
+    private const string WgcFailed = "wgc_failed";
+    public const string WgcFailedText =
+        "창 캡처(WGC)를 시작하지 못해서 프레임 생성을 멈췄어요. 이 게임에는 화면 캡처(DXGI) 방식이 필요해요. " +
+        "DXGI는 캡처에서 숨긴 최상위 창으로 게임 전체를 덮어서, 안티치트가 핵 오버레이로 보고 계정을 정지할 수 있어요(실제 안티치트에서 시험하지 않았어요). " +
+        "앱이 혼자 바꾸지 않아요. 위험을 알고 쓰려면 '캡처 방식'에서 DXGI를 고른 뒤 다시 시작하세요";
+
+    // The app ends a silent engine after FrameGenEngine.StallSeconds; with the app held up, the engine ends itself.
+    private const string StalledText =
+        "프레임 생성 엔진이 멈춰서 껐어요. 게임 위에 남은 창을 없애고 커서를 원래대로 돌렸어요. 다시 시작해도 되풀이되면 품질을 낮춰 보세요";
+
     // The engine reports in English; every Mac user meets the first one on the first run.
     private static string Friendly(string msg)
     {
+        if (msg.StartsWith(WgcFailed)) return WgcFailedText;
         if (msg.StartsWith("screen recording permission"))
             return "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록(또는 화면 및 시스템 오디오 녹음)에서 SystemBoost를 켠 뒤 앱을 다시 열어 주세요. 이미 켜져 있는데 이 문구가 나오면 목록에서 SystemBoost를 골라 − 버튼으로 지우고, 앱을 다시 열어 허용해 주세요. 업데이트 뒤에 생길 수 있어요.";
         if (msg == NoFrames) return "고른 창의 화면이 들어오지 않아요. 게임 화면이 멈춰 있거나 다른 창을 고른 것일 수 있어요. 게임이 보이는 창을 고르세요";

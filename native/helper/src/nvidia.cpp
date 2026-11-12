@@ -6,6 +6,7 @@
 #include "commands.h"
 #include "nvapi.h"
 #include "NvApiDriverSettings.h"
+#include <cstdlib>
 #include <mutex>
 #include <string>
 
@@ -89,30 +90,45 @@ NvAPI_Status dropIfEmpty(Session& s, NvDRSProfileHandle profile, const std::stri
     return info.numOfSettings == 0 ? NvAPI_DRS_DeleteProfile(s.h, profile) : NVAPI_OK;
 }
 
-std::string undo(const std::string& exe, NvU32 id, const std::string& old) {
+// Puts `old` back ("none" = the profile had no value of its own). With `ours`, only while the profile
+// still holds that value: a value the user or another program set since stays ("ok\tchanged").
+// "ok\tdone", or "ok\tgone" when the profile or the setting is not there any more.
+std::string undo(const std::string& exe, NvU32 id, const std::string& old, const NvU32* ours = nullptr) {
+    unsigned long long oldValue = 0;
+    if (old != "none") {
+        oldValue = std::strtoull(old.c_str(), nullptr, 10);
+        if (oldValue > 0xFFFFFFFFull) return "err\tbad value";
+    }
     Session s;
     std::string why;
     if (!open(s, why)) return why;
     NvDRSProfileHandle profile = nullptr;
-    if (find(s, exe, &profile) != NVAPI_OK) return "ok\t";   // already gone
+    if (find(s, exe, &profile) != NVAPI_OK) return "ok\tgone";   // already gone
+    if (ours) {
+        NvU32 value;
+        if (!current(s, profile, id, value)) return "ok\tgone";
+        if (value != *ours) return "ok\tchanged";
+    }
     NvAPI_Status st;
     if (old == "none") {
         st = NvAPI_DRS_DeleteProfileSetting(s.h, profile, id);
         if (st == NVAPI_SETTING_NOT_FOUND) st = NVAPI_OK;
         if (st == NVAPI_OK) st = dropIfEmpty(s, profile, exe);
     } else {
-        st = write(s, profile, id, (NvU32)std::stoul(old));
+        st = write(s, profile, id, (NvU32)oldValue);
     }
     if (st != NVAPI_OK) return fail("restore", st);
     if ((st = NvAPI_DRS_SaveSettings(s.h)) != NVAPI_OK) return fail("save", st);
-    return "ok\t";
+    return "ok\tdone";
 }
 
 // The limit in force. It only makes sense while frame generation runs, so it goes when the helper
-// goes, whatever happened to the app.
+// goes, whatever happened to the app. It goes back only while the profile still holds our number:
+// a limit set since in the NVIDIA app or another tool stays.
 std::mutex gLimitLock;
 bool gLimited = false;
 std::string gLimitExe, gLimitOld;
+NvU32 gLimitOurs = 0;
 
 }  // namespace
 
@@ -158,7 +174,7 @@ std::string nvRestore(const std::string& exe, const std::string& old) {
 std::string nvLimitSet(const std::string& exe, unsigned fps) {
     std::lock_guard<std::mutex> hold(gLimitLock);
     if (gLimited && gLimitExe != exe) {
-        undo(gLimitExe, FRL_FPS_ID, gLimitOld);
+        undo(gLimitExe, FRL_FPS_ID, gLimitOld, &gLimitOurs);
         gLimited = false;
     }
     Session s;
@@ -183,18 +199,44 @@ std::string nvLimitSet(const std::string& exe, unsigned fps) {
     gLimited = true;
     gLimitExe = exe;
     gLimitOld = old;
+    gLimitOurs = fps;
     return "ok\tset;" + old;
 }
 
+// A limit this helper set goes back only while it is still ours. After the helper started again
+// (the app's backup after a crash) it cannot tell, and the app's record (nv.limit.undo) checks instead.
 std::string nvLimitRestore(const std::string& exe, const std::string& old) {
     std::lock_guard<std::mutex> hold(gLimitLock);
-    std::string reply = undo(exe, FRL_FPS_ID, old);
-    if (gLimited && gLimitExe == exe && reply.rfind("ok", 0) == 0) gLimited = false;
+    const bool mine = gLimited && gLimitExe == exe;
+    std::string reply = undo(exe, FRL_FPS_ID, old, mine ? &gLimitOurs : nullptr);
+    if (mine && reply.rfind("ok", 0) == 0) gLimited = false;
+    return reply;
+}
+
+// "ok\t<value>" or "ok\tnone": the limit the game's own profile holds now, what nv.limit.set would
+// report as the value from before. The app writes it to disk before it asks for a limit.
+std::string nvLimitGet(const std::string& exe) {
+    Session s;
+    std::string why;
+    if (!open(s, why)) return why;
+    NvDRSProfileHandle profile = nullptr;
+    if (find(s, exe, &profile) != NVAPI_OK) return "ok\tnone";
+    NvU32 value;
+    return current(s, profile, FRL_FPS_ID, value) ? "ok\t" + std::to_string(value) : "ok\tnone";
+}
+
+// The app's record, after a crash, in 전체 되돌리기 or on uninstall: `old` back only while the
+// profile still holds `ours`. "ok\tdone", "ok\tchanged" (another value now, left alone) or "ok\tgone".
+std::string nvLimitUndo(const std::string& exe, unsigned ours, const std::string& old) {
+    std::lock_guard<std::mutex> hold(gLimitLock);
+    const NvU32 value = ours;
+    std::string reply = undo(exe, FRL_FPS_ID, old, &value);
+    if (gLimited && gLimitExe == exe && (reply == "ok\tdone" || reply == "ok\tgone")) gLimited = false;
     return reply;
 }
 
 void nvLimitShutdown() {
     std::lock_guard<std::mutex> hold(gLimitLock);
-    if (gLimited) undo(gLimitExe, FRL_FPS_ID, gLimitOld);
+    if (gLimited) undo(gLimitExe, FRL_FPS_ID, gLimitOld, &gLimitOurs);
     gLimited = false;
 }

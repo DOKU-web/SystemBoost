@@ -4,9 +4,14 @@
 // or reads the memory of the game process: input is the OS screen capture of
 // the game window, output is a click-through topmost window.
 //
-// Protocol with the WPF app (one JSON object per line):
-//   stdout: {"type":"ready"|"stats"|"warning"|"error"|"exit", ...}
+// Protocol with the app (one JSON object per line):
+//   stdout: {"type":"ready"|"stats"|"alive"|"warning"|"error"|"exit", ...}
+//           "alive" comes about every second from the main loop, also while the game is behind
+//           another window and no stats come: a silence means the loop is stuck (the app ends it).
 //   stdin : "mode auto|x2|x3|x4|x6|x8|off", "sharp 0..1", "enable", "disable", "quit"
+// The process ends when stdin closes or the app's process (--parent-pid) ends. If its main loop
+// cannot get there, a watchdog thread puts the cursor back and ends it (exit code 6, or 7 when the
+// loop itself was stuck).
 #include "Capture.h"
 #include "Cursor.h"
 #include "FrameGenGpu.h"
@@ -58,6 +63,52 @@ struct Commands {
     std::atomic<bool> quit{false};
 } g_cmd;
 
+// --- staying alive only while it should ---------------------------------------
+// A stuck main loop leaves its last frame in a topmost window over the game and, while upscaling,
+// the cursor blank and clipped. The app ends a silent engine (FrameGenEngine.cs); these cover the
+// app being gone or stuck too.
+constexpr double kHeartbeatSec = 1.0;   // {"type":"alive"} from the main loop
+constexpr double kStallExitSec = 15.0;  // main loop stuck this long: end here (the app acts first, at 8 s)
+constexpr double kQuitGraceSec = 3.0;   // after a quit or the app's end, the main loop has this long to finish
+constexpr UINT kExitQuitTimeout = 6, kExitStalled = 7;
+std::atomic<double> g_loopAlive{0};     // QPC seconds of the main loop's last pass, 0 until it runs
+std::atomic<double> g_quitAt{0};        // when the quit was asked for, 0 = not asked
+
+void RequestQuit() {
+    double none = 0;
+    g_quitAt.compare_exchange_strong(none, QpcNow());
+    g_cmd.quit = true;
+}
+
+// Nothing is written to stdout here: a full pipe may be what holds the main loop.
+void ForceExit(UINT code) {
+    RestoreCursorState();   // what this process changed; its output window goes with the process
+    TerminateProcess(GetCurrentProcess(), code);
+}
+
+void Watchdog() {
+    double prev = QpcNow();
+    for (;;) {
+        Sleep(500);
+        const double now = QpcNow();
+        const bool resumed = now - prev > 3.0;   // the PC slept or the process was held: the loop was too
+        prev = now;
+        if (resumed) {
+            if (g_loopAlive > 0) g_loopAlive = now;
+            continue;
+        }
+        if (const double q = g_quitAt; q > 0 && now - q > kQuitGraceSec) ForceExit(kExitQuitTimeout);
+        if (const double a = g_loopAlive; a > 0 && now - a > kStallExitSec) ForceExit(kExitStalled);
+    }
+}
+
+// The app's process ended (killed, crashed). stdin closing says the same; this does not depend on the pipe.
+void WatchParent(HANDLE parent) {
+    WaitForSingleObject(parent, INFINITE);
+    CloseHandle(parent);
+    RequestQuit();
+}
+
 void StdinThread() {
     std::string line;
     while (std::getline(std::cin, line)) {
@@ -84,7 +135,7 @@ void StdinThread() {
             } else EmitMsg("warning", "bad command: " + line);
         } else if (!line.empty()) EmitMsg("warning", "unknown command: " + line);
     }
-    g_cmd.quit = true;  // stdin closed (parent exited) -> stop
+    RequestQuit();  // "quit", or stdin closed (parent exited) -> stop
 }
 
 // DWM only reports the primary monitor: next to a 144 Hz primary, the vblank of a 120 Hz
@@ -263,25 +314,26 @@ int Run(const Settings& s) {
     // a software adapter has no GPU scheduler to ask
     const GpuPriority gpuPriority = RaiseGpuPriority(genDev.Get(), s.genGpu == GenGpu::Warp ? kGpuPriorityOff : s.gpuPriority);
 
-    CaptureApi api = s.capture;
-#ifndef SBFG_WITH_WGC
-    if (api == CaptureApi::Wgc) {
-        EmitMsg("warning", "built without Windows.Graphics.Capture, using DXGI capture");
-        api = CaptureApi::Dxgi;
-    }
-#endif
     std::unique_ptr<ICapture> cap;
     std::unique_ptr<CrossAdapterCopy> xcopy;
     bool windowCapture = false;
+    if (s.capture == CaptureApi::Wgc) {
+        // No switch to screen capture (DXGI) here: there the output window has to be hidden from
+        // capture, and a full-screen, topmost, click-through window hidden from capture over a game is
+        // what a cheat overlay looks like to anti-cheat software. The engine stops; the app tells the
+        // user and leaves the choice to them ("wgc_failed" is matched there).
 #ifdef SBFG_WITH_WGC
-    if (api == CaptureApi::Wgc) {
+        std::string failed;
         // cursor: drawn by us in upscaling mode, otherwise optional
-        cap = CreateWgcCapture(genDev.Get(), game, s.captureCursor && !s.upscale);
-        if (!cap) EmitMsg("warning", "Windows.Graphics.Capture failed, using DXGI capture");
-        windowCapture = cap != nullptr;
-    }
+        cap = CreateWgcCapture(genDev.Get(), game, s.captureCursor && !s.upscale, &failed);
+        if (!cap) { EmitMsg("error", "wgc_failed: Windows.Graphics.Capture failed (" + failed + ")"); return 5; }
+        windowCapture = true;
+#else
+        EmitMsg("error", "wgc_failed: built without Windows.Graphics.Capture");
+        return 5;
 #endif
-    if (!cap) {
+    }
+    if (!cap) {    // DXGI, chosen by the user
         if (dispIdx != genIdx) {
             CreateDevice(AdapterByIndex(dispIdx).Get(), dispDev, dispCtx);
             cap = CreateDxgiCapture(dispDev.Get(), game);
@@ -306,6 +358,7 @@ int Run(const Settings& s) {
     // DXGI copies the whole screen, overlay included, so there the overlay has to stay out of
     // captures. Window capture copies only the game's window and never sees it, so there it is an
     // ordinary window: anti-cheat software can take a window hidden from capture for a cheat's.
+    // DXGI runs only when the user picked it, past the warning on the frame generation page.
     Overlay overlay(genDev.Get(), genCtx.Get(), s.showInCapture || windowCapture);
     CursorManager cursor(genDev.Get());
     if (s.upscale) InstallCursorSafety();
@@ -389,12 +442,18 @@ int Run(const Settings& s) {
     bool wasActive = false;
     CapturedFrame f;
     bool holding = false;  // captured frame waiting for the output clock (Pacer::wantsSource)
+    double lastBeat = 0;
 
     while (!g_cmd.quit) {
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
         if (!IsWindow(game)) break;
         const double now = QpcNow();
+        g_loopAlive = now;
+        if (now - lastBeat >= kHeartbeatSec) {
+            lastBeat = now;
+            Emit("{\"type\":\"alive\"}");
+        }
 
         {   // commands
             std::lock_guard<std::mutex> l(g_cmd.m);
@@ -662,6 +721,13 @@ static int Main(int argc, wchar_t** argv) {
     Settings s;
     std::string err = parseArgs(args, s);
     if (!err.empty()) { EmitMsg("error", err); return 1; }
+    if (!s.listGpus && !s.listWindows) {
+        // a parent that cannot be opened has gone already: stdin closing ends this run then
+        if (s.parentPid) {
+            if (HANDLE parent = OpenProcess(SYNCHRONIZE, FALSE, s.parentPid)) std::thread(WatchParent, parent).detach();
+        }
+        std::thread(Watchdog).detach();
+    }
     // A late Present is a visible stutter; above-normal (not high) keeps pacing
     // stable without taking CPU time away from the game.
     SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
