@@ -567,7 +567,8 @@ public sealed class SupportPage : UserControl
             // the key itself goes along (the typed one, else this PC's), so the server can check it is this buyer's;
             // the server keeps only its ID
             var (id, error) = await Support.CreateAsync(new SupportDraft("refund", subject, text, _rfContact.Text, null, order,
-                                                                         typed?.Key ?? License.KeyText(), typed?.Id ?? License.KeyId, reason.Id));
+                                                                         typed?.Key ?? (License.KeyText() is { } own ? License.Canonical(own) : null),
+                                                                         typed?.Id ?? License.KeyId, reason.Id));
             _rfSending = false;
             _rfSend.IsEnabled = _info.Open;
             if (id == null) { _rfMsg.Text = error ?? ""; return; }
@@ -658,10 +659,18 @@ public sealed class SupportPage : UserControl
 
         if (info?.Sub == null) { _rfCard.Content = null; _rfCard.IsVisible = false; return; }
         var card = new StackPanel { Spacing = 8 };
-        card.Children.Add(Ui.Text("카드 구독 키예요. 환불이 정해지면 판매자가 카드 결제로 돌려줘요. 다음 결제가 되지 않게 하려면 '구독 관리'에서 구독을 해지해 주세요.", "label", wrap: true));
-        var msg = Message();
-        card.Children.Add(Left(PortalButton(msg, _rfTyped)));
-        card.Children.Add(msg);
+        if (_rfTyped != null)
+        {   // a typed key may be someone else's: the subscription page (billing details, cancelling) opens only for
+            // this PC's own key, and a typed key's buyer uses the link in the payment e-mail
+            card.Children.Add(Ui.Text("카드 구독 키예요. 환불이 정해지면 판매자가 카드 결제로 돌려줘요. 다음 결제가 되지 않게 하려면 결제 메일에 있는 구독 관리 링크에서 구독을 해지해 주세요.", "label", wrap: true));
+        }
+        else
+        {
+            card.Children.Add(Ui.Text("카드 구독 키예요. 환불이 정해지면 판매자가 카드 결제로 돌려줘요. 다음 결제가 되지 않게 하려면 '구독 관리'에서 구독을 해지해 주세요.", "label", wrap: true));
+            var msg = Message();
+            card.Children.Add(Left(PortalButton(msg)));
+            card.Children.Add(msg);
+        }
         _rfCard.Content = Ui.Card(card, "note");
         _rfCard.IsVisible = true;
     }
@@ -693,14 +702,14 @@ public sealed class SupportPage : UserControl
     }
 
     // ------------------------------------------------------------ 구독 관리 (a key with a card subscription only)
-    private Button PortalButton(TextBlock msg, TypedKey? typed = null)
+    private Button PortalButton(TextBlock msg)
     {
         var b = Ui.Button("구독 관리", "ghost");
         b.Click += async (_, _) =>
         {
             b.IsEnabled = false;
             msg.Text = "구독 관리 링크를 받는 중…";
-            var (url, error) = await Support.SubscriptionPortalAsync(typed);
+            var (url, error) = await Support.SubscriptionPortalAsync();
             b.IsEnabled = true;
             if (url == null) { msg.Text = error ?? ""; return; }
             try

@@ -1040,5 +1040,5 @@
 "카드 구독": "Card subscription",
 "이 PC": "This PC",
 "이 PC에 등록된 키와 같아요": "Same as the key registered on this PC",
-"입력한 키는 카드 구독 키가 아니에요": "The key you entered is not a card subscription key"
+"카드 구독 키예요. 환불이 정해지면 판매자가 카드 결제로 돌려줘요. 다음 결제가 되지 않게 하려면 결제 메일에 있는 구독 관리 링크에서 구독을 해지해 주세요.": "This is a card subscription key. If a refund is agreed, the seller pays it back to the card. To stop the next payment, cancel the subscription with the subscription management link in the payment e-mail."
 }

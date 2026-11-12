@@ -676,18 +676,12 @@ public static class Support
         _ = RefreshAsync(Scope.Waiting);
     }
 
-    /// A pre-signed link to the card subscription's own management page. Only for a key with a subscription:
-    /// typed = a key typed into the refund form, else this PC's key.
-    public static async Task<(string? url, string? error)> SubscriptionPortalAsync(TypedKey? typed = null)
+    /// A pre-signed link to the card subscription's own management page. Only for this PC's key with a subscription
+    /// (never a key typed into the refund form: that key may be someone else's).
+    public static async Task<(string? url, string? error)> SubscriptionPortalAsync()
     {
-        string key;
-        if (typed != null)
-        {
-            if (typed.Info.Sub == null) return (null, "입력한 키는 카드 구독 키가 아니에요");
-            key = typed.Key;
-        }
-        else if (License.Info?.Sub == null || License.KeyText() is not { } own) return (null, "이 PC의 키는 카드 구독 키가 아니에요");
-        else key = own;
+        if (License.Info?.Sub == null || License.KeyText() is not { } own) return (null, "이 PC의 키는 카드 구독 키가 아니에요");
+        var key = License.Canonical(own);
         var (status, r, _, _) = await Call(HttpMethod.Post, "/support/subscription", new Dictionary<string, string> { ["key"] = key });
         if (status == 200 && Str(r, "portal") is { } link && Uri.TryCreate(link, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
             return (link, null);
