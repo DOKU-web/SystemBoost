@@ -179,7 +179,7 @@ public sealed partial class WindowsBoostBackend
     {
         if (_s.Backups.Any(IsToast)) return false;
         ApplyUserValues(feature, (PushNotifications, "ToastEnabled", 0));
-        RestartNotifications();
+        if (!RestartNotifications()) Log("Windows 알림 끄기는 다음 로그인부터 적용돼요");
         return true;
     }
 
