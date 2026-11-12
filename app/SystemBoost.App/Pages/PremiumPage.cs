@@ -81,9 +81,9 @@ public sealed class PremiumPage : UserControl
         new("모니터링 · 벤치마크", "●", "●", "●", "●", false),
         new("자원 분배 (사용량 그래프 · 우선/낮춤)", "●", "●", "●", "●", false),
         new("자원 분배 · CPU 최대 사용량 제한", "—", "●", "●", "●", true),
-        new("듀얼 GPU (내장 그래픽에 생성 맡기기)", "—", "—", "●", "●", false),
+        new("듀얼 GPU (내장 + 외장 그래픽이 모두 있는 PC만)", "—", "—", "●", "●", false),
         new("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "—", "●", "●", true),
-        new("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA)", "—", "—", "●", "●", true),
+        new("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA만)", "—", "—", "●", "●", true),
         new("방송 모드 (방송 프로그램 우선 · 방송 중 알림 끄기)", "—", "—", "—", "●", true),
         new("업무 모드 (화상 회의 · 업무 프로그램 우선)", "—", "—", "—", "●", true),
         new("시작 프로그램 정리", "—", "—", "—", "●", true),
@@ -130,8 +130,8 @@ public sealed class PremiumPage : UserControl
         _boostReady = boostReady;
         var root = new StackPanel();
         root.Children.Add(Ui.Header("플랜", Platform.IsWindows
-            ? "무료로도 기본 기능은 계속 쓸 수 있어요. 프로는 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭까지 더해요. 산업은 울트라에 방송 모드, 업무 모드, 시작 프로그램 정리를 더해요. 효과는 게임과 PC마다 달라서, 벤치마크로 직접 확인하고 결정하세요."
-            : "무료로도 기본 기능은 계속 쓸 수 있어요. 프로는 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 6·8배와 듀얼 GPU까지 더해요. 효과는 게임과 PC마다 달라서, 벤치마크로 직접 확인하고 결정하세요."));
+            ? "무료로도 기본 기능은 계속 쓸 수 있어요. 프로는 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭까지 더해요. 산업은 울트라에 방송 모드, 업무 모드, 시작 프로그램 정리를 더해요. 효과는 게임과 PC마다 달라요. 무료 플랜의 프레임 생성 2배와 벤치마크로 이 PC에서 먼저 확인해 보세요. 유료 플랜에만 있는 기능은 구매 전에 써 볼 수 없어요."
+            : "무료로도 기본 기능은 계속 쓸 수 있어요. 프로는 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 6·8배와 듀얼 GPU(내장 + 외장 그래픽이 있는 Intel Mac)까지 더해요. 효과는 게임과 Mac마다 달라요. 무료 플랜의 프레임 생성 2배와 벤치마크로 이 Mac에서 먼저 확인해 보세요. 유료 플랜에만 있는 기능은 구매 전에 써 볼 수 없어요."));
 
         var status = new StackPanel { Spacing = 4 };
         status.Children.Add(_state);
@@ -232,6 +232,7 @@ public sealed class PremiumPage : UserControl
         }
         buy.Children.Add(_methodBox);
         buy.Children.Add(_methodNote);
+        buy.Children.Add(PurchaseInfo.BeforePaying());   // seller, agreement, withdrawal and minors notice before paying (PurchaseInfo.cs)
         _buyBtn.HorizontalAlignment = HorizontalAlignment.Left;
         _buyBtn.IsEnabled = false;
         _buyBtn.Click += async (_, _) => await Buy();

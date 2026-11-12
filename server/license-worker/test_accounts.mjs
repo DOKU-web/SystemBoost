@@ -91,7 +91,7 @@ assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_sessions WHER
 assert.ok(!JSON.stringify(await rows("SELECT * FROM public.account_hits")).includes("10.0.0."));
 assert.match(row.hash, /^\$2[abxy]\$10\$/);   // bcrypt
 for (const call of calls) assert.ok(!call.includes("password123") && !call.includes(a.recovery) && !call.includes("10.0.0."));   // what leaves the Worker
-assert.match(row.consent, /^2026-11-06 /);
+assert.match(row.consent, /^2026-11-12 /);   // CONSENT: the sign-up text of AccountPage.SignUp
 
 // login and session
 assert.equal((await send("/account/login", { id: "alice_1", password: "nope" })).error, "wrong");

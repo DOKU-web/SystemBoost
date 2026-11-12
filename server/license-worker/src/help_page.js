@@ -58,6 +58,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <p id="refundDays"></p>
 <p data-t="refundHow"></p>
 <ul><li data-t="refundCard"></li><li data-t="refundManual"></li></ul>
+<p data-t="minors"></p>
 </section>
 
 <section id="s-seller"><h2 data-t="seller"></h2><dl id="seller"></dl></section>
@@ -120,12 +121,14 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       title: "SystemBoost 고객센터", other: "English", lead: "자주 묻는 질문과 환불 안내를 보고, 앱 없이도 문의를 남길 수 있어요.",
       faq: "자주 묻는 질문", refund: "환불 · 청약철회", seller: "판매자 정보", ask: "문의하기", mine: "내 문의", loading: "불러오는 중…",
       privacy: "개인정보 처리방침", privacyMore: "자세한 내용은 개인정보 처리방침에서 볼 수 있어요",
-      refundLead: "환불(청약철회)은 사용권 계약 제9조를 따라요. 아래는 그 조항 그대로예요.",
-      refundDays: "판매자가 안내하는 청약철회 기간: 키를 받은 날부터 {n}일",
+      refundLead: "환불(청약철회)은 사용권 계약 제9조를 따라요. 아래는 그 조항 그대로예요. 제2항과 제5항은 2027년 1월 1일부터 시행하는 문구이고, 그 전에는 이전 문구가 적용돼요.",
+      refundDays: "청약철회 기간: 키를 받은 날부터 7일 (사용권 계약 제9조 제1항)",
+      refundDaysLonger: "판매자가 안내하는 청약철회 기간: 키를 받은 날부터 {n}일 (법이 정한 7일보다 길어요)",
+      minors: "미성년자가 법정대리인의 동의 없이 결제하면 미성년자 본인이나 법정대리인이 그 계약을 취소할 수 있어요(사용권 계약 제3조 제11항).",
       refundHow: "환불 요청은 아래 '문의하기'에서 문의 종류 '환불'로 보내 주세요. 판매자가 확인하고 이 문의로 답해요.",
       refundCard: "카드 결제(Lemon Squeezy): 판매자가 Lemon Squeezy에서 환불하면 키가 막히고, 이 문의에 환불 완료가 표시돼요.",
       refundManual: "계좌이체 · 직접 결제: 판매자가 직접 돌려 드린 뒤 환불 완료로 표시하고 키를 막아요.",
-      sellerEmpty: "판매 페이지 참고",
+      sellerEmpty: "판매자가 아직 입력하지 않았어요",
       sellerLabels: { name: "상호", rep: "대표자", address: "주소", bizNo: "사업자등록번호", mailOrderNo: "통신판매업 신고번호", email: "메일", phone: "전화", hours: "문의 받는 시간" },
       closed: "지금은 문의를 받지 않아요. 보낸 문의는 아래 '내 문의'에서 볼 수 있어요.",
       cat: "문의 종류", subject: "제목", text: "내용", reason: "환불 사유", refundNeeds: "환불 요청에는 주문 코드나 라이선스 키 중 하나가 필요해요.",
@@ -162,12 +165,14 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       title: "SystemBoost Support", other: "한국어", lead: "Read the FAQ and the refund policy, and send a request without the app.",
       faq: "FAQ", refund: "Refunds and withdrawal", seller: "Seller", ask: "Send a request", mine: "My requests", loading: "Loading…",
       privacy: "Privacy policy", privacyMore: "Details are in the privacy policy",
-      refundLead: "Refunds (withdrawal) follow Article 9 of the license agreement. Here it is word for word.",
-      refundDays: "Withdrawal period announced by the seller: {n} days from receiving the key",
+      refundLead: "Refunds (withdrawal) follow Article 9 of the license agreement. Here it is word for word. Paragraphs 2 and 5 are the wording in force from January 1, 2027; until then the previous wording applies.",
+      refundDays: "Withdrawal period: 7 days from receiving the key (license agreement, Article 9, Paragraph 1)",
+      refundDaysLonger: "Withdrawal period announced by the seller: {n} days from receiving the key (longer than the 7 days set by law)",
+      minors: "If a minor pays without the consent of a legal representative, the minor or the legal representative may cancel the purchase (license agreement, Article 3, Paragraph 11).",
       refundHow: "Send a refund request under 'Send a request' with the category 'Refund'. The seller checks it and replies in that request.",
       refundCard: "Card payment (Lemon Squeezy): when the seller refunds it in Lemon Squeezy, the key is blocked and the request shows the refund as complete.",
       refundManual: "Bank transfer · direct payment: the seller pays the money back, then marks the refund complete and blocks the key.",
-      sellerEmpty: "See the sales page",
+      sellerEmpty: "Not entered by the seller yet",
       sellerLabels: { name: "Business name", rep: "Representative", address: "Address", bizNo: "Business registration no.", mailOrderNo: "Mail-order business no.", email: "Email", phone: "Phone", hours: "Support hours" },
       closed: "Requests are closed for now. Requests you sent can still be read under 'My requests'.",
       cat: "Category", subject: "Subject", text: "Message", reason: "Reason for the refund", refundNeeds: "A refund request needs an order code or a license key.",
@@ -285,14 +290,20 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       pol.appendChild(el("p", "", info.policy.title));
       (info.policy.items || []).forEach(function (t) { pol.appendChild(el("p", "", t)); });
     }
-    $("refundDays").textContent = fill(TX.refundDays, Number(info.refundDays) || 0);
-    var dl = $("seller");
+    // never shown below the 7 days of 제9조 제1항: the dashboard may announce a longer period, not a shorter one
+    var days = Number(info.refundDays) || 0;
+    $("refundDays").textContent = days > 7 ? fill(TX.refundDaysLonger, days) : TX.refundDays;
+    // only the fields the seller filled in, as in the app: an empty one gets no line
+    var dl = $("seller"), shown = 0;
     dl.textContent = "";
     Object.keys(TX.sellerLabels).forEach(function (k) {
-      var v = info.seller && info.seller[k];
+      var v = info.seller && typeof info.seller[k] === "string" ? info.seller[k].trim() : "";
+      if (!v) return;
       dl.appendChild(el("dt", "", TX.sellerLabels[k]));
-      dl.appendChild(el("dd", v ? "" : "m", v || TX.sellerEmpty));
+      dl.appendChild(el("dd", "", v));
+      shown++;
     });
+    if (!shown) dl.appendChild(el("dd", "m", TX.sellerEmpty));
     var cat = $("cat");
     cat.textContent = "";
     (info.categories || []).forEach(function (c) { var o = el("option", "", c[L]); o.value = c.id; cat.appendChild(o); });

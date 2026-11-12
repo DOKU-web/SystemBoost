@@ -679,6 +679,7 @@ public sealed class SupportPage : UserControl
     {
         var p = new StackPanel { Spacing = 6 };
         p.Children.Add(Ui.Text("사용권 계약에서 옮겨 온 내용이에요.", "muted"));
+        p.Children.Add(Ui.Text("제2항과 제5항은 2027년 1월 1일부터 시행하는 문구예요. 그 전에는 이전 문구가 적용돼요.", "muted", wrap: true));
         try
         {
             var lines = Eula.Lines();
@@ -745,16 +746,7 @@ public sealed class SupportPage : UserControl
         var s = _info.Seller;
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("판매자 정보", "h2"));
-        if (s.Empty) p.Children.Add(Ui.Text("판매 페이지 참고", "label"));
-        else
-        {
-            static string Or(string v) => string.IsNullOrWhiteSpace(v) ? "판매 페이지 참고" : v.Trim();
-            p.Children.Add(Facts(new[]
-            {
-                ("상호", Or(s.Name)), ("대표자", Or(s.Rep)), ("주소", Or(s.Address)), ("사업자등록번호", Or(s.BizNo)),
-                ("통신판매업 신고번호", Or(s.MailOrderNo)), ("메일", Or(s.Email)), ("전화", Or(s.Phone)), ("문의 받는 시간", Or(s.Hours)),
-            }));
-        }
+        p.Children.Add(PurchaseInfo.Seller(s, _info.Reachable));   // only the fields the seller filled in (PurchaseInfo.cs)
         _seller.Content = Ui.Card(p);
     }
 

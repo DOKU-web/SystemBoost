@@ -17,24 +17,27 @@ Effective date: {{EFFECTIVE_DATE}}
 - Starting an app with a registered key: the key ID (16 characters computed from the key), to check whether the key was blocked. Not stored.
 - Renewing a subscription key: the subscription number and the key in use (only checked against that subscription). Not stored.
 - Bank transfer and direct payment: the order code, plan, status and times, the payer name and payment memo you type, a discount ticket's percentage; when approved, the key ID and an email address the seller may enter; a rejection reason or refund time.
-- Card payment: from Lemon Squeezy, the payment email, subscription number, order number, plan and next payment date. Other details in Lemon Squeezy's notice (such as the name) are not stored.
+- Card payment: from Lemon Squeezy, the payment email, subscription number, order number, payment (invoice) number, plan, next payment date and whether it is a test payment. Other details in Lemon Squeezy's notice (such as the name) are not stored.
 - Every key: the full key text and its record (plan, dates, how it was received, email address, note, subscription number, blocked or not). The note can hold the order code, the payer name and memo of a direct payment, a referral code, or a member ID. The key itself contains the email address, so showing the key to someone shows the email address too.
 - Referral and invite codes: the code and a random device number made by the app.
 - Members (optional): ID, password and recovery code as hashes only, sign-up and last login times, the consent text version and time, invite codes and relations, rewards, discount tickets (including the order code they were used on), failed logins and lockout, blocked or not, login sessions as hashes.
 - Support requests and refund requests: category, subject, messages and replies, times, status, consent time, language, the access code as a hash, the member ID when sent from a signed-in app, and what you choose to give (contact, order code, key ID, app details). A refund request also carries the order and key details the server holds. A full key sent for a check is never stored.
-- Usage statistics (on by default, can be turned off in Settings): a random install number, app version, operating system, plan, frame generation multiplier, one-click boost use, the country (from Cloudflare), first and last connection. No IP address is stored with them.
+- Usage statistics (optional: chosen with 'Send usage statistics' on the agreement screen, ticked at first, changeable later in Settings; nothing is sent before the agreement is accepted): a random install number, app version, operating system, plan, frame generation multiplier, one-click boost use, the country (from Cloudflare), first and last connection. No IP address is stored with them.
 - Abuse limits: hashes made from IP addresses with a value only the server knows (sign-up, login, support), and the plain IP address of a wrong dashboard password, for 15 minutes after the last miss.
 - The seller's activity log: what the seller did and automatic steps, with details such as order codes, key IDs, email addresses, key notes and member IDs.
 - If the seller turns on Cloudflare's logs: request addresses and server error records, for the period Cloudflare sets.
+- Background checks by the running app: while an order waits (up to 14 days after ordering), its order code every 5 seconds for the first 15 minutes, then every minute, until the key arrives or the order is rejected or refunded; while a support request waits for the seller's answer (changed in the last 14 days), its number and access code every 30 minutes (up to every 2 hours when the server is busy). Neither check leaves a new record on the server.
 
 ## How long
 
 - Orders: 90 days from the last change. Key-collection records: 7 days (card) or 30 days (direct payment).
 - Key records, the email index, links between Lemon Squeezy orders and keys, blocked keys, subscription plans and referral codes: no set retention period, kept until the seller deletes them.
-- Members: until they leave or the seller deletes the account. The member ID stays in invite-reward key notes (no set period), the activity log (180 days) and support requests (their own period).
+- Members: until they leave or the seller deletes the account; leaving deletes the account from the live database at once, and Supabase backups keep it up to 7 more days. The member ID stays in invite-reward key notes (no set period), the activity log (180 days) and support requests (their own period).
 - Login sessions: 90 days. Sign-up and login IP hashes: a little over an hour. Support IP hashes: up to 1 hour after the last request, in memory and the Cloudflare cache only.
 - Support requests: 3 years for payment and refund requests, 1 year for the rest, from the last change.
 - Usage statistics: 90 days after the last connection. Activity log: 180 days.
+- A subscription's list of key IDs: 400 days after a key was last added. Marks that a card payment notice was already handled (subscription and payment numbers): 400 days.
+- Backups: deleted records stay for a while in the providers' recovery copies, up to 30 days for Cloudflare's database (usage statistics, daily totals, the dashboard's news) and up to 7 days for member accounts in Supabase. They are used only to recover from a failure, and anything deleted before a restore is deleted again.
 - Requests saved by /help in your browser: until you remove them.
 
 ## Sharing, processors and transfers abroad
@@ -48,7 +51,7 @@ Effective date: {{EFFECTIVE_DATE}}
 ## Your rights
 
 - You can ask to see, correct or delete your information, to stop its processing, or withdraw consent: through Support in the app, /help, or the email address below. The seller answers within 10 days.
-- You can delete your account under '◈ Account' → 'Delete account', turn off 'Send usage statistics' in Settings, close your requests, and remove saved requests on /help ('Remove from list').
+- You can delete your account under '◈ Account' → 'Delete account', turn off 'Send usage statistics' on the agreement screen or in Settings, close your requests, and remove saved requests on /help ('Remove from list').
 - Sign-up is for people aged 14 or over.
 
 ## Contact
