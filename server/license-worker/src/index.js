@@ -3,6 +3,7 @@ import { INVITE_DAYS, accounts } from "./accounts.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
 import { helpPage, privacyPage, support, supportAdmin, supportCounts, webhookRefund } from "./support.js";
+import { overIp } from "./iplimit.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
@@ -11,7 +12,10 @@ export { Stats } from "./stats.js";
 //   POST /webhook/lemonsqueezy   Lemon Squeezy webhook (X-Signature HMAC-SHA256 checked)
 //   GET  /claim?session=<id>     app polls this after opening checkout -> {status, key, keys?} (keys: a bundle)
 //   GET  /thanks?session=<id>    checkout "return to" page that shows the key
-//   GET  /renew?sub=<id>         latest key of an active subscription (app renews before expiry)
+//   POST /renew {sub, key}       latest key of an active subscription, for whoever holds one of its keys (also an
+//                                expired one); GET /renew?sub=<id> (apps up to 0.8.11) gets nothing
+//   POST /subscription/change {key, plan}
+//                                plan change of a card subscription (Lemon Squeezy), asked by the holder of its key
 //   GET  /status                 {sales, pay:{monthly,yearly}} - the app enables "결제하기" only for plans
 //                                that have a payment link (links are set in the dashboard)
 //   POST /order?plan=…           app gets an order code (SB-XXXX-XXXX) to write in the payment memo;
@@ -140,6 +144,41 @@ async function openPlans(env) {   // plans the app may sell right now, per metho
 // A plan named by a request: own keys only, so "constructor" or "__proto__" are not plans.
 const isPlan = p => typeof p === "string" && Object.hasOwn(PLANS, p);
 
+// Calls per IP address an hour on the public routes that write KV or call Lemon Squeezy (src/iplimit.js: no KV writes
+// for the counting). Approximate; the daily caps (orders 300, referral gifts REF_DAILY) stay the backstop.
+const IP_LIMIT = { order: 20, paid: 30, checkout: 20, change: 10, referral: 30 };
+const PAID_EDITS = 5;   // payer / memo changes an order takes after its first "I paid"
+const TIER_RANK = { premium: 1, ultra: 2, biz: 3 };
+
+// A key the buyer holds, as the shop issued it: signed here, registered with exactly this text, not blocked.
+// Null otherwise. Reads lic:<id> and revoked:<id>.
+async function heldKey(env, key) {
+  key = typeof key === "string" ? key.trim() : "";
+  const parts = key.split(".");
+  if (parts.length !== 2 || key.length > 4096 || !(await verifySig(env, parts[0], parts[1]))) return null;
+  let payload;
+  try { payload = JSON.parse(new TextDecoder().decode(unb64url(parts[0]))); } catch { return null; }
+  if (!payload || typeof payload !== "object") return null;
+  const id = await keyId(key);
+  const r = await env.LICENSES.getWithMetadata("lic:" + id);
+  if (r?.value !== key || r.metadata?.revoked) return null;
+  if ((await env.LICENSES.get("revoked:" + id)) !== null) return null;
+  return { id, key, payload, meta: r.metadata || {} };
+}
+
+// Early renewal (기간 연장): the app (from the release after 0.8.11) sends the key this PC holds with a bank-transfer order for one PC.
+// A key that still runs, of the same or a lower tier than the plan bought and not a test key, is noted on the order
+// as extendFrom {id, expires}; adminIssue then counts the new period from that key's end instead of from the approval.
+// Anything else (no key: apps up to 0.8.11, a higher tier, a card or bundle order) leaves the order as before.
+async function extendable(env, key, plan) {
+  const h = await heldKey(env, key);
+  if (!h || h.payload.test) return null;
+  const end = Date.parse(h.payload.expires || "");
+  if (!(end > Date.now())) return null;   // no end date (nothing to add to) or over already (counts from now anyway)
+  if ((TIER_RANK[h.payload.plan] || 1) > TIER_RANK[tierOf(plan)]) return null;
+  return { id: h.id, expires: new Date(end).toISOString().replace(/\.\d+Z$/, "Z") };
+}
+
 async function order(req, url, env) {
   const plan = url.searchParams.get("plan");
   if (!isPlan(plan)) return json({ error: "bad plan" }, 400);
@@ -147,6 +186,8 @@ async function order(req, url, env) {
   let method = url.searchParams.get("method");
   if (!method) method = methods.card.includes(plan) ? "card" : "manual";
   if (!["card", "manual"].includes(method) || !methods[method].includes(plan)) return json({ error: "sales closed" }, 503);
+  if (await overIp(req, env, "order", IP_LIMIT.order)) return json({ error: "busy" }, 429);
+  const extendFrom = method === "manual" && seatsOf(plan) === 1 ? await extendable(env, (await readJson(req)).key, plan) : null;
   const n = Number((await env.LICENSES.get("count:orders:" + now().slice(0, 10))) || 0);
   if (n >= 300) return json({ error: "busy" }, 429);   // cheap cap on junk orders per day
   await env.LICENSES.put("count:orders:" + now().slice(0, 10), String(n + 1), { expirationTtl: 60 * 60 * 48 });
@@ -163,42 +204,54 @@ async function order(req, url, env) {
     ticket = t.percent;
   }
   else payUrl = (await payLinks(env))[plan];
-  await putOrder(env, { code, plan, at: now(), status: "requested", method, ...(ticket ? { ticket } : {}) });
-  return json({ code, url: payUrl, method });
+  await putOrder(env, { code, plan, at: now(), status: "requested", method, ...(ticket ? { ticket } : {}), ...(extendFrom ? { extendFrom } : {}) });
+  return json({ code, url: payUrl, method, ...(extendFrom ? { extends: extendFrom.expires } : {}) });
 }
 
 // Buyer says "I paid" (manual payments). Name / memo help the seller find the payment.
 // The order code is what claims the key, so the app sends it in the body; apps up to 0.8.11 put it in the address.
+// Anyone with a code can call this, so it writes KV only when something changes: requested -> paid, or a new
+// payer / memo, at most PAID_EDITS times after the first. Repeating the same note is answered without a write.
 async function orderPaid(req, url, env) {
   const b = await readJson(req);
   const code = String(url.searchParams.get("code") || b.code || "").toUpperCase();
   if (!CODE_RE.test(code)) return json({ error: "bad code" }, 400);
+  if (await overIp(req, env, "paid", IP_LIMIT.paid)) return json({ error: "busy" }, 429);
   const o = await getOrder(env, code);
   if (!o) return json({ error: "no order" }, 404);
   if (o.status !== "requested" && o.status !== "paid") return json({ status: o.status });
   // a card payment is confirmed by Lemon Squeezy's signed webhook, never by the buyer: an unpaid card order
   // must not show up in the dashboard as 결제 확인 요청
   if (o.method === "card" || o.method === "auto") return json({ status: o.status });
+  const payer = String(b.payer || "").trim().slice(0, 40), msg = String(b.msg || "").trim().slice(0, 100);
+  if (o.status === "paid") {
+    if (payer === (o.payer || "") && msg === (o.msg || "")) return json({ status: "paid" });   // nothing new: no write
+    if ((o.edits || 0) >= PAID_EDITS) return json({ error: "too many changes", status: "paid" }, 429);
+    o.edits = (o.edits || 0) + 1;
+  } else o.paidAt = now();
   o.status = "paid";
-  o.payer = String(b.payer || "").trim().slice(0, 40);
-  o.msg = String(b.msg || "").trim().slice(0, 100);
-  o.paidAt = now();
+  o.payer = payer;
+  o.msg = msg;
   await putOrder(env, o);
   return json({ status: "paid" });
 }
 
 const SESSION_TTL = 60 * 60 * 24 * 7;   // claim within 7 days
 const GRACE_DAYS = 3;                   // subscription key stays valid a bit past renewal
+const HOOK_TTL = 60 * 60 * 24 * 400;    // "this webhook was handled" markers (hook:*)
 
 // What src/support.js uses from here (passed in, so the two files do not import each other).
 // events: the support feed in the Stats Durable Object (stats.js), so the dashboard sees what buyers do.
-const SUPPORT = { getOrder, putOrder, revoke, audit, accounts, verifySig, unb64url, allRecords, state, keyId, events: (env, path, body) => stats(env, path, body) };
+// revokeSub(env, sub, reason): blocks every key of a card subscription. cancelSubscription(env, sub, why): stops its
+// billing at Lemon Squeezy (or logs that the owner must), never throws; {ok} or {ok: false, reason}.
+const SUPPORT = { getOrder, putOrder, revoke, revokeSub, cancelSubscription, audit, accounts, verifySig, unb64url, allRecords, state, keyId,
+                  events: (env, path, body) => stats(env, path, body) };
 
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     try {
-      if (req.method === "POST" && url.pathname === "/checkout") return await checkout(url, env);
+      if (req.method === "POST" && url.pathname === "/checkout") return await checkout(req, url, env);
       if (req.method === "POST" && url.pathname === "/webhook/lemonsqueezy") return await webhook(req, env);
       // The order code and the key are secrets: the app sends them in a POST body, where addresses (and so logs)
       // do not carry them. The GET forms are what apps up to 0.8.11 use; drop them once no such app is in use
@@ -208,6 +261,7 @@ export default {
       if (req.method === "GET" && url.pathname === "/thanks") return await thanks(url, env);
       if (req.method === "POST" && url.pathname === "/renew") { const b = await readJson(req); return await renew(String(b.sub || ""), String(b.key || ""), env); }
       if (req.method === "GET" && url.pathname === "/renew") return await renew(url.searchParams.get("sub") || "", "", env);
+      if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env);
@@ -243,11 +297,12 @@ async function ping(req, env) {
 }
 
 // ---------------------------------------------------------------- checkout (automatic payments)
-async function checkout(url, env) {   // kept for direct use; the app goes through /order
+async function checkout(req, url, env) {   // kept for direct use; the app goes through /order
   if (!(await cardOpen(env))) return json({ error: "sales closed" }, 503);
   const plan = url.searchParams.get("plan");
   const session = url.searchParams.get("session") || "";
   if (!isPlan(plan) || !validSession(session)) return json({ error: "bad request" }, 400);
+  if (await overIp(req, env, "checkout", IP_LIMIT.checkout)) return json({ error: "busy" }, 429);
   const u = await lsCheckout(env, plan, session);
   return u ? json({ url: u }) : json({ error: "checkout failed" }, 502);
 }
@@ -291,12 +346,17 @@ async function webhook(req, env) {
   // A subscription can hold more than one key that is still valid (a plan change, a repeated webhook, a
   // refund that comes after a cancellation), and a refund must not leave any of them on. An open refund request
   // naming the refunded key (the order's key, or the subscription's current key) is marked done (src/support.js).
+  // A refund also cancels the subscription at Lemon Squeezy (cancelSubscription), so the card is not charged again for
+  // keys that are blocked; a cancellation that fails is logged for the owner and never fails the webhook.
   if (event === "order_refunded") {
     const id = await env.LICENSES.get("order:" + String(body?.data?.id));
     if (id) {
       const m = (await env.LICENSES.getWithMetadata("lic:" + id))?.metadata;
       if ((await env.LICENSES.get("revoked:" + id)) === null) await revoke(env, id, "환불", "webhook");
-      if (m?.sub) await revokeSub(env, String(m.sub), "환불");
+      if (m?.sub) {
+        await revokeSub(env, String(m.sub), "환불");
+        await cancelSubscription(env, String(m.sub), "환불");
+      }
       await webhookRefund(env, id, SUPPORT);
     }
     return json({ ok: true });
@@ -304,6 +364,7 @@ async function webhook(req, env) {
   if (event === "subscription_payment_refunded") {
     const key = await env.LICENSES.get("sub:" + String(a.subscription_id));   // read before revokeSub drops it
     await revokeSub(env, String(a.subscription_id), "환불");
+    await cancelSubscription(env, String(a.subscription_id), "환불");
     if (key) await webhookRefund(env, await keyId(key), SUPPORT);
     return json({ ok: true });
   }
@@ -338,28 +399,118 @@ async function webhook(req, env) {
     await audit(env, "카드 결제", "어떤 플랜인지 몰라서 키를 만들지 않음", "구독 " + subId + " · 상품 " + String(a.variant_id ?? "?"));
     return json({ ok: true, ignored: "unknown variant" });
   }
-  // Lemon Squeezy sends an event again when it is not sure it arrived (and the owner can resend one): the
-  // start of a subscription and each paid invoice give one key, however often they arrive.
-  const once = event === "subscription_created" ? "hook:created:" + subId : invoice ? "hook:invoice:" + String(body?.data?.id) : null;
-  if (once && (await env.LICENSES.get(once)) !== null) return json({ ok: true, ignored: "repeat" });
+  // Lemon Squeezy sends an event again when it is not sure it arrived, and again after a reply that was not 2xx (the
+  // owner can resend one too). The start of a subscription, a plan change and each paid invoice give ONE key, however
+  // often they arrive, and a retry after a failure part way still delivers it. The event's marker:
+  //   (none)              not seen yet: sign a key
+  //   "pending:<key id>"  a key was signed and noted, then something failed: deliver that same key (signing again would
+  //                       make a second key for one payment). A noted key that never got registered is signed anew.
+  //   "1"                 handled: written LAST, after the key, the subscription record and the order are stored
+  // Every write in between overwrites, so doing them again on a retry is safe. Markers written by the worker before this
+  // one hold "1". A plan change without updated_at has no marker (as before): its subplan is written last instead.
+  const once = event === "subscription_created" ? "hook:created:" + subId
+             : invoice ? "hook:invoice:" + String(body?.data?.id)
+             : a.updated_at ? "hook:plan:" + subId + ":" + plan + ":" + String(a.updated_at).slice(0, 40) : null;
+  const mark = once ? await env.LICENSES.get(once) : null;
+  if (mark !== null && !String(mark).startsWith("pending:")) return json({ ok: true, ignored: "repeat" });
   const period = plan.endsWith("yearly") ? 366 : 31;
   let expires = !invoice && a.renews_at ? addDays(a.renews_at, GRACE_DAYS) : addDays(now(), period + GRACE_DAYS);
   if (testOrder) expires = addDays(now(), 1);   // test keys never last
   const what = { subscription_created: "카드 결제", subscription_updated: "플랜 변경", subscription_payment_success: "자동 갱신" }[event];
-  const key = await makeKey(env, { plan: tierOf(plan), email: a.user_email || "", sub: subId, expires, test: testOrder,
-                                   src: "subscription", note: [session && event === "subscription_created" ? session : "", PLANS[plan] + " " + what].filter(Boolean).join(" · ") });
+  const fields = { plan: tierOf(plan), email: a.user_email || "", sub: subId, expires, test: testOrder,
+                   src: "subscription", note: [session && event === "subscription_created" ? session : "", PLANS[plan] + " " + what].filter(Boolean).join(" · ") };
+  let key = null;
+  if (mark) {   // signed on an earlier try
+    const id = String(mark).slice("pending:".length);
+    const r = /^[0-9a-f]{16}$/.test(id) ? await env.LICENSES.getWithMetadata("lic:" + id) : null;
+    if (r?.value && String(r.metadata?.sub || "") === subId) key = r.value;
+  }
+  if (!key) {
+    const signed = await signKey(env, fields);
+    if (once) await env.LICENSES.put(once, "pending:" + (await keyId(signed.key)), { expirationTtl: HOOK_TTL });
+    await register(env, signed.key, signed.payload, fields.src, fields.note);
+    key = signed.key;
+  }
+  const id = await keyId(key);
   await env.LICENSES.put("sub:" + subId, key);
-  await env.LICENSES.put("subplan:" + subId, plan);
-  await addSubKey(env, subId, await keyId(key));
-  if (once) await env.LICENSES.put(once, "1", { expirationTtl: 60 * 60 * 24 * 400 });
+  await addSubKey(env, subId, id);
   if (event === "subscription_created") {
-    if (a.order_id != null) await env.LICENSES.put("order:" + String(a.order_id), await keyId(key));   // a refund of the first payment
+    if (a.order_id != null) await env.LICENSES.put("order:" + String(a.order_id), id);   // a refund of the first payment
     await store(env, session, key, a.user_email, plan);
   } else {
     if (a.user_email) await env.LICENSES.put("email:" + String(a.user_email).toLowerCase(), key);
-    await audit(env, "카드 결제", what, "구독 " + subId + " · " + PLANS[plan] + " · " + (await keyId(key)));
+    await audit(env, "카드 결제", what, "구독 " + subId + " · " + PLANS[plan] + " · " + id);
   }
+  await env.LICENSES.put("subplan:" + subId, plan);   // after the key is out: a plan change is "new" until here
+  if (once) await env.LICENSES.put(once, "1", { expirationTtl: HOOK_TTL });
   return json({ ok: true });
+}
+
+// Stops a card subscription's billing: Lemon Squeezy's DELETE /v1/subscriptions/<id> cancels it (it runs to the end of
+// the paid period and is not charged again). Without the API key the owner has to cancel it in Lemon Squeezy, and the
+// log says so. Never throws, so a refund or a block goes through even when Lemon Squeezy cannot be reached; every
+// outcome is a log line. Returns { ok: true } or { ok: false, reason }. Also passed to src/support.js (SUPPORT).
+async function cancelSubscription(env, sub, why = "") {
+  sub = String(sub ?? "");
+  if (!/^\d{1,20}$/.test(sub)) return { ok: false, reason: "bad sub" };
+  const tell = (action, detail) => audit(env, "카드 결제", action, "구독 " + sub + (why ? " · " + why : "") + " · " + detail).catch(() => {});
+  if (!env.LS_API_KEY) {
+    await tell("구독 해지 필요", "Lemon Squeezy API 키가 없어서 자동으로 해지하지 못했어요. Lemon Squeezy에서 이 구독을 직접 해지하세요");
+    return { ok: false, reason: "no api key" };
+  }
+  let res;
+  try {
+    res = await fetch("https://api.lemonsqueezy.com/v1/subscriptions/" + sub, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + env.LS_API_KEY, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" },
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch {
+    await tell("구독 해지 실패", "Lemon Squeezy에 연결하지 못했어요. Lemon Squeezy에서 이 구독을 직접 해지하세요");
+    return { ok: false, reason: "network" };
+  }
+  if (!res.ok) {
+    await tell("구독 해지 실패", "Lemon Squeezy " + res.status + ". 이미 해지된 구독이 아니라면 Lemon Squeezy에서 직접 해지하세요");
+    return { ok: false, reason: "lemonsqueezy " + res.status };
+  }
+  await tell("구독 해지", "Lemon Squeezy에서 해지했어요. 더 결제되지 않아요");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------- plan change of a card subscription
+// The app sends the key it holds and the plan it wants. Lemon Squeezy switches the subscription to that plan's product
+// (PATCH /v1/subscriptions/<id> with its variant_id) and bills the difference under the store's own settings; its
+// subscription_updated webhook then gives the new key (above), which the app fetches through /renew.
+// A new checkout instead would start a second subscription and leave this one charging. Reads only, plus a log line.
+async function subscriptionChange(req, env) {
+  if (await overIp(req, env, "change", IP_LIMIT.change)) return json({ error: "busy" }, 429);
+  const b = await readJson(req);
+  const plan = String(b.plan ?? "");
+  if (!isPlan(plan) || seatsOf(plan) !== 1) return json({ error: "bad plan" }, 400);
+  const h = await heldKey(env, b.key);
+  const sub = String(h?.payload?.sub ?? "");
+  if (!h || !/^\d{1,20}$/.test(sub) || String(h.meta.sub || "") !== sub) return json({ error: "key" }, 403);
+  if ((await env.LICENSES.get("sub:" + sub)) === null) return json({ error: "inactive" }, 409);   // cancelled, refunded or blocked
+  const c = await lsConfig(env);
+  if (!env.LS_API_KEY || !c.store) return json({ error: "unavailable" }, 503);
+  if (!c.variants[plan]) return json({ error: "plan closed" }, 409);
+  const from = await env.LICENSES.get("subplan:" + sub);
+  if (from === plan) return json({ error: "same plan" }, 409);
+  let res;
+  try {
+    res = await fetch("https://api.lemonsqueezy.com/v1/subscriptions/" + sub, {
+      method: "PATCH",
+      headers: { Authorization: "Bearer " + env.LS_API_KEY, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" },
+      body: JSON.stringify({ data: { type: "subscriptions", id: sub, attributes: { variant_id: Number(c.variants[plan]) } } }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch { return json({ error: "unavailable" }, 503); }
+  if (!res.ok) {
+    await audit(env, "카드 결제", "플랜 변경 실패", "구독 " + sub + " · " + (PLANS[from] || "?") + " → " + PLANS[plan] + " · Lemon Squeezy " + res.status);
+    return json({ error: "refused" }, 502);
+  }
+  await audit(env, "카드 결제", "플랜 변경 요청", "구독 " + sub + " · " + (PLANS[from] || "?") + " → " + PLANS[plan] + " · " + h.id);
+  return json({ ok: true, plan });
 }
 
 async function store(env, session, key, email, plan) {
@@ -370,7 +521,7 @@ async function store(env, session, key, email, plan) {
     await audit(env, "카드 결제", "카드 주문이 아니라 자동 승인하지 않음", session + " · " + (await keyId(key)) + (email ? " · " + email : ""));
     session = null;
   }
-  if (session) await env.LICENSES.put("session:" + session, key, { expirationTtl: SESSION_TTL });
+  if (session) await env.LICENSES.put("session:" + session, key, { expirationTtl: SESSION_TTL, metadata: { at: now() } });   // at: /thanks
   if (session && CODE_RE.test(session)) {   // verified payment -> order approved automatically
     const ord = o || { code: session, plan, at: now() };
     // the order says what the app asked for; the key is what was paid for (the variant), and so is the record
@@ -398,6 +549,9 @@ async function claim(s, env) {
 // Only whoever holds a key of that subscription gets its next key: subscription numbers count up, so a bare
 // number would hand out every subscriber's key and e-mail address. The app sends the key it has, exactly as
 // it was issued (not its id: ids travel in /check addresses); apps up to 0.8.11 send none and renew by hand.
+// The key may have run out: an app that was closed (or asleep) past the end of a paid period, or a payment that Lemon
+// Squeezy retried for days, must still get the next key. What it may not be is blocked, or another subscription's.
+// Three KV reads, no writes.
 async function renew(sub, held, env) {
   if (!/^[0-9]{1,20}$/.test(sub)) return json({ error: "bad sub" }, 400);
   held = held.trim();
@@ -410,12 +564,22 @@ async function renew(sub, held, env) {
   return json(key ? { status: "ready", key } : { status: "inactive" });
 }
 
+// The checkout's "return to" page. Its address (with the order code) stays in the browser's history, so the full key
+// shows only for THANKS_SHOW after it was issued; later the page says where the key is instead. (The order code itself
+// still claims the key in the app for SESSION_TTL; GET /claim, which apps up to 0.8.11 use, answers the same way.)
+const THANKS_SHOW = 60 * 60 * 1000;
 async function thanks(url, env) {
   const s = url.searchParams.get("session") || "";
-  const key = validSession(s) ? await env.LICENSES.get("session:" + s) : null;
-  const body = key
+  const r = validSession(s) ? await env.LICENSES.getWithMetadata("session:" + s) : null;
+  const key = r?.value ?? null, fresh = key !== null && Date.parse(r?.metadata?.at || "") > Date.now() - THANKS_SHOW;
+  const code = CODE_RE.test(s) ? s : "";
+  const keep = `키는 메일로 보내지 않아요. 잃어버리면 앱의 '고객센터'나 <a href="/help" style="color:#ff7a1a">도움말 페이지</a>에서 ${code ? "주문 코드 " + code + "를 적어 " : ""}문의해 주세요. 판매자는 결제한 메일 주소로도 키를 찾을 수 있어요.`;
+  const body = fresh
     ? `<h1>결제가 완료됐어요</h1><p>SystemBoost가 켜져 있으면 키가 자동으로 등록돼요. 아니라면 아래 키를 복사해 '★ 플랜 → 라이선스 키'(0.8.9 이하는 '★ 프리미엄')에 넣으세요.</p>
-       <textarea readonly onclick="this.select()">${escapeHtml(key)}</textarea><p class="m">같은 키가 결제한 메일 주소로도 저장돼 있어요. 키를 잃어버리면 문의해 주세요.</p>`
+       <textarea readonly onclick="this.select()">${escapeHtml(key)}</textarea><p class="m">이 화면은 결제 뒤 1시간 동안만 키를 보여 줘요. ${keep}</p>`
+    : key !== null
+    ? `<h1>결제가 완료됐어요</h1><p>키는 SystemBoost 앱에 자동으로 등록돼요. 이 화면은 결제 뒤 1시간이 지나면 키를 보여 주지 않아요.</p>
+       ${code ? `<p>앱이 키를 받지 못했다면 '★ 플랜 → 주문 코드로 키 받기'에 주문 코드 <b>${code}</b>를 넣으세요.</p>` : ""}<p class="m">${keep}</p>`
     : `<h1>결제를 확인하는 중이에요</h1><p>보통 몇 초 걸려요. 이 페이지는 자동으로 새로고침돼요.</p><script>setTimeout(()=>location.reload(),3000)</script>`;
   return new Response(`<!DOCTYPE html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SystemBoost</title><style>body{background:#0b0b0c;color:#e8e6e3;font-family:system-ui,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;line-height:1.6}
@@ -451,13 +615,15 @@ async function revoke(env, id, reason, who) {
   }
   await audit(env, who, "차단", id + (reason ? " · " + reason : ""));
 }
-// Every key a subscription was given, so a refund can turn all of them off.
+// Every key a subscription was given, so a refund can turn all of them off. Kept 400 days after the subscription's
+// last key (each new key writes it again), longer than any key of it runs; revokeSub also finds older keys in lic:.
+const SUBKEYS_TTL = 60 * 60 * 24 * 400;
 async function addSubKey(env, sub, id) {
   let ids = [];
   try { ids = JSON.parse((await env.LICENSES.get("subkeys:" + sub)) || "[]"); } catch {}
   if (!Array.isArray(ids)) ids = [];
   if (!ids.includes(id)) ids.push(id);
-  await env.LICENSES.put("subkeys:" + sub, JSON.stringify(ids.slice(-200)));
+  await env.LICENSES.put("subkeys:" + sub, JSON.stringify(ids.slice(-200)), { expirationTtl: SUBKEYS_TTL });
 }
 async function revokeSub(env, sub, reason) {
   if (!/^\d{1,20}$/.test(sub)) return;
@@ -566,7 +732,9 @@ async function admin(req, url, env) {
     case "POST /revoke": {
       if (!/^[0-9a-f]{16}$/.test(body.id || "")) return json({ error: "bad id" }, 400, false);
       await revoke(env, body.id, String(body.reason || "관리자 차단"), "admin");
-      return json({ ok: true }, 200, false);
+      // cancel: true also stops the billing of the key's card subscription (cancelSubscription, payments section)
+      const sub = body.cancel === true ? String((await env.LICENSES.getWithMetadata("lic:" + body.id))?.metadata?.sub || "") : "";
+      return json({ ok: true, ...(sub ? { cancelled: await cancelSubscription(env, sub, String(body.reason || "관리자 차단")) } : {}) }, 200, false);
     }
     case "POST /unrevoke": {
       if (!/^[0-9a-f]{16}$/.test(body.id || "")) return json({ error: "bad id" }, 400, false);
@@ -762,6 +930,7 @@ async function useRef(env, r, device) {
 }
 
 async function referral(req, env) {
+  if (await overIp(req, env, "referral", IP_LIMIT.referral)) return json({ error: "busy" }, 429);   // a gift is 5 KV writes
   const b = await readJson(req);
   const code = String(b.code || "").trim().toUpperCase(), device = String(b.device || "");
   if (!REF_RE.test(code) || !REF_DEVICE.test(device)) return json({ error: "bad request" }, 400);
@@ -854,33 +1023,55 @@ async function adminIssue(env, b) {
   if (!note && !code) return { error: "주문 코드나 메모(발급 이유) 중 하나는 적어 주세요" };
   const seats = b.seats == null || b.seats === "" ? seatsOf(plan) : Math.floor(Number(b.seats));
   if (!(seats >= 1 && seats <= MAX_SEATS)) return { error: "키 개수는 1~" + MAX_SEATS + "개예요" };
+  const prev = code ? await getOrder(env, code) : null;
   // a refunded order stays refunded: issuing for its code again would set it back to approved and let /claim hand out
   // a key for money that was paid back (status: the HTTP status for POST /issue)
-  if (code && (await getOrder(env, code))?.status === "refunded")
+  if (prev?.status === "refunded")
     return { status: 409, error: "환불한 주문이에요. 이 주문 코드로는 키를 다시 발급하지 않아요. 다시 팔았다면 새 주문 코드로 발급하거나, 주문 코드 없이 메모를 적어 발급하세요" };
+  // one payment, one key: a second issue for an approved code (two tabs, a retry, the form) would leave two valid keys.
+  // reissue: true replaces them on purpose, and the order's earlier keys are blocked.
+  if (prev?.status === "approved" && b.reissue !== true)
+    return { status: 409, error: "이미 키를 발급한 주문이에요. 키를 다시 보내려면 키 목록의 '키 복사'를 쓰세요. 같은 주문으로 새 키를 만들려면 재발급을 고르세요(이전 키는 막아요)" };
+  const before = prev?.status === "approved" ? [...new Set([prev.keyId, ...(await bundleIds(env, code))])].filter(x => /^[0-9a-f]{16}$/.test(x || "")) : [];
   const src = code ? "payment" : "manual";
   // the key's "plan": ultra also opens frame generation x6 and x8, biz adds the work and streaming features
   const tier = tierOf(plan) !== "premium" ? tierOf(plan) : TIERS.includes(b.tier) ? b.tier : "premium";
+  // 기간 연장: the order names a key the buyer still holds (order(), extendable()). The new period then runs from that
+  // key's end, unless it was blocked since (a refund, sharing). One PC only; a bundle starts today.
+  let from = now(), extended = "";
+  const ext = prev?.extendFrom;
+  if (days && seats === 1 && ext && /^[0-9a-f]{16}$/.test(ext.id || "") && Date.parse(ext.expires) > Date.now()) {
+    if ((await env.LICENSES.get("revoked:" + ext.id)) === null) { from = addDays(ext.expires, 0); extended = ext.id; }
+  }
   const keys = [], ids = [];
   for (let i = 1; i <= seats; i++) {   // a bundle is that many separate keys: one per PC, each can be turned off alone
-    const k = await makeKey(env, { plan: tier, email, expires: days ? addDays(now(), days) : undefined, src,
-                                   note: [code, seats > 1 ? seats + "대 묶음 " + i + "/" + seats : "", note].filter(Boolean).join(" · ") });
+    const k = await makeKey(env, { plan: tier, email, expires: days ? addDays(from, days) : undefined, src,
+                                   note: [code, seats > 1 ? seats + "대 묶음 " + i + "/" + seats : "", extended ? "기간 연장 " + extended : "", note].filter(Boolean).join(" · ") });
     keys.push(k); ids.push(await keyId(k));
   }
   const key = keys[0], id = ids[0];
   if (code) {   // the buyer's app is polling /claim?session=<code> -> popup
     const ttl = { expirationTtl: 60 * 60 * 24 * 30 };
-    await env.LICENSES.put("session:" + code, key, ttl);
+    await env.LICENSES.put("session:" + code, key, { ...ttl, metadata: { at: now() } });
     if (seats > 1) await env.LICENSES.put("bundle:" + code, JSON.stringify(keys), ttl);
-    const o = (await getOrder(env, code)) || { code, plan, at: now(), method: "manual" };
+    else if (prev?.seats > 1) await env.LICENSES.delete("bundle:" + code);
+    const o = prev || { code, plan, at: now(), method: "manual" };
     Object.assign(o, { status: "approved", keyId: id, email: email.slice(0, 80), approvedAt: now(), ...(seats > 1 ? { seats } : {}) });
+    if (seats === 1) delete o.seats;
     await putOrder(env, o);
+    for (const old of before) await revoke(env, old, "재발급", "admin");   // a reissue: the earlier keys of this order
   }
   // a bundle's key ids go last: the log keeps 300 characters
   await audit(env, "admin", "키 발급", (seats > 1 ? seats + "대 묶음" : id) + " · " + (code || "코드 없음") + " · " + (email || "메일 없음") + " · " +
-              (days ? days + "일" : "평생") + (tier !== "premium" ? " · " + TIER_KO[tier] : "") + (note ? " · " + note : "") +
-              (seats > 1 ? " · " + ids.join(", ") : ""));
-  return { key, id, keys, ids };
+              (days ? days + "일" : "평생") + (extended ? " · " + from.slice(0, 10) + "부터 이어서" : "") + (tier !== "premium" ? " · " + TIER_KO[tier] : "") +
+              (note ? " · " + note : "") + (seats > 1 ? " · " + ids.join(", ") : ""));
+  return { key, id, keys, ids, ...(extended ? { extendedFrom: from } : {}) };
+}
+async function bundleIds(env, code) {
+  try {
+    const keys = JSON.parse((await env.LICENSES.get("bundle:" + code)) || "[]");
+    return Array.isArray(keys) ? await Promise.all(keys.filter(k => typeof k === "string").map(keyId)) : [];
+  } catch { return []; }
 }
 async function lookup(env, key) {
   key = key.trim();
@@ -905,6 +1096,12 @@ async function validSignature(raw, sigHex, secret) {
 
 let signingKey, verifyKey;
 async function makeKey(env, fields) {
+  const { key, payload } = await signKey(env, fields);
+  await register(env, key, payload, fields.src || "manual", fields.note || "");
+  return key;
+}
+// Signs a key without storing anything (the webhook notes its id before registering it).
+async function signKey(env, fields) {
   if (!signingKey) {
     const pkcs8 = Uint8Array.from(atob(env.LICENSE_PRIVATE_KEY.replace(/-----[^-]+-----|\s/g, "")), c => c.charCodeAt(0));
     signingKey = await crypto.subtle.importKey("pkcs8", pkcs8, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
@@ -916,9 +1113,7 @@ async function makeKey(env, fields) {
   if (fields.test) payload.test = true;
   const data = new TextEncoder().encode(JSON.stringify(payload));
   const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, signingKey, data));
-  const key = b64url(data) + "." + b64url(sig);
-  await register(env, key, payload, fields.src || "manual", fields.note || "");
-  return key;
+  return { key: b64url(data) + "." + b64url(sig), payload };
 }
 
 async function verifySig(env, p, s) {

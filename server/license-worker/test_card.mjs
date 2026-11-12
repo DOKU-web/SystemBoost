@@ -26,8 +26,14 @@ const env = {
 // ---- fake Lemon Squeezy API
 const sent = [];
 let lsAnswer = () => new Response(JSON.stringify({ data: { attributes: { url: "https://shop.example/checkout/abc" } } }), { status: 201 });
+const cancelled = [];   // DELETE /v1/subscriptions/<id>: a refund stops the subscription's billing
 globalThis.fetch = async (url, init = {}) => {
   url = String(url);
+  if (/^https:\/\/api\.lemonsqueezy\.com\/v1\/subscriptions\/\d+$/.test(url) && init.method === "DELETE") {
+    assert.equal(init.headers.Authorization, "Bearer lsk_fake_api_key");
+    cancelled.push(url.split("/").pop());
+    return new Response("{}", { status: 200 });
+  }
   assert.equal(url, "https://api.lemonsqueezy.com/v1/checkouts", "only the fake Lemon Squeezy is called");
   sent.push({ auth: init.headers.Authorization, body: JSON.parse(init.body) });
   return lsAnswer();
@@ -212,6 +218,14 @@ await hook("subscription_payment_refunded", { type: "subscription-invoices", id:
 assert.equal((await j("/check?id=" + (await adm("/lookup", { key: k21 })).id)).revoked, true, "refund of a renewal");
 assert.equal((await renew(21, k21)).status, "inactive");
 assert.equal((await j("/check?id=" + kid(k21first))).revoked, true, "a refund turns off every key of the subscription");
+assert.deepEqual(cancelled, ["20", "21"], "and cancels the subscription at Lemon Squeezy");
+
+// an app that was closed past the end of the period renews with the key it still holds (it has run out)
+await hook("subscription_created", sub(22, V.monthly, { renews_at: "2026-01-01T00:00:00.000000Z" }));
+const k22old = kv.get("sub:22");
+assert.ok(days(payload(k22old).expires) < 0);
+await hook("subscription_payment_success", invoice(22, "renewal"));
+assert.ok(days(payload((await renew(22, k22old)).key).expires) > 30, "an expired key of the subscription gets the next key");
 
 // the dashboard's key list shows what each key came from
 const listed = (await adm("/keys?status=all")).keys.filter(k => k.src === "subscription");
