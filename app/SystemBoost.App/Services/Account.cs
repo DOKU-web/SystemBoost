@@ -1,5 +1,6 @@
 // Member account. Optional: nothing in the app needs one. The app keeps a session token, never the
-// password. Messages come back in Korean; Lang translates them where they reach the screen.
+// password; AccountFile keeps it on disk, sealed for the Windows user. Messages come back in Korean;
+// Lang translates them where they reach the screen.
 using System;
 using System.IO;
 using System.Net.Http;
@@ -7,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Saved = SystemBoost.App.Services.AccountSession;
 
 namespace SystemBoost.App.Services;
 
@@ -16,8 +18,6 @@ public sealed record AccountProfile(string Id, DateTimeOffset Created, string? C
 public static class Account
 {
     public const int MinPassword = 8, MaxPassword = 72;
-
-    private sealed record Saved(string Id, string Token);
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
     private static string RecordFile => Path.Combine(Platform.DataDir, "account.json");
@@ -30,20 +30,16 @@ public static class Account
 
     private static Saved? Read()
     {
-        try { if (File.Exists(RecordFile)) return JsonSerializer.Deserialize<Saved>(File.ReadAllText(RecordFile)); }
-        catch (Exception) { }   // a damaged record counts as signed out
+        try { return AccountFile.Load(RecordFile); }   // damaged, or sealed for another Windows user or PC: signed out
+        catch (Exception) { }   // no data folder: the same
         return null;
     }
 
     private static void Keep(Saved? saved)
     {
         _saved = saved;
-        try
-        {
-            if (saved == null) File.Delete(RecordFile);
-            else File.WriteAllText(RecordFile, JsonSerializer.Serialize(saved));
-        }
-        catch (Exception) { }   // the session then lasts until the app closes
+        try { AccountFile.Save(RecordFile, saved); }   // false: the session then lasts until the app closes
+        catch (Exception) { }   // no data folder: the same
         Avalonia.Threading.Dispatcher.UIThread.Post(() => Changed?.Invoke());
     }
 
@@ -73,13 +69,16 @@ public static class Account
         {
             using var req = new HttpRequestMessage(body == null ? HttpMethod.Get : HttpMethod.Post, $"{License.ServerUrl}/account/{action}");
             if (body != null) req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            if (_saved != null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _saved.Token);
+            var sent = _saved;
+            if (sent != null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sent.Token);
             using var r = await Http.SendAsync(req);
             using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
             var root = doc.RootElement.Clone();
             if (r.IsSuccessStatusCode) return (root, null);
             var code = root.TryGetProperty("error", out var e) ? e.GetString() : null;
-            if (code == "session") Keep(null);   // ended here or on the server: either way it no longer works
+            // Ended here or on the server: either way it no longer works. Only the session this went out with:
+            // the member may have signed in again while it was on its way.
+            if (code == "session" && sent != null && _saved == sent) Keep(null);
             return (null, Message(code));
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
@@ -117,8 +116,25 @@ public static class Account
 
     public static async Task LogOutAsync()
     {
-        await Send("logout", new { });   // offline, the session simply runs out on the server
-        Keep(null);
+        var token = _saved?.Token;
+        Keep(null);   // off this PC first: closing the app or a dead connection must not leave the session on disk
+        if (token != null) await RevokeAsync(token);
+    }
+
+    /// Ends the session on the server too, so a copy of the token stops working. Best effort: offline or on
+    /// server trouble the session simply runs out on the server (90 days at most).
+    private static async Task RevokeAsync(string token)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"{License.ServerUrl}/account/logout")
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var r = await Http.SendAsync(req);
+        }
+        catch (Exception) { }
     }
 
     public static async Task<(string? error, string? recovery)> RecoverAsync(string id, string recovery, string next)

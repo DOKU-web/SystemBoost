@@ -16,6 +16,7 @@ const LIMITS = {
   sessionDays: 90, sessionsKept: 5,
   loginTries: 5, lockMin: 15,
   signupsPerIp: 5, signupsPerHour: 100, failsPerIp: 20,
+  takenPerIp: 20,               // "this id is taken" replies to one address an hour (they tell which ids exist)
 };
 const TIMEOUT_MS = 10000;
 const ID_RE = /^[a-z0-9_]{4,20}$/;
@@ -56,6 +57,10 @@ async function db(env, action, b) {
   return fail(503, "unavailable");
 }
 
+// Without the signing key the pepper would be a value anyone can work out, so accounts stop instead.
+const NEEDS_PEPPER = ["signup", "login", "recover", "admin/recovery", "password", "delete"];
+const hasPepper = env => typeof env.LICENSE_PRIVATE_KEY === "string" && env.LICENSE_PRIVATE_KEY.trim().length >= 32;
+
 async function secrets(env) {
   const pepper = await sha("systemboost-account|" + env.LICENSE_PRIVATE_KEY);
   return {
@@ -66,6 +71,7 @@ async function secrets(env) {
 }
 
 export async function accounts(env, action, b) {
+  if (NEEDS_PEPPER.includes(action) && !hasPepper(env)) return fail(503, "unavailable");
   const s = await secrets(env);
   switch (action) {
     case "ping": return db(env, "ping", {});
@@ -100,7 +106,7 @@ export async function accounts(env, action, b) {
     case "logout": return db(env, action, { token });
     case "ticket": return db(env, "ticket", { token, order: b.order });
     case "password": return changePassword(env, s, token, b);
-    case "delete": return db(env, "delete", { token, pw: await s.password(String(b.password || "").slice(0, 100)) });
+    case "delete": return db(env, "delete", { token, pw: await s.password(String(b.password || "").slice(0, 100)), ip: await s.ip(b.ip) });
   }
   return fail(404, "not found");
 }
@@ -138,6 +144,6 @@ async function changePassword(env, s, session, b) {
   if (!goodPassword(next, me.id)) return fail(400, "password");
   const token = newToken(), recovery = newRecovery();
   const r = await db(env, "password", { token: session, pw: await s.password(String(b.password || "").slice(0, 100)), next: await s.password(next),
-                                        nextProof: await s.proof(recovery), session: await sha(token) });
+                                        nextProof: await s.proof(recovery), session: await sha(token), ip: await s.ip(b.ip) });
   return r.error ? r : { id: me.id, token, recovery };
 }

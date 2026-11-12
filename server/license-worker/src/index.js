@@ -131,9 +131,12 @@ async function openPlans(env) {   // plans the app may sell right now, per metho
                       manual: Object.keys(await payLinks(env)).filter(p => PLANS[p] && (seatsOf(p) === 1 || bundleOpen(env))) } };
 }
 
+// A plan named by a request: own keys only, so "constructor" or "__proto__" are not plans.
+const isPlan = p => typeof p === "string" && Object.hasOwn(PLANS, p);
+
 async function order(req, url, env) {
   const plan = url.searchParams.get("plan");
-  if (!PLANS[plan]) return json({ error: "bad plan" }, 400);
+  if (!isPlan(plan)) return json({ error: "bad plan" }, 400);
   const { methods } = await openPlans(env);
   let method = url.searchParams.get("method");
   if (!method) method = methods.card.includes(plan) ? "card" : "manual";
@@ -159,13 +162,17 @@ async function order(req, url, env) {
 }
 
 // Buyer says "I paid" (manual payments). Name / memo help the seller find the payment.
+// The order code is what claims the key, so the app sends it in the body; apps up to 0.8.11 put it in the address.
 async function orderPaid(req, url, env) {
-  const code = (url.searchParams.get("code") || "").toUpperCase();
+  const b = await readJson(req);
+  const code = String(url.searchParams.get("code") || b.code || "").toUpperCase();
   if (!CODE_RE.test(code)) return json({ error: "bad code" }, 400);
   const o = await getOrder(env, code);
   if (!o) return json({ error: "no order" }, 404);
   if (o.status !== "requested" && o.status !== "paid") return json({ status: o.status });
-  const b = await req.json().catch(() => ({}));
+  // a card payment is confirmed by Lemon Squeezy's signed webhook, never by the buyer: an unpaid card order
+  // must not show up in the dashboard as 결제 확인 요청
+  if (o.method === "card" || o.method === "auto") return json({ status: o.status });
   o.status = "paid";
   o.payer = String(b.payer || "").trim().slice(0, 40);
   o.msg = String(b.msg || "").trim().slice(0, 100);
@@ -183,9 +190,14 @@ export default {
     try {
       if (req.method === "POST" && url.pathname === "/checkout") return await checkout(url, env);
       if (req.method === "POST" && url.pathname === "/webhook/lemonsqueezy") return await webhook(req, env);
-      if (req.method === "GET" && url.pathname === "/claim") return await claim(url, env);
+      // The order code and the key are secrets: the app sends them in a POST body, where addresses (and so logs)
+      // do not carry them. The GET forms are what apps up to 0.8.11 use; drop them once no such app is in use
+      // (GET /renew gives those apps nothing any more: it carries no key).
+      if (req.method === "POST" && url.pathname === "/claim") return await claim(String((await readJson(req)).session || ""), env);
+      if (req.method === "GET" && url.pathname === "/claim") return await claim(url.searchParams.get("session") || "", env);
       if (req.method === "GET" && url.pathname === "/thanks") return await thanks(url, env);
-      if (req.method === "GET" && url.pathname === "/renew") return await renew(url, env);
+      if (req.method === "POST" && url.pathname === "/renew") { const b = await readJson(req); return await renew(String(b.sub || ""), String(b.key || ""), env); }
+      if (req.method === "GET" && url.pathname === "/renew") return await renew(url.searchParams.get("sub") || "", "", env);
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env);
@@ -222,7 +234,7 @@ async function checkout(url, env) {   // kept for direct use; the app goes throu
   if (!(await cardOpen(env))) return json({ error: "sales closed" }, 503);
   const plan = url.searchParams.get("plan");
   const session = url.searchParams.get("session") || "";
-  if (!PLANS[plan] || !validSession(session)) return json({ error: "bad request" }, 400);
+  if (!isPlan(plan) || !validSession(session)) return json({ error: "bad request" }, 400);
   const u = await lsCheckout(env, plan, session);
   return u ? json({ url: u }) : json({ error: "checkout failed" }, 502);
 }
@@ -262,15 +274,20 @@ async function webhook(req, env) {
   const event = body?.meta?.event_name;
   const testOrder = body?.meta?.test_mode === true;
   const a = body?.data?.attributes || {};
-  // refunds are handled in every mode: the key of that order, or of that subscription, is revoked
+  // refunds are handled in every mode: the key of that order, and every key of its subscription, is revoked.
+  // A subscription can hold more than one key that is still valid (a plan change, a repeated webhook, a
+  // refund that comes after a cancellation), and a refund must not leave any of them on.
   if (event === "order_refunded") {
     const id = await env.LICENSES.get("order:" + String(body?.data?.id));
-    if (id) await revoke(env, id, "환불", "webhook");
+    if (id) {
+      const m = (await env.LICENSES.getWithMetadata("lic:" + id))?.metadata;
+      if ((await env.LICENSES.get("revoked:" + id)) === null) await revoke(env, id, "환불", "webhook");
+      if (m?.sub) await revokeSub(env, String(m.sub), "환불");
+    }
     return json({ ok: true });
   }
   if (event === "subscription_payment_refunded") {
-    const key = await env.LICENSES.get("sub:" + String(a.subscription_id));
-    if (key) await revoke(env, await keyId(key), "환불", "webhook");
+    await revokeSub(env, String(a.subscription_id), "환불");
     return json({ ok: true });
   }
   const mode = await salesMode(env);
@@ -300,10 +317,14 @@ async function webhook(req, env) {
   if (invoice && a.billing_reason !== "renewal") return json({ ok: true, ignored: "first payment" });   // subscription_created gave that key
   if (event === "subscription_created" && !["active", "on_trial"].includes(a.status)) return json({ ok: true, ignored: "status " + a.status });
   const plan = invoice ? known : byVariant;
-  if (!PLANS[plan]) {
+  if (!isPlan(plan)) {
     await audit(env, "카드 결제", "어떤 플랜인지 몰라서 키를 만들지 않음", "구독 " + subId + " · 상품 " + String(a.variant_id ?? "?"));
     return json({ ok: true, ignored: "unknown variant" });
   }
+  // Lemon Squeezy sends an event again when it is not sure it arrived (and the owner can resend one): the
+  // start of a subscription and each paid invoice give one key, however often they arrive.
+  const once = event === "subscription_created" ? "hook:created:" + subId : invoice ? "hook:invoice:" + String(body?.data?.id) : null;
+  if (once && (await env.LICENSES.get(once)) !== null) return json({ ok: true, ignored: "repeat" });
   const period = plan.endsWith("yearly") ? 366 : 31;
   let expires = !invoice && a.renews_at ? addDays(a.renews_at, GRACE_DAYS) : addDays(now(), period + GRACE_DAYS);
   if (testOrder) expires = addDays(now(), 1);   // test keys never last
@@ -312,6 +333,8 @@ async function webhook(req, env) {
                                    src: "subscription", note: [session && event === "subscription_created" ? session : "", PLANS[plan] + " " + what].filter(Boolean).join(" · ") });
   await env.LICENSES.put("sub:" + subId, key);
   await env.LICENSES.put("subplan:" + subId, plan);
+  await addSubKey(env, subId, await keyId(key));
+  if (once) await env.LICENSES.put(once, "1", { expirationTtl: 60 * 60 * 24 * 400 });
   if (event === "subscription_created") {
     if (a.order_id != null) await env.LICENSES.put("order:" + String(a.order_id), await keyId(key));   // a refund of the first payment
     await store(env, session, key, a.user_email, plan);
@@ -323,19 +346,27 @@ async function webhook(req, env) {
 }
 
 async function store(env, session, key, email, plan) {
+  const o = session && CODE_RE.test(session) ? await getOrder(env, session) : null;
+  // The session rides on the checkout address, so a buyer can put any order code there. A card payment never
+  // approves a bank-transfer order (the seller checks those by hand); the key stays findable by e-mail.
+  if (o && o.method !== "card" && o.method !== "auto") {
+    await audit(env, "카드 결제", "카드 주문이 아니라 자동 승인하지 않음", session + " · " + (await keyId(key)) + (email ? " · " + email : ""));
+    session = null;
+  }
   if (session) await env.LICENSES.put("session:" + session, key, { expirationTtl: SESSION_TTL });
   if (session && CODE_RE.test(session)) {   // verified payment -> order approved automatically
-    const o = (await getOrder(env, session)) || { code: session, plan, at: now() };
-    Object.assign(o, { status: "approved", method: "card", plan: o.plan || plan, keyId: await keyId(key), email: (email || "").slice(0, 80), approvedAt: now() });
-    await putOrder(env, o);
-    await audit(env, "카드 결제", "자동 승인", session + " · " + o.keyId + (email ? " · " + email : ""));
+    const ord = o || { code: session, plan, at: now() };
+    // the order says what the app asked for; the key is what was paid for (the variant), and so is the record
+    if (ord.plan && ord.plan !== plan) await audit(env, "카드 결제", "주문과 다른 상품으로 결제됨", session + " · " + (PLANS[ord.plan] || ord.plan) + " → " + PLANS[plan]);
+    Object.assign(ord, { status: "approved", method: "card", plan, keyId: await keyId(key), email: (email || "").slice(0, 80), approvedAt: now() });
+    await putOrder(env, ord);
+    await audit(env, "카드 결제", "자동 승인", session + " · " + ord.keyId + (email ? " · " + email : ""));
   }
   if (email) await env.LICENSES.put("email:" + email.toLowerCase(), key);   // for support / restore
 }
 
 // ---------------------------------------------------------------- app endpoints
-async function claim(url, env) {
-  const s = url.searchParams.get("session") || "";
+async function claim(s, env) {
   if (!validSession(s)) return json({ error: "bad session" }, 400);
   const key = await env.LICENSES.get("session:" + s);
   if (key) {   // a bundle also lists every key; the app registers the first one on this PC
@@ -347,9 +378,17 @@ async function claim(url, env) {
   return json({ status: "pending", order: o?.status || "" });
 }
 
-async function renew(url, env) {
-  const sub = url.searchParams.get("sub") || "";
+// Only whoever holds a key of that subscription gets its next key: subscription numbers count up, so a bare
+// number would hand out every subscriber's key and e-mail address. The app sends the key it has, exactly as
+// it was issued (not its id: ids travel in /check addresses); apps up to 0.8.11 send none and renew by hand.
+async function renew(sub, held, env) {
   if (!/^[0-9]{1,20}$/.test(sub)) return json({ error: "bad sub" }, 400);
+  held = held.trim();
+  const id = held && held.length <= 4096 ? await keyId(held) : "";
+  const r = id ? await env.LICENSES.getWithMetadata("lic:" + id) : null;
+  const m = r?.value != null && r.value === held ? r.metadata : null;
+  if (!m || String(m.sub || "") !== sub) return json({ error: "key" }, 403);
+  if (m.revoked || (await env.LICENSES.get("revoked:" + id)) !== null) return json({ status: "inactive" });
   const key = await env.LICENSES.get("sub:" + sub);
   return json(key ? { status: "ready", key } : { status: "inactive" });
 }
@@ -395,6 +434,29 @@ async function revoke(env, id, reason, who) {
   }
   await audit(env, who, "차단", id + (reason ? " · " + reason : ""));
 }
+// Every key a subscription was given, so a refund can turn all of them off.
+async function addSubKey(env, sub, id) {
+  let ids = [];
+  try { ids = JSON.parse((await env.LICENSES.get("subkeys:" + sub)) || "[]"); } catch {}
+  if (!Array.isArray(ids)) ids = [];
+  if (!ids.includes(id)) ids.push(id);
+  await env.LICENSES.put("subkeys:" + sub, JSON.stringify(ids.slice(-200)));
+}
+async function revokeSub(env, sub, reason) {
+  if (!/^\d{1,20}$/.test(sub)) return;
+  const ids = new Set();
+  try { for (const id of JSON.parse((await env.LICENSES.get("subkeys:" + sub)) || "[]")) if (/^[0-9a-f]{16}$/.test(id)) ids.add(id); } catch {}
+  const current = await env.LICENSES.get("sub:" + sub);
+  if (current) ids.add(await keyId(current));
+  for (const m of await allRecords(env)) if (String(m.sub || "") === sub) ids.add(m.id);   // keys from before "subkeys:" was kept
+  for (const id of ids) {
+    const m = (await env.LICENSES.getWithMetadata("lic:" + id))?.metadata || {};
+    if (m.revoked || (await env.LICENSES.get("revoked:" + id)) !== null) continue;
+    if (m.expires && Date.parse(m.expires) < Date.now()) continue;   // ran out already
+    await revoke(env, id, reason, "webhook");
+  }
+  await env.LICENSES.delete("sub:" + sub);   // no more renewals for that subscription
+}
 async function check(url, env) {
   const id = url.searchParams.get("id") || "";
   if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "bad id" }, 400);
@@ -428,7 +490,7 @@ async function admin(req, url, env) {
     return json({ error: "unauthorized" }, 401, false);
   }
   const route = req.method + " " + url.pathname.slice("/admin/api".length);
-  const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+  const body = req.method === "POST" ? await readJson(req) : {};
   if (route === "GET /announce" || route.startsWith("POST /announce/")) {
     const r = await announce(env, route, body, (action, detail) => audit(env, "admin", action, detail));
     return json(r, r.status || 200, false);
@@ -676,7 +738,7 @@ async function useRef(env, r, device) {
 }
 
 async function referral(req, env) {
-  const b = await req.json().catch(() => ({}));
+  const b = await readJson(req);
   const code = String(b.code || "").trim().toUpperCase(), device = String(b.device || "");
   if (!REF_RE.test(code) || !REF_DEVICE.test(device)) return json({ error: "bad request" }, 400);
   const r = await getRef(env, code);
@@ -691,7 +753,7 @@ const ACCOUNT_ACTIONS = ["signup", "login", "recover", "me", "invite", "reward",
 async function account(req, url, env) {
   const action = url.pathname.slice("/account/".length);
   if (!ACCOUNT_ACTIONS.includes(action)) return json({ error: "not found" }, 404);
-  const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+  const body = req.method === "POST" ? await readJson(req) : {};
   body.ip = req.headers.get("CF-Connecting-IP") || "unknown";
   body.token = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const r = action === "signup" ? await signup(env, body)
@@ -704,7 +766,7 @@ async function account(req, url, env) {
 // A problem with the code stops the sign-up, so nothing is left half done and the user can fix it.
 async function signup(env, b) {
   const invite = String(b.invite || "").trim().toUpperCase(), device = String(b.device || "");
-  if (!invite) return accounts(env, "signup", { ...b, invite: "" });
+  if (!invite) return accounts(env, "signup", { ...b, invite: "", ticket: false });   // the discount ticket comes with a code only, never from the request
   if (!REF_RE.test(invite) || !REF_DEVICE.test(device)) return { status: 400, error: "bad request" };
   const seller = await getRef(env, invite);
   const stop = (seller && refClosed(seller)) || (await refBlocked(env, device));
@@ -762,7 +824,7 @@ async function adminIssue(env, b) {
   const period = periodOf(plan);   // orders say ultra_monthly, biz_yearly_x5 etc.; the form says monthly / yearly / days
   let days = 0;
   if (period === "days") days = Math.floor(Number(b.days));
-  else if (PLAN_DAYS[period]) days = PLAN_DAYS[period] + GRACE_DAYS;
+  else if (Object.hasOwn(PLAN_DAYS, period)) days = PLAN_DAYS[period] + GRACE_DAYS;
   else if (period !== "lifetime" || !code) return { error: "플랜을 고르세요" };   // an order placed while it was on sale can still be approved
   if (period === "days" && !(days >= 1 && days <= 3650)) return { error: "기간은 1~3650일이에요" };
   if (!note && !code) return { error: "주문 코드나 메모(발급 이유) 중 하나는 적어 주세요" };
@@ -846,6 +908,7 @@ function unb64url(s) {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   return Uint8Array.from(atob(s + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 }
+async function readJson(req) { const b = await req.json().catch(() => null); return b && typeof b === "object" ? b : {}; }   // "null" is JSON too
 function now() { return new Date().toISOString().replace(/\.\d+Z$/, "Z"); }
 function b64url(bytes) {
   let s = "";
