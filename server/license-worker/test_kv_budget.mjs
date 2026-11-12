@@ -52,6 +52,13 @@ const g1 = await gift("FREEPLAN", 1);
 assert.ok(g1.key, JSON.stringify(g1));
 assert.deepEqual([n(PUB()), n(REF())], [5, 1]);
 assert.equal(kv.has("count:ref:" + day()), false, "no KV write for counting gifts");
+// the dashboard's home shows today's counts against the caps (GET /admin/api/summary budget), read without a KV write
+const summary = () => j("/admin/api/summary", { headers: { Authorization: "Bearer " + env.ADMIN_TOKEN } });
+let p0 = puts;
+assert.deepEqual((await summary()).budget, { pub: [5, 400], gifts: [1, 60], support: [0, 250] });
+assert.equal(puts, p0, "reading the budget writes nothing");
+st.obj.take({ items: [{ name: "sup:" + day() + ":w", ttl: 172800, by: 7 }, { name: "sup:" + day() + ":vw", ttl: 172800, by: 2 }] });
+assert.deepEqual((await summary()).budget.support, [9, 250], "both support lanes");
 
 // 2. REF_DAILY: 60 gifts a day
 st.obj.take({ items: [{ name: REF(), ttl: 172800, by: 59 }] });
@@ -85,6 +92,7 @@ assert.equal((await order()).http, 200);
 
 // 4. the object cannot be reached: the old KV caps (300 orders, REF_DAILY gifts), as before
 st.down = true;
+assert.equal((await summary()).budget, null, "the object does not answer: no budget shown (the KV caps hold)");
 assert.equal((await order()).http, 200);
 assert.equal(kv.get("count:orders:" + day()), "1");
 kv.set("count:orders:" + day(), "300");

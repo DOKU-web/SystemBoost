@@ -9,7 +9,8 @@
 <style>
 :root{--bg:#0b0b0c;--card:#141416;--line:#26262a;--txt:#e8e6e3;--mut:#8b8a88;--or:#ff7a1a;--ok:#3ecf8e;--bad:#ff5a5a;--warn:#f5c04a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,-apple-system,"Malgun Gothic",sans-serif}
-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--bg)}
+#top{position:sticky;top:0;z-index:5;background:var(--bg)}
 header b{color:var(--or);font-size:17px}header .sp{flex:1}
 main{max-width:1100px;margin:0 auto;padding:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
@@ -55,7 +56,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}#dRows td{white-spa
 details summary{cursor:pointer;color:var(--mut);font-size:13px;margin-top:12px}
 #vizTip{position:fixed;display:none;background:#222;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;pointer-events:none;z-index:9;white-space:nowrap}
 #vizTip b{display:block}#vizTip span{color:var(--mut);font-size:12px}
-#usage.stale{opacity:.6}
+.usage.stale{opacity:.6}
 .cardSetup{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}.cardSetup summary{color:var(--txt);font-size:14px;margin:0}
 .cSteps{margin:10px 0 0;padding-left:20px;display:grid;gap:12px}.cSteps li{overflow-wrap:anywhere}
 .cIds{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}.cIds input{margin-top:4px}
@@ -153,6 +154,30 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
 #ftoast .ft{display:block;width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere;background:none;border:0;padding:4px 2px;font-weight:600}
 #ftoast .ft:hover{color:var(--or)}#ftoast .more{color:var(--mut);font-size:13px;padding:2px}
 #ftoast .x{position:absolute;top:4px;right:4px;background:none;border:0;padding:4px 10px;color:var(--mut);font-size:18px;line-height:1}
+/* the menu: one part of the dashboard at a time */
+.tabsBar{border-bottom:1px solid var(--line);background:var(--bg)}
+.tabs{display:flex;gap:2px;max-width:1100px;margin:0 auto;padding:0 10px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:11px 12px 9px;color:var(--mut)}
+.tabs button:hover{color:var(--txt);border-color:transparent;border-bottom-color:#4a4a50}
+.tabs button.on{color:var(--txt);border-bottom-color:var(--or);font-weight:600}
+#supTop,#annTop,#tkView,#sfCard{scroll-margin-top:120px}
+@media(max-width:900px){#supTop,#annTop,#tkView,#sfCard{scroll-margin-top:170px}}
+@media(max-width:600px){.tabs{padding:0 4px}.tabs button{padding:10px 9px 8px}}
+/* home: 할 일, today's server writes */
+.todo{display:grid;gap:8px}
+.todoRow{display:flex;align-items:center;gap:14px;width:100%;text-align:left;white-space:normal;background:#0f0f11;border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--txt)}
+button.todoRow:hover{border-color:var(--or)}
+.todoRow .tn{font-size:26px;font-weight:700;min-width:2.2em;text-align:center;font-variant-numeric:tabular-nums}
+.todoRow .tt{flex:1;min-width:0;display:grid;gap:2px}.todoRow .tg{color:var(--mut);white-space:nowrap}
+.todoRow.warn{border-color:#6a5420}.todoRow.warn .tn{color:var(--warn)}
+.todoDone{color:var(--ok);padding:6px 2px}
+.budget{display:grid;gap:10px;margin-bottom:12px}
+.bRow{display:grid;grid-template-columns:minmax(120px,210px) 1fr auto;gap:12px;align-items:center;font-size:14px}
+.bBar{height:10px;background:#0f0f11;border:1px solid var(--line);border-radius:99px;overflow:hidden}.bBar>div{height:100%;background:var(--ok)}
+.bRow .v{min-width:7.5em;text-align:right}
+.linkGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px 16px}.linkGrid>div{grid-column:1/-1}
+.bRow.near .bBar>div{background:var(--warn)}.bRow.full .bBar>div{background:var(--bad)}.bRow.full .v{color:var(--bad)}.bRow .v{font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:600px){.bRow{grid-template-columns:1fr auto}.bRow .bBar{grid-column:1/-1;grid-row:2}}
 </style>
 </head>
 <body>
@@ -164,74 +189,33 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
 </div>
 
 <div id="app" class="hide">
-<header><b>SystemBoost 관리자</b><span class="mut" id="modeTxt"></span><span class="sp"></span><span class="hb"><button id="goSup">고객센터<span class="nb hide" id="supBadge"></span><span class="nb r hide" id="supBadgeR"></span></button><button id="goAnn">디스코드 공지</button><button id="reload">새로고침</button><button id="out">나가기</button></span></header>
+<div id="top"><header><b>SystemBoost 관리자</b><span class="mut" id="modeTxt"></span><span class="sp"></span><span class="hb"><button id="reload">새로고침</button><button id="out">나가기</button></span></header>
+<div class="tabsBar"><nav class="tabs" id="tabs" aria-label="관리 메뉴"><button data-tab="home">홈</button><button data-tab="sales">판매·키<span class="nb hide" id="salesBadge"></span></button><button data-tab="members">회원·추천</button><button data-tab="support" id="goSup">고객센터<span class="nb hide" id="supBadge"></span><span class="nb r hide" id="supBadgeR"></span></button><button data-tab="stats">통계</button><button data-tab="pay">결제 설정</button><button data-tab="ann" id="goAnn">디스코드 공지</button><button data-tab="log">기록</button></nav></div></div>
 <main>
   <div id="demoNote" class="demo hide">시연 모드예요. 가짜 데이터로 동작하고 서버에 아무것도 저장하지 않아요.</div>
+<section class="tab" data-tab="home" aria-label="홈">
   <div id="cfgWarn" class="warnBar hide" role="alert"></div>
-  <div id="moreWarn" class="sfWarn hide" role="status" style="margin:0 0 14px"></div>
-  <div id="usage">
+  <div class="card" id="todoCard">
+    <h2>할 일 <small>지금 처리할 것만 모았어요. 누르면 그 화면으로 가요.</small></h2>
+    <div class="todo" id="todo"><div class="empty">불러오는 중이에요</div></div>
+  </div>
+  <div class="usage" id="usage">
     <div class="card">
       <h2>실시간 사용 현황 <small id="uNote">불러오는 중</small></h2>
       <div class="hero"><span class="dot" id="uDot"></span><div><div class="hn" id="uLive">—</div><div class="mut" id="uLiveL">지금 켜져 있는 앱</div></div></div>
       <div class="stats in" id="uStats" style="margin-bottom:0"></div>
     </div>
 
-    <div class="card">
-      <h2>다운로드 <small id="dNote"></small></h2>
-      <div class="stats in" id="dStats"></div>
-      <div class="tbl"><table><thead><tr><th>버전</th><th>출시일</th><th class="n">Windows 설치판</th><th class="n">Windows 포터블</th><th class="n">macOS</th><th class="n">자동 업데이트</th></tr></thead><tbody id="dRows"></tbody></table></div>
-    </div>
-
-    <div class="card">
-      <h2>최근 30일 <small>막대에 마우스를 올리면 그날 숫자가 보여요</small></h2>
-      <div class="trio">
-        <figure><figcaption>하루 사용자 <small>그날 앱을 켠 설치 수</small></figcaption><div class="viz" id="cActive"></div></figure>
-        <figure><figcaption>새 설치 <small>처음 신호를 보낸 설치 수</small></figcaption><div class="viz" id="cInstalls"></div></figure>
-        <figure><figcaption>다운로드 <small>설치 파일, 자동 업데이트 제외</small></figcaption><div class="viz" id="cDownloads"></div></figure>
-      </div>
-      <details><summary>표로 보기</summary><div class="tbl"><table><thead><tr><th>날짜</th><th class="n">사용자</th><th class="n">새 설치</th><th class="n">다운로드</th><th class="n">업데이트</th><th class="n">켜 둔 시간</th><th class="n">프레임 생성</th></tr></thead><tbody id="hRows"></tbody></table></div></details>
-    </div>
-
-    <div class="card">
-      <h2>사용자 구성 <small id="pNote"></small></h2>
-      <div class="parts" id="parts"></div>
-    </div>
   </div>
-
-  <h2 style="margin:22px 0 10px">판매와 키</h2>
+  <div class="card" id="budgetCard">
+    <h2>오늘 서버 저장 횟수 <small>Cloudflare 무료 요금제는 서버 전체가 하루 1,000번까지 저장할 수 있어요. 한국 시간 오전 9시(UTC 자정)에 0으로 돌아가요.</small></h2>
+    <div class="budget" id="budget"></div>
+    <p class="mut" style="margin:0">구매자가 보내는 요청만 세고, 선물 하나는 저장 3번으로 세요. 판매자 작업(승인, 키 발급, 설정 저장)과 카드 결제 알림은 세지도 막지도 않아서 칸이 다 차도 하루 350번 넘게 남아요. 칸이 다 차면 그날 남은 시간 동안 그 요청에는 '잠시 뒤 다시 시도'가 떠요.</p>
+  </div>
+</section>
+<section class="tab hide" data-tab="sales" aria-label="판매·키">
   <div class="stats" id="stats"></div>
-
-  <div class="card">
-    <h2>결제 방식 <small>두 가지를 함께 켤 수 있어요. 구매자가 앱에서 골라요.</small></h2>
-    <div style="display:grid;gap:12px">
-      <div><b>계좌이체 · 직접 결제</b> <span class="mut" id="manualHelp"></span></div>
-      <div><b>카드 결제</b> <span class="mut" id="methodHelp"></span>
-        <div class="seg" id="mode" style="margin-top:8px"><button data-m="off">꺼짐</button><button data-m="test">테스트</button><button data-m="live">실판매</button></div></div>
-    </div>
-    <details id="cardSetup" class="cardSetup">
-      <summary>카드 결제 설정 (Lemon Squeezy) <span id="cReady" class="mut"></span></summary>
-      <ol class="cSteps">
-        <li><b>API 키</b> <span id="cKey"></span> · <b>웹훅 서명 비밀</b> <span id="cSign"></span>
-          <div class="mut">바탕화면의 'SystemBoost 카드 결제 키 넣기.cmd'를 더블클릭해서 직접 넣어요. 여기에는 저장되지 않고 보이지도 않아요.</div></li>
-        <li><b>웹훅</b> — Lemon Squeezy Settings → Webhooks에서 아래 주소를 넣고, 서명 비밀은 위에 넣은 것과 같은 값으로 해요.
-          <div class="row" style="margin:6px 0"><code id="cHook" style="flex:1;min-width:0;overflow-wrap:anywhere"></code><button id="cHookCopy">주소 복사</button></div>
-          <div class="mut">보낼 이벤트: subscription_created, subscription_updated, subscription_payment_success, subscription_payment_refunded, order_refunded</div></li>
-        <li><b>상점과 상품 번호</b> — 구독 상품을 플랜마다 하나씩 만들고 번호를 넣어요. 비워 둔 플랜은 카드로 팔지 않아요. 5대·10대 묶음은 카드로 팔지 않고 아래 '결제 링크'로만 팔아요.
-          <div class="cIds">
-            <label class="mut">상점 번호<input id="cStore" inputmode="numeric" placeholder="예: 12345"></label>
-            <label class="mut">프로 월간 ₩2,900<input id="cV_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
-            <label class="mut">프로 연간 ₩19,900<input id="cV_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
-            <label class="mut">울트라 월간 ₩8,900<input id="cV_ultra_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
-            <label class="mut">울트라 연간 ₩59,900<input id="cV_ultra_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
-            <label class="mut">산업 월간 ₩12,900<input id="cV_biz_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
-            <label class="mut">산업 연간 ₩89,900<input id="cV_biz_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
-          </div>
-          <div class="row" style="margin-top:8px"><button class="p" id="cSave">번호 저장</button><span id="cMsg" class="mut"></span></div></li>
-      </ol>
-      <p class="mut">테스트 모드에서 만든 상품 번호와 API 키는 실판매에서 쓸 수 없어요. 실판매로 바꿀 때는 실판매 상품 번호와 API 키로 다시 넣으세요. 결제 금액과 수수료는 Lemon Squeezy 상품에서 정해요.</p>
-    </details>
-  </div>
-
+  <div id="moreWarn" class="sfWarn hide" role="status" style="margin:-4px 0 14px"></div>
   <div class="card">
     <h2>결제 신청 <small>구매자가 앱에서 '결제하기'를 누르면 신청이 생기고, 결제했다고 알리면 '결제 확인 요청'으로 바뀌어요.</small></h2>
     <div class="seg scroll" id="oseg" style="margin-bottom:10px"><button data-o="open" class="on">처리할 것</button><button data-o="approved">승인</button><button data-o="rejected">거절</button><button data-o="refunded">환불됨</button><button data-o="all">전체</button></div>
@@ -239,6 +223,42 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
     <p class="mut" id="oMore"></p>
   </div>
 
+  <div class="grid2">
+    <div class="card">
+      <h2>키 직접 발급 <small>선물·리뷰용이나 앱 밖에서 받은 결제</small></h2>
+      <div class="row" style="margin-bottom:8px"><input id="iCode" placeholder="주문 코드 SB-XXXX-XXXX (있으면 구매자 앱에 바로 떠요)"></div>
+      <div class="row" style="margin-bottom:8px">
+        <select id="iPlan"><option value="monthly">월간 (34일)</option><option value="yearly">연간 (369일)</option><option value="days">직접 입력(일)</option></select>
+        <input id="iDays" type="number" min="1" max="3650" placeholder="일 수" class="hide">
+        <select id="iSeats" title="몇 대 쓸 키인지"><option value="1">키 1개</option><option value="5">키 5개 (5대 묶음)</option><option value="10">키 10개 (10대 묶음)</option></select>
+      </div>
+      <div class="row" style="margin-bottom:8px"><input id="iEmail" placeholder="구매자 메일 (선택)"></div>
+      <div class="row" style="margin-bottom:8px"><input id="iNote" placeholder="메모: 입금자명, 결제 번호, 선물 이유 등"></div>
+      <div class="row"><button class="p" id="issue">프로 키 발급</button><button class="p" id="issueUltra">울트라 키 발급</button><button class="p" id="issueBiz">산업 키 발급</button><span id="iMsg" class="mut"></span></div>
+      <textarea id="iKey" class="hide" rows="4" readonly style="margin-top:10px"></textarea>
+      <p class="mut">울트라 키는 프로 기능에 프레임 생성 6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭이 더해져요. 산업 키는 울트라 기능에 방송 모드, 업무 모드, 시작 프로그램 정리(Windows)가 더해져요. 월간·연간은 만료 3일 여유를 더해 발급해요. 다음 결제를 받으면 같은 방식으로 새 키를 발급하면 돼요.</p>
+      <p class="mut">키 5개·10개를 고르면 PC마다 쓸 키가 따로 만들어져요. 키 하나가 공유되면 그 키만 차단할 수 있어요. 주문 코드를 넣으면 구매자 앱에 모든 키가 한 번에 떠요.</p>
+    </div>
+    <div class="card">
+      <h2>키 확인 <small>구매자가 보낸 키를 붙여 넣어 진짜인지, 차단됐는지 봐요</small></h2>
+      <textarea id="lKey" rows="3" placeholder="키 붙여 넣기"></textarea>
+      <div class="row" style="margin-top:8px"><button id="look">확인</button></div>
+      <div id="lOut" class="mut" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>발급된 키</h2>
+    <div class="row" style="margin-bottom:10px">
+      <input id="q" placeholder="메일, 키 식별 번호, 주문 코드, 메모로 찾기">
+      <div class="seg" id="seg"><button data-s="all" class="on">전체</button><button data-s="active">사용 중</button><button data-s="expired">만료</button><button data-s="revoked">차단</button><button data-s="test">테스트</button></div>
+    </div>
+    <div class="tbl"><table><thead><tr><th>키 식별 번호</th><th>메일 / 메모</th><th>플랜</th><th>발급</th><th>만료</th><th>상태</th><th></th></tr></thead><tbody id="keys"></tbody></table></div>
+    <p class="mut" id="more"></p>
+  </div>
+
+</section>
+<section class="tab hide" data-tab="members" aria-label="회원·추천">
   <div class="card">
     <h2>회원 <small id="mSum"></small></h2>
     <div class="row" style="margin-bottom:10px"><input id="mQ" placeholder="아이디나 초대 코드로 찾기"><button id="mFind">찾기</button><span id="mMsg"></span></div>
@@ -259,80 +279,9 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
     <div class="tbl"><table><thead><tr><th>코드</th><th>메모</th><th>주는 것</th><th>사용</th><th>상태</th><th></th></tr></thead><tbody id="refs"></tbody></table></div>
   </div>
 
-  <div class="grid2">
-    <div class="card">
-      <h2>키 직접 발급 <small>선물·리뷰용이나 앱 밖에서 받은 결제</small></h2>
-      <div class="row" style="margin-bottom:8px"><input id="iCode" placeholder="주문 코드 SB-XXXX-XXXX (있으면 구매자 앱에 바로 떠요)"></div>
-      <div class="row" style="margin-bottom:8px">
-        <select id="iPlan"><option value="monthly">월간 (34일)</option><option value="yearly">연간 (369일)</option><option value="days">직접 입력(일)</option></select>
-        <input id="iDays" type="number" min="1" max="3650" placeholder="일 수" class="hide">
-        <select id="iSeats" title="몇 대 쓸 키인지"><option value="1">키 1개</option><option value="5">키 5개 (5대 묶음)</option><option value="10">키 10개 (10대 묶음)</option></select>
-      </div>
-      <div class="row" style="margin-bottom:8px"><input id="iEmail" placeholder="구매자 메일 (선택)"></div>
-      <div class="row" style="margin-bottom:8px"><input id="iNote" placeholder="메모: 입금자명, 결제 번호, 선물 이유 등"></div>
-      <div class="row"><button class="p" id="issue">프로 키 발급</button><button class="p" id="issueUltra">울트라 키 발급</button><button class="p" id="issueBiz">산업 키 발급</button><span id="iMsg" class="mut"></span></div>
-      <textarea id="iKey" class="hide" rows="4" readonly style="margin-top:10px"></textarea>
-      <p class="mut">울트라 키는 프로 기능에 프레임 생성 6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭이 더해져요. 산업 키는 울트라 기능에 방송 모드, 업무 모드, 시작 프로그램 정리(Windows)가 더해져요. 월간·연간은 만료 3일 여유를 더해 발급해요. 다음 결제를 받으면 같은 방식으로 새 키를 발급하면 돼요.</p>
-      <p class="mut">키 5개·10개를 고르면 PC마다 쓸 키가 따로 만들어져요. 키 하나가 공유되면 그 키만 차단할 수 있어요. 주문 코드를 넣으면 구매자 앱에 모든 키가 한 번에 떠요.</p>
-    </div>
-    <div class="card">
-      <h2>결제 링크 <small>수동 확인 방식에서 써요. 비워 둔 플랜은 앱에서 '결제 준비 중'으로 잠겨요</small></h2>
-      <div style="display:grid;gap:8px">
-        <label class="mut">프로 월간 ₩2,900<input id="pMonthly" placeholder="https://…"></label>
-        <label class="mut">프로 연간 ₩19,900<input id="pYearly" placeholder="https://…"></label>
-        <label class="mut">울트라 월간 ₩8,900<input id="pUltraMonthly" placeholder="https://…"></label>
-        <label class="mut">울트라 연간 ₩59,900<input id="pUltraYearly" placeholder="https://…"></label>
-        <label class="mut">산업 월간 ₩12,900<input id="pBizMonthly" placeholder="https://…"></label>
-        <label class="mut">산업 연간 ₩89,900<input id="pBizYearly" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 프로 월간 ₩2,610<input id="pMonthlyT" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 프로 연간 ₩17,910<input id="pYearlyT" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 울트라 월간 ₩8,010<input id="pUltraMonthlyT" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 울트라 연간 ₩53,910<input id="pUltraYearlyT" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 산업 월간 ₩11,610<input id="pBizMonthlyT" placeholder="https://…"></label>
-        <label class="mut">할인 티켓 산업 연간 ₩80,910<input id="pBizYearlyT" placeholder="https://…"></label>
-        <div class="mut" style="margin-top:6px"><b>묶음 (연간, 키 5개·10개)</b> — 5대 15%, 10대 25% 할인. 할인 티켓은 쓸 수 없어요. 앱에는 사용권 계약 개정이 시행되는 2026년 12월 9일부터 나와요.</div>
-        <label class="mut">프로 연간 5대 ₩84,500 (대당 ₩16,900)<input id="pYearly5" placeholder="https://…"></label>
-        <label class="mut">프로 연간 10대 ₩149,000 (대당 ₩14,900)<input id="pYearly10" placeholder="https://…"></label>
-        <label class="mut">울트라 연간 5대 ₩254,500 (대당 ₩50,900)<input id="pUltraYearly5" placeholder="https://…"></label>
-        <label class="mut">울트라 연간 10대 ₩449,000 (대당 ₩44,900)<input id="pUltraYearly10" placeholder="https://…"></label>
-        <label class="mut">산업 연간 5대 ₩382,000 (대당 ₩76,400)<input id="pBizYearly5" placeholder="https://…"></label>
-        <label class="mut">산업 연간 10대 ₩674,000 (대당 ₩67,400)<input id="pBizYearly10" placeholder="https://…"></label>
-        <div class="row"><button class="p" id="saveLinks">링크 저장</button><span id="pMsg" class="mut"></span></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>발급된 키</h2>
-    <div class="row" style="margin-bottom:10px">
-      <input id="q" placeholder="메일, 키 식별 번호, 주문 코드, 메모로 찾기">
-      <div class="seg" id="seg"><button data-s="all" class="on">전체</button><button data-s="active">사용 중</button><button data-s="expired">만료</button><button data-s="revoked">차단</button><button data-s="test">테스트</button></div>
-    </div>
-    <div class="tbl"><table><thead><tr><th>키 식별 번호</th><th>메일 / 메모</th><th>플랜</th><th>발급</th><th>만료</th><th>상태</th><th></th></tr></thead><tbody id="keys"></tbody></table></div>
-    <p class="mut" id="more"></p>
-  </div>
-
-  <div class="grid2">
-    <div class="card">
-      <h2>키 확인 <small>구매자가 보낸 키를 붙여 넣어 진짜인지, 차단됐는지 봐요</small></h2>
-      <textarea id="lKey" rows="3" placeholder="키 붙여 넣기"></textarea>
-      <div class="row" style="margin-top:8px"><button id="look">확인</button></div>
-      <div id="lOut" class="mut" style="margin-top:8px"></div>
-    </div>
-    <div class="card">
-      <h2>기록 <small>최근 100개, 180일 보관. 메일·입금자명·메모는 앞부분만 남겨요</small></h2>
-      <div class="tbl" style="max-height:300px;overflow:auto"><table><tbody id="log"></tbody></table></div>
-      <p class="mut" id="logNote"></p>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>관리자 접속 기록 <small id="accNote">로그인과 개인정보를 본 기록이에요. 1년 보관하고, 접속 주소는 알아볼 수 없게 바꿔 남겨요. 검색어는 남기지 않아요.</small></h2>
-    <div class="tbl" style="max-height:320px;overflow:auto"><table><thead><tr><th>시각</th><th>접속</th><th>한 일</th><th>대상</th></tr></thead><tbody id="acc"></tbody></table></div>
-    <div class="row" style="margin-top:8px"><span class="mut" id="accMsg"></span><span class="sp"></span><button id="accMore" class="hide">이전 기록 더 보기</button></div>
-  </div>
-
-  <h2 id="supTop" style="margin:22px 0 10px">고객센터</h2>
+</section>
+<section class="tab hide" data-tab="support" aria-label="고객센터">
+  <span id="supTop"></span>
   <div class="card" id="feedCard">
     <h2>새 소식 <small>구매자가 앱이나 도움말 페이지(/help)에서 한 일이에요. 이 탭이 화면에 보이는 동안 30초마다 확인해요. 최근 20개, 서버에 30일 보관해요.</small></h2>
     <ul class="feed" id="feedList"><li class="empty">불러오는 중이에요</li></ul>
@@ -375,7 +324,93 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
     <div class="acts"><span class="sp"></span><span id="sfMsg" class="mut"></span><button class="p" id="sfSave">설정 저장</button></div>
   </div>
 
-  <h2 id="annTop" style="margin:22px 0 10px">디스코드 공지</h2>
+</section>
+<section class="tab hide" data-tab="stats" aria-label="통계">
+  <div class="usage" id="usage2">
+    <div class="card">
+      <h2>다운로드 <small id="dNote"></small></h2>
+      <div class="stats in" id="dStats"></div>
+      <div class="tbl"><table><thead><tr><th>버전</th><th>출시일</th><th class="n">Windows 설치판</th><th class="n">Windows 포터블</th><th class="n">macOS</th><th class="n">자동 업데이트</th></tr></thead><tbody id="dRows"></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2>최근 30일 <small>막대에 마우스를 올리면 그날 숫자가 보여요</small></h2>
+      <div class="trio">
+        <figure><figcaption>하루 사용자 <small>그날 앱을 켠 설치 수</small></figcaption><div class="viz" id="cActive"></div></figure>
+        <figure><figcaption>새 설치 <small>처음 신호를 보낸 설치 수</small></figcaption><div class="viz" id="cInstalls"></div></figure>
+        <figure><figcaption>다운로드 <small>설치 파일, 자동 업데이트 제외</small></figcaption><div class="viz" id="cDownloads"></div></figure>
+      </div>
+      <details><summary>표로 보기</summary><div class="tbl"><table><thead><tr><th>날짜</th><th class="n">사용자</th><th class="n">새 설치</th><th class="n">다운로드</th><th class="n">업데이트</th><th class="n">켜 둔 시간</th><th class="n">프레임 생성</th></tr></thead><tbody id="hRows"></tbody></table></div></details>
+    </div>
+
+    <div class="card">
+      <h2>사용자 구성 <small id="pNote"></small></h2>
+      <div class="parts" id="parts"></div>
+    </div>
+  </div>
+</section>
+<section class="tab hide" data-tab="pay" aria-label="결제 설정">
+  <div class="card">
+    <h2>결제 방식 <small>두 가지를 함께 켤 수 있어요. 구매자가 앱에서 골라요.</small></h2>
+    <div style="display:grid;gap:12px">
+      <div><b>계좌이체 · 직접 결제</b> <span class="mut" id="manualHelp"></span></div>
+      <div><b>카드 결제</b> <span class="mut" id="methodHelp"></span>
+        <div class="seg" id="mode" style="margin-top:8px"><button data-m="off">꺼짐</button><button data-m="test">테스트</button><button data-m="live">실판매</button></div></div>
+    </div>
+    <details id="cardSetup" class="cardSetup">
+      <summary>카드 결제 설정 (Lemon Squeezy) <span id="cReady" class="mut"></span></summary>
+      <ol class="cSteps">
+        <li><b>API 키</b> <span id="cKey"></span> · <b>웹훅 서명 비밀</b> <span id="cSign"></span>
+          <div class="mut">바탕화면의 'SystemBoost 카드 결제 키 넣기.cmd'를 더블클릭해서 직접 넣어요. 여기에는 저장되지 않고 보이지도 않아요.</div></li>
+        <li><b>웹훅</b> — Lemon Squeezy Settings → Webhooks에서 아래 주소를 넣고, 서명 비밀은 위에 넣은 것과 같은 값으로 해요.
+          <div class="row" style="margin:6px 0"><code id="cHook" style="flex:1;min-width:0;overflow-wrap:anywhere"></code><button id="cHookCopy">주소 복사</button></div>
+          <div class="mut">보낼 이벤트: subscription_created, subscription_updated, subscription_payment_success, subscription_payment_refunded, order_refunded</div></li>
+        <li><b>상점과 상품 번호</b> — 구독 상품을 플랜마다 하나씩 만들고 번호를 넣어요. 비워 둔 플랜은 카드로 팔지 않아요. 5대·10대 묶음은 카드로 팔지 않고 아래 '결제 링크'로만 팔아요.
+          <div class="cIds">
+            <label class="mut">상점 번호<input id="cStore" inputmode="numeric" placeholder="예: 12345"></label>
+            <label class="mut">프로 월간 ₩2,900<input id="cV_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">프로 연간 ₩19,900<input id="cV_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">울트라 월간 ₩8,900<input id="cV_ultra_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">울트라 연간 ₩59,900<input id="cV_ultra_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">산업 월간 ₩12,900<input id="cV_biz_monthly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+            <label class="mut">산업 연간 ₩89,900<input id="cV_biz_yearly" inputmode="numeric" placeholder="상품(variant) 번호"></label>
+          </div>
+          <div class="row" style="margin-top:8px"><button class="p" id="cSave">번호 저장</button><span id="cMsg" class="mut"></span></div></li>
+      </ol>
+      <p class="mut">테스트 모드에서 만든 상품 번호와 API 키는 실판매에서 쓸 수 없어요. 실판매로 바꿀 때는 실판매 상품 번호와 API 키로 다시 넣으세요. 결제 금액과 수수료는 Lemon Squeezy 상품에서 정해요.</p>
+    </details>
+  </div>
+
+    <div class="card">
+      <h2>결제 링크 <small>수동 확인 방식에서 써요. 비워 둔 플랜은 앱에서 '결제 준비 중'으로 잠겨요</small></h2>
+      <div class="linkGrid">
+        <div class="anSub" style="margin:0">정가</div>
+        <label class="mut">프로 월간 ₩2,900<input id="pMonthly" placeholder="https://…"></label>
+        <label class="mut">프로 연간 ₩19,900<input id="pYearly" placeholder="https://…"></label>
+        <label class="mut">울트라 월간 ₩8,900<input id="pUltraMonthly" placeholder="https://…"></label>
+        <label class="mut">울트라 연간 ₩59,900<input id="pUltraYearly" placeholder="https://…"></label>
+        <label class="mut">산업 월간 ₩12,900<input id="pBizMonthly" placeholder="https://…"></label>
+        <label class="mut">산업 연간 ₩89,900<input id="pBizYearly" placeholder="https://…"></label>
+        <div class="anSub">할인 티켓 (정가의 90%)</div>
+        <label class="mut">할인 티켓 프로 월간 ₩2,610<input id="pMonthlyT" placeholder="https://…"></label>
+        <label class="mut">할인 티켓 프로 연간 ₩17,910<input id="pYearlyT" placeholder="https://…"></label>
+        <label class="mut">할인 티켓 울트라 월간 ₩8,010<input id="pUltraMonthlyT" placeholder="https://…"></label>
+        <label class="mut">할인 티켓 울트라 연간 ₩53,910<input id="pUltraYearlyT" placeholder="https://…"></label>
+        <label class="mut">할인 티켓 산업 월간 ₩11,610<input id="pBizMonthlyT" placeholder="https://…"></label>
+        <label class="mut">할인 티켓 산업 연간 ₩80,910<input id="pBizYearlyT" placeholder="https://…"></label>
+        <div class="mut" style="margin-top:6px"><b>묶음 (연간, 키 5개·10개)</b> — 5대 15%, 10대 25% 할인. 할인 티켓은 쓸 수 없어요. 앱에는 사용권 계약 개정이 시행되는 2026년 12월 9일부터 나와요.</div>
+        <label class="mut">프로 연간 5대 ₩84,500 (대당 ₩16,900)<input id="pYearly5" placeholder="https://…"></label>
+        <label class="mut">프로 연간 10대 ₩149,000 (대당 ₩14,900)<input id="pYearly10" placeholder="https://…"></label>
+        <label class="mut">울트라 연간 5대 ₩254,500 (대당 ₩50,900)<input id="pUltraYearly5" placeholder="https://…"></label>
+        <label class="mut">울트라 연간 10대 ₩449,000 (대당 ₩44,900)<input id="pUltraYearly10" placeholder="https://…"></label>
+        <label class="mut">산업 연간 5대 ₩382,000 (대당 ₩76,400)<input id="pBizYearly5" placeholder="https://…"></label>
+        <label class="mut">산업 연간 10대 ₩674,000 (대당 ₩67,400)<input id="pBizYearly10" placeholder="https://…"></label>
+        <div class="row"><button class="p" id="saveLinks">링크 저장</button><span id="pMsg" class="mut"></span></div>
+      </div>
+    </div>
+</section>
+<section class="tab hide" data-tab="ann" aria-label="디스코드 공지">
+  <span id="annTop"></span>
   <div class="anGrid">
     <div>
       <div class="card anForm">
@@ -426,6 +461,20 @@ label.chk{display:flex;align-items:center;gap:8px;color:var(--txt)}label.chk inp
     </div></div>
   </div>
 
+</section>
+<section class="tab hide" data-tab="log" aria-label="기록">
+    <div class="card">
+      <h2>기록 <small>최근 100개, 180일 보관. 메일·입금자명·메모는 앞부분만 남겨요</small></h2>
+      <div class="tbl" style="max-height:560px;overflow:auto"><table><tbody id="log"></tbody></table></div>
+      <p class="mut" id="logNote"></p>
+    </div>
+  <div class="card">
+    <h2>관리자 접속 기록 <small id="accNote">로그인과 개인정보를 본 기록이에요. 1년 보관하고, 접속 주소는 알아볼 수 없게 바꿔 남겨요. 검색어는 남기지 않아요.</small></h2>
+    <div class="tbl" style="max-height:320px;overflow:auto"><table><thead><tr><th>시각</th><th>접속</th><th>한 일</th><th>대상</th></tr></thead><tbody id="acc"></tbody></table></div>
+    <div class="row" style="margin-top:8px"><span class="mut" id="accMsg"></span><span class="sp"></span><button id="accMore" class="hide">이전 기록 더 보기</button></div>
+  </div>
+
+</section>
 </main>
 </div>
 
@@ -541,10 +590,11 @@ let sumCounts = null;
 function sumTiles(c) {
   $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["답변할 문의", c.ticketsOpen || 0, "var(--or)"], ["환불 진행 중", c.refundsOpen || 0, "var(--bad)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total]]
     .map(([l, n, col]) => `<div class="stat"><div class="n" style="color:${col || "inherit"}">${n}</div><div class="l">${l}</div></div>`).join("");
+  renderTodo(c);
 }
 async function loadSummary() {
   const s = await api("/summary"), c = s.counts;
-  sumCounts = c; supBadge(c); sumTiles(c);
+  sumCounts = c; renderBudget(s.budget); supBadge(c); sumTiles(c);
   const partial = [c.keysMore && "키가 2만 개를 넘어 앞의 2만 개만 셌어요", c.ordersMore && "주문이 1,000개를 넘어 앞의 1,000개만 셌어요",
                    c.ticketsMore && "문의가 1,000개를 넘어 앞의 1,000개만 셌어요"].filter(Boolean);
   $("moreWarn").textContent = partial.length ? "위 숫자는 일부만 센 값이에요: " + partial.join(" · ") + "." : "";
@@ -734,11 +784,11 @@ async function loadStats() {
   try {
     const s = await api("/stats");
     renderStats(s);
-    $("usage").classList.remove("stale");
+    document.querySelectorAll(".usage").forEach(u => u.classList.remove("stale"));
     askGitHubHere(s);
   } catch (e) {
     if (e.message === "401") return;
-    $("usage").classList.add("stale");
+    document.querySelectorAll(".usage").forEach(u => u.classList.add("stale"));
     $("uNote").textContent = "통계를 불러오지 못했어요 · " + new Date().toLocaleTimeString("ko-KR");
   }
 }
@@ -881,8 +931,62 @@ $("look").onclick = async () => {
     (r.revoked ? `<br><span class="err">차단됨: ${esc(r.revoked)}</span> <button data-unrev="${esc(r.id)}">해제</button>` : (r.valid ? ` <button class="d" data-rev="${esc(r.id)}" data-sub="${esc(p.sub || "")}">차단</button>` : ""));
 };
 $("reload").onclick = () => { loadAll(); loadStats(); feedPoll(); };
-$("goAnn").onclick = () => $("annTop").scrollIntoView();
-$("goSup").onclick = () => { $("supTop").scrollIntoView(); feedNew = 0; feedTitle(); };
+// ------------------------------------------------------------ the menu (tabs)
+// One part of the dashboard at a time. The part is in the address (#sales …), so a reload or a bookmark opens it again.
+const TABS = ["home", "sales", "members", "support", "stats", "pay", "ann", "log"];
+let tabNow = "";
+function showTab(name, quiet) {
+  if (!TABS.includes(name)) name = "home";
+  const changed = name !== tabNow;
+  tabNow = name;
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("hide", s.dataset.tab !== name));
+  document.querySelectorAll("#tabs [data-tab]").forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle("on", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  try { if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name); } catch (e) {}
+  if (name === "stats") drawCharts();   // drawn while the tab was hidden, the charts had no width to fit
+  if (name === "support") { feedNew = 0; feedTitle(); }
+  if (changed && !quiet) scrollTo(0, 0);
+  const b = document.querySelector('#tabs [data-tab="' + name + '"]');
+  if (b && matchMedia("(max-width:900px)").matches) b.scrollIntoView({ block: "nearest", inline: "nearest" });   // a narrow menu scrolls sideways
+}
+$("tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); });
+addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+
+// ------------------------------------------------------------ home: what needs the seller now, and today's server writes
+let budgetNow = null;   // GET /summary budget: [count, cap] each, counted in the Stats object (null: it did not answer)
+const BUDGET_ROWS = [["pub", "주문 · 입금 알림 · 선물", "번"], ["gifts", "추천 · 초대 선물", "개"], ["support", "고객센터 문의와 답장", "번"]];
+function renderBudget(b) {
+  budgetNow = b || null;
+  if (!b) { $("budget").innerHTML = `<div class="mut">통계 저장소에 연결하지 못해 지금은 보여 줄 수 없어요.</div>`; return; }
+  $("budget").innerHTML = BUDGET_ROWS.filter(([k]) => Array.isArray(b[k])).map(([k, label, unit]) => {
+    const [n, max] = b[k].map(Number), pct = max ? Math.min(100, n / max * 100) : 0;
+    return `<div class="bRow${n >= max ? " full" : pct >= 80 ? " near" : ""}"><span>${esc(label)}</span><div class="bBar"><div style="width:${pct.toFixed(1)}%"></div></div><span class="v">${num(n)} / ${num(max)}${unit}</span></div>`;
+  }).join("");
+}
+function renderTodo(c) {
+  const rows = [[c.ordersPaid, "결제 확인 요청", "구매자가 결제했다고 알렸어요. 입금을 확인한 뒤 승인하세요.", "sales", "", "var(--or)"],
+                [c.ticketsOpen, "답변할 문의", "구매자가 답장을 기다리고 있어요.", "support", "open", "var(--or)"],
+                [c.refundsOpen, "환불 진행 중", "환불 요청을 승인하거나 거절하고, 돈을 돌려준 뒤 '환불 완료'를 누르세요.", "support", "refund", "var(--bad)"]]
+    .filter(r => Number(r[0]) > 0);
+  let html = rows.map(([n, label, what, tab, seg, col]) => `<button class="todoRow" data-go="${tab}" data-seg="${seg}"><span class="tn" style="color:${col}">${num(n)}</span><span class="tt"><b>${esc(label)}</b><span class="mut">${esc(what)}</span></span><span class="tg">보기 ›</span></button>`).join("");
+  const near = budgetNow ? BUDGET_ROWS.filter(([k]) => Array.isArray(budgetNow[k]) && budgetNow[k][1] && budgetNow[k][0] >= budgetNow[k][1] * 0.8) : [];
+  if (near.length) html += `<div class="todoRow warn"><span class="tn">!</span><span class="tt"><b>오늘 서버 저장 한도가 거의 찼어요</b><span class="mut">${esc(near.map(([k, label]) => label + " " + num(budgetNow[k][0]) + " / " + num(budgetNow[k][1])).join(" · "))}. 아래 '오늘 서버 저장 횟수'를 보세요.</span></span></div>`;
+  if (!html) html = `<div class="todoDone">지금 처리할 일이 없어요.</div>`;
+  const waiting = Math.max(0, (Number(c.ordersOpen) || 0) - (Number(c.ordersPaid) || 0));
+  if (waiting) html += `<p class="mut" style="margin:6px 0 0">결제 전 신청 ${num(waiting)}건: 앱에서 '결제하기'를 눌렀지만 아직 결제했다고 알리지 않았어요. 판매·키의 결제 신청에 있어요.</p>`;
+  $("todo").innerHTML = html;
+  $("salesBadge").textContent = num(c.ordersPaid || 0); $("salesBadge").classList.toggle("hide", !Number(c.ordersPaid));
+  $("salesBadge").parentNode.title = c.ordersPaid ? "결제 확인 요청 " + num(c.ordersPaid) + "건" : "";
+}
+$("todo").addEventListener("click", e => {
+  const b = e.target.closest("[data-go]"); if (!b) return;
+  showTab(b.dataset.go);
+  if (b.dataset.go === "sales" && ostatus !== "open") document.querySelector('#oseg [data-o="open"]').click();
+  if (b.dataset.seg && sstatus !== b.dataset.seg) document.querySelector('#tkSeg [data-ts="' + b.dataset.seg + '"]').click();
+});
 $("out").onclick = () => logout("");
 function logout(msg) { token = ""; feedNew = 0; feedTitle(); try { sessionStorage.removeItem("sbAdmin"); } catch (e) {} $("app").classList.add("hide"); $("login").classList.remove("hide"); $("lerr").textContent = msg; }
 async function login() {
@@ -1287,7 +1391,7 @@ async function supClick(e) {
     return;
   }
   if (ds.tkCopy) return copy(tkCur.contact);
-  if (ds.tkFind) { $("q").value = ds.tkFind; await loadKeys(); $("q").scrollIntoView({ block: "center" }); return; }
+  if (ds.tkFind) { $("q").value = ds.tkFind; await loadKeys(); showTab("sales"); $("q").scrollIntoView({ block: "center" }); return; }
   if (ds.tkSend) {
     const text = $("tkText").value.trim();
     if (!text) return toast("답장을 써 주세요");
@@ -1423,7 +1527,7 @@ function sfPrivWarn() {
   const top = [sellerGaps.length && `판매자 정보 ${sellerGaps.length}칸 (${sellerGaps.join(", ")})`, gaps.length && `개인정보 처리방침 ${gaps.length}칸 (${gaps.join(", ")})`].filter(Boolean);
   $("cfgWarn").innerHTML = top.length ? `<b>비어 있는 칸이 있어요:</b> ${esc(top.join(" · "))}. ${!s.rep ? "개인정보 보호책임자(대표자) 이름이 필요해요. " : ""}<button id="cfgGo">고객센터 설정 열기</button>` : "";
   $("cfgWarn").classList.toggle("hide", !top.length);
-  if ($("cfgGo")) $("cfgGo").onclick = () => $("sfCard").scrollIntoView();
+  if ($("cfgGo")) $("cfgGo").onclick = () => { showTab("support"); $("sfCard").scrollIntoView(); };
 }
 function renderFaq() {
   const box = $("sfFaq"); box.textContent = "";
@@ -1536,14 +1640,14 @@ function feedToast(fresh) {
   }
   if (fresh.length > 3) { const m = document.createElement("div"); m.className = "more"; m.textContent = "외 " + (fresh.length - 3) + "개 · 고객센터의 새 소식에 모두 있어요"; box.append(m); }
   const x = document.createElement("button"); x.className = "x"; x.dataset.feedX = "1"; x.textContent = "×"; x.title = "닫기"; x.setAttribute("aria-label", "닫기"); box.append(x);
-  box.style.top = Math.round(document.querySelector("header").getBoundingClientRect().bottom + 8) + "px";   // under the header, however many rows it has
+  box.style.top = Math.round($("top").getBoundingClientRect().bottom + 8) + "px";   // under the header and the menu, however many rows they have
   box.classList.remove("hide");
   clearTimeout(feedHide); feedHide = setTimeout(() => box.classList.add("hide"), 15000);
 }
 function feedOpen(id) {
   $("ftoast").classList.add("hide");
   feedNew = 0; feedTitle();
-  if (!matchMedia("(max-width:900px)").matches) $("supTop").scrollIntoView();
+  showTab("support");
   openTicket(id, false, true);
 }
 // Browser notifications: only after the seller presses the button and the browser allows it; they show while this tab
@@ -1649,8 +1753,9 @@ function demoApi(path, b) {
   }
   if (p === "/summary") { const c = { total: demo.keys.length, active: 0, revoked: 0, expired: 0, test: 0, last30: demo.keys.filter(k => Date.parse(k.issued) > Date.now() - 30 * 864e5).length };
     demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length;
+    c.ordersOpen = demo.orders.filter(o => ["requested", "paid"].includes(o.status)).length;
     c.ticketsOpen = demo.tickets.filter(t => t.status === "open").length; c.refundsOpen = demo.tickets.filter(t => t.refund && ["requested", "approved"].includes(t.refund.status)).length;
-    return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c }); }
+    return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c, budget: { pub: [137, 400], gifts: [4, 60], support: [212, 250] } }); }
   if (p.startsWith("/support")) return demoSupport(p, q, b, { st, L, R });
   if (p === "/orders") { const w = q.get("status"); const count = { requested: 0, paid: 0, approved: 0, rejected: 0, refunded: 0 }; demo.orders.forEach(o => count[o.status]++);
     return R({ count, orders: demo.orders.filter(o => w === "all" || (w === "open" ? ["requested", "paid"].includes(o.status) : o.status === w)) }); }
@@ -1803,6 +1908,7 @@ function demoSupport(p, q, b, { st, L, R }) {
   }
   return R({});
 }
+showTab(location.hash.slice(1), true);
 if (DEMO) { token = "demo"; login(); } else if (token) login();
 </script>
 </body>

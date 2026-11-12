@@ -2,7 +2,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
-import { helpPage, ipBucket, privacyPage, support, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
+import { budgetNames, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, support, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
 import { overIp } from "./iplimit.js";
 import { purchaseNote } from "./purchase_note.js";
 export { Stats } from "./stats.js";
@@ -26,6 +26,7 @@ export { Stats } from "./stats.js";
 //   POST /ping                   usage statistics from a running app -> {next: seconds until the next ping}
 //   /support/*, GET /help        customer support and refund requests (src/support.js, src/help_page.js)
 //   GET  /privacy                the privacy policy (?lang=en: an English summary), src/privacy_page.js
+//   GET  /terms                  the licence agreement as the app shows it (?lang=en: the reference translation), src/terms_page.js
 //   GET  /admin                  owner dashboard (HTML); its API is /admin/api/* with
 //                                "Authorization: Bearer <ADMIN_TOKEN>"
 //
@@ -288,6 +289,7 @@ export default {
       if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
       if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
       if (req.method === "GET" && url.pathname === "/privacy") return await privacyPage(url, env);
+      if (req.method === "GET" && url.pathname === "/terms") return termsPage(url);
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -1090,7 +1092,20 @@ async function summary(env) {
   if (all.truncated) c.keysMore = true;           // counted from the first 20,000 keys only
   Object.assign(c, await supportCounts(env));   // ticketsOpen, refundsOpen (ticketsMore: from the first 1,000)
   return { sales: await salesMode(env), autoReady: await cardPlans(env), cardLiveOpen: cardLiveOpen(env),
-           salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c };
+           salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c, budget: await kvBudget(env) };
+}
+// Today's share of KV writes for requests anyone can make (Workers free plan), as [count, cap] for the dashboard's
+// home: orders, "I paid" notes and gifts (PUBLIC_KV_DAY), gifts (REF_DAILY) and support (both lanes). One read of the
+// Stats object, no KV; null when it does not answer (the counts are then in KV, and the caps still hold).
+async function kvBudget(env) {
+  const s = budgetNames(), names = [pubName(), refName(), s.w, s.vw];
+  try {
+    const r = await stats(env, "/peek", { names });
+    if (!r?.n) return null;
+    const v = k => Number(r.n[k]) || 0;
+    return { pub: [v(names[0]), PUBLIC_KV_DAY], gifts: [v(names[1]), REF_DAILY],
+             support: [v(s.w) + v(s.vw), SUPPORT_LIMITS.writesPerDay + SUPPORT_LIMITS.vWritesPerDay] };
+  } catch { return null; }
 }
 async function listKeys(env, q, status) {
   q = q.trim().toLowerCase();

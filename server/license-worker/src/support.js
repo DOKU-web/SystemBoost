@@ -61,6 +61,7 @@
 // Without the secret (local tests only) the salt is empty.
 import { HELP_HTML } from "./help_page.js";
 import { PRIVACY_HTML } from "./privacy_page.js";
+import { TERMS_HTML } from "./terms_page.js";
 
 const DAY = 86400;
 export const LIMITS = {
@@ -808,6 +809,18 @@ export async function privacyPage(url, env) {
     .replace(/\{\{(OWNER_NAME|OWNER_EMAIL|SUPABASE_REGION|EFFECTIVE_DATE)\}\}/g,
              (_, k) => v[k] ? escHtml(v[k]) : '<span class="blank">' + PRIVACY_EMPTY[lang] + "</span>");
   return new Response(html, { headers: {
+    "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+    "content-security-policy": `default-src 'none'; style-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    "x-frame-options": "DENY", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });
+}
+
+// GET /terms. The licence agreement as the app shows it, made from the app's eula.txt / eula.en.txt by build_terms.mjs
+// (static, no script, nothing filled in). It is on the sales page (/help links to it) so a change can be announced
+// there 30 days ahead (EULA Article 13).
+export function termsPage(url) {
+  const lang = lang2(url.searchParams.get("lang"));
+  const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  return new Response(TERMS_HTML[lang].replaceAll("__NONCE__", nonce), { headers: {
     "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
     "content-security-policy": `default-src 'none'; style-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     "x-frame-options": "DENY", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });

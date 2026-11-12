@@ -39,6 +39,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row button{margin-top:8px}
 .msg{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}.msg.admin{border-color:var(--accent)}
 .msg .who{font-size:13px;color:var(--muted)}.msg .body{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}
+.terms{white-space:normal;border-color:var(--accent)}.terms ul{margin:8px 0;padding-left:20px}.terms li{margin:4px 0}
 .err{color:var(--bad)}.okc{color:var(--ok)}code{background:#0f0f11;border:1px solid var(--line);border-radius:6px;padding:2px 6px;overflow-wrap:anywhere}
 </style>
 </head>
@@ -46,9 +47,10 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <noscript><div class="box warn"><p>이 페이지는 JavaScript가 있어야 동작해요. SystemBoost 앱의 '고객센터'에서도 문의할 수 있어요.</p><p>This page needs JavaScript. You can also send a request from 'Support' in the SystemBoost app.</p></div></noscript>
 <header><h1 data-t="title"></h1><a id="langLink" href="?lang=en"></a></header>
 <p class="m" data-t="lead"></p>
-<nav><a href="#s-faq" data-t="faq"></a><a href="#s-refund" data-t="refund"></a><a href="#s-seller" data-t="seller"></a><a href="#s-ask" data-t="ask"></a><a href="#s-mine" data-t="mine"></a><a id="privacyNav" href="/privacy" data-t="privacy"></a></nav>
+<nav><a href="#s-faq" data-t="faq"></a><a href="#s-refund" data-t="refund"></a><a href="#s-seller" data-t="seller"></a><a href="#s-ask" data-t="ask"></a><a href="#s-mine" data-t="mine"></a><a id="privacyNav" href="/privacy" data-t="privacy"></a><a id="termsNav" href="/terms" data-t="termsNav"></a></nav>
 <div id="offline" class="box warn" hidden></div>
 <div id="notice" class="box" hidden></div>
+<div id="terms" class="box terms" hidden><b data-t="termsTitle"></b><p data-t="termsLead"></p><ul id="termsList"></ul><a id="termsLink" href="/terms" data-t="termsLink"></a></div>
 
 <section id="s-faq"><h2 data-t="faq"></h2><div id="faq"><p class="m" data-t="loading"></p></div></section>
 
@@ -121,6 +123,17 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       title: "SystemBoost 고객센터", other: "English", lead: "자주 묻는 질문과 환불 안내를 보고, 앱 없이도 문의를 남길 수 있어요.",
       faq: "자주 묻는 질문", refund: "환불 · 청약철회", seller: "판매자 정보", ask: "문의하기", mine: "내 문의", loading: "불러오는 중…",
       privacy: "개인정보 처리방침", privacyMore: "자세한 내용은 개인정보 처리방침에서 볼 수 있어요",
+      termsNav: "사용권 계약", termsTitle: "사용권 계약 변경 안내 · 2027년 1월 1일 시행", termsLink: "바뀐 사용권 계약 전문 보기",
+      termsLead: "사용권 계약의 아래 조항이 2027년 1월 1일부터 바뀌어요. 그 전에는 이전 문구가 적용돼요. 앱은 0.8.12부터 켤 때 바뀐 계약을 보여 주고 다시 동의를 받아요.",
+      termsItems: ["제1조: '판매 페이지'는 앱의 ★ 플랜 화면과 고객센터, 이 도움말 페이지(/help)를 말해요.",
+                   "제3조 제2항: 플랜별 기능과 그 기능에 필요한 사양은 구매할 때 앱의 ★ 플랜 화면에 표시된 대로예요.",
+                   "제3조 제3항: 카드 구독의 해지 방법(결제 메일의 구독 관리 링크), 해지해도 이미 결제한 기간이 끝날 때까지 쓸 수 있다는 것, 이미 결제한 대금을 돌려주는 경우를 적었어요.",
+                   "제3조 제10항(새 조항): 판매자가 직접 결제 주문을 거절하면, 그 주문으로 받은 돈을 늦어도 받은 날부터 3영업일 안에 돌려주거나 돌려주는 데 필요한 조치를 해요.",
+                   "제3조 제11항(새 조항): 미성년자가 법정대리인의 동의 없이 유료 플랜을 사면 본인이나 법정대리인이 취소할 수 있어요. 민법이 취소를 인정하지 않는 경우는 제외해요.",
+                   "제8조: 서버로 보내고 보관하는 정보와 보관 기간, 국외 이전(Cloudflare, Supabase), 사용 통계를 고르는 방법, 회원 정보, IP 주소 해시값, 고객센터 기록, 백업을 자세히 적었어요.",
+                   "제9조 제2항: 구매 전에 써 볼 수 있는 것이 3일 시험 키에서 무료 플랜으로 바뀌어요. 유료 플랜에만 있는 기능은 구매 전에 써 볼 수 없어요.",
+                   "제9조 제5항: 청약철회와 환불 문의를 앱이나 이 도움말 페이지의 고객센터로도 보낼 수 있어요.",
+                   "제10조 제3항: 판매자의 경과실로 생긴 손해의 배상 한도가 '지급한 금액'에서 '지급한 금액과 10만 원 가운데 큰 금액'으로 바뀌어요. 무료 플랜만 쓰면 10만 원이에요."],
       refundLead: "환불(청약철회)은 사용권 계약 제9조를 따라요. 아래는 그 조항 그대로예요. 제2항과 제5항은 2027년 1월 1일부터 시행하는 문구이고, 그 전에는 이전 문구가 적용돼요.",
       refundDays: "청약철회 기간: 키를 받은 날부터 7일 (사용권 계약 제9조 제1항)",
       refundDaysLonger: "판매자가 안내하는 청약철회 기간: 키를 받은 날부터 {n}일 (법이 정한 7일보다 길어요)",
@@ -166,6 +179,17 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       title: "SystemBoost Support", other: "한국어", lead: "Read the FAQ and the refund policy, and send a request without the app.",
       faq: "FAQ", refund: "Refunds and withdrawal", seller: "Seller", ask: "Send a request", mine: "My requests", loading: "Loading…",
       privacy: "Privacy policy", privacyMore: "Details are in the privacy policy",
+      termsNav: "License agreement", termsTitle: "License agreement changes · in force January 1, 2027", termsLink: "Read the changed license agreement",
+      termsLead: "The articles below change on January 1, 2027; until then the previous wording applies. From version 0.8.12 the app shows the changed agreement when it starts and asks for consent again. The Korean text is the agreement.",
+      termsItems: ["Article 1: the 'sales page' means the app's ★ Plans screen and Support, and this help page (/help).",
+                   "Article 3, Paragraph 2: each plan's features, and the system requirements for them, are as the app's ★ Plans screen shows at the time of purchase.",
+                   "Article 3, Paragraph 3: how to cancel a card subscription (the subscription link in the payment email), that a cancelled subscription can still be used until the paid period ends, and when an amount already paid is refunded.",
+                   "Article 3, Paragraph 10 (new): if the seller rejects a direct-payment order, money received for it is returned, or the steps to return it are taken, within 3 business days of receiving it at the latest.",
+                   "Article 3, Paragraph 11 (new): a minor who buys a paid plan without a legal representative's consent, or the legal representative, may cancel the purchase, except where the Civil Act does not allow it.",
+                   "Article 8: in detail, what is sent to and kept on the server and for how long, transfer abroad (Cloudflare, Supabase), choosing whether to send usage statistics, member data, IP address hashes, support records and backups.",
+                   "Article 9, Paragraph 2: what can be tried before buying changes from a 3-day trial key to the free plan. Features only in paid plans cannot be tried before buying.",
+                   "Article 9, Paragraph 5: withdrawal and refund requests can also be sent from Support in the app or on this help page.",
+                   "Article 10, Paragraph 3: the cap on damages for the seller's slight negligence changes from 'the amount paid' to 'the larger of the amount paid and 100,000 won' (100,000 won for free-plan users)."],
       refundLead: "Refunds (withdrawal) follow Article 9 of the license agreement. Here it is word for word. Paragraphs 2 and 5 are the wording in force from January 1, 2027; until then the previous wording applies.",
       refundDays: "Withdrawal period: 7 days from receiving the key (license agreement, Article 9, Paragraph 1)",
       refundDaysLonger: "Withdrawal period announced by the seller: {n} days from receiving the key (longer than the 7 days set by law)",
@@ -276,6 +300,13 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
   link.textContent = TX.other;
   link.href = L === "en" ? "?lang=ko" : "?lang=en";
   $("privacyNav").href = $("privacyLink").href = L === "en" ? "/privacy?lang=en" : "/privacy";   // Korean is the policy, English a summary
+  // The licence agreement change of 2027-01-01, announced here 30 days ahead (EULA Article 13: the sales page and the
+  // app); shown until the end of January 2027 (KST). /terms is the full text as the app shows it.
+  $("termsNav").href = $("termsLink").href = L === "en" ? "/terms?lang=en" : "/terms";
+  if (Date.now() < Date.UTC(2027, 0, 31, 15)) {
+    TX.termsItems.forEach(function (s) { $("termsList").appendChild(el("li", "", s)); });
+    $("terms").hidden = false;
+  }
 
   function renderInfo() {
     if (info.notice) { $("notice").textContent = info.notice; $("notice").hidden = false; }
