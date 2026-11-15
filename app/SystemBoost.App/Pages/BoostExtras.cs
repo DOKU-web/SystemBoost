@@ -226,7 +226,7 @@ internal static class BoostExtras
         var core = Picker(cores, choice.CoreMHz, Offset);
         var mems = Steps(MemOffsetMin, MemOffsetMax, MemOffsetStep, 0);
         var mem = Picker(mems, choice.MemMHz, Offset);
-        var risk = new CheckBox { Content = "값을 높이면 게임이 멈추거나 화면이 꺼질 수 있고, 적용한 결과는 제 책임이라는 것을 이해했어요", IsChecked = choice.RiskAccepted };
+        var risk = new CheckBox { Content = "값을 높이면 게임이 멈추거나 화면이 꺼질 수 있고, 적용한 결과는 제 책임이라는 것을 이해했어요", IsChecked = b.GpuRiskAccepted };
         p.Children.Add(Ui.Row("전력 제한", "낮추면 전력과 열이 줄고 성능도 줄 수 있어요", power, true));
         p.Children.Add(Ui.Row("코어 클럭 오프셋", "기본 클럭에 더하거나 빼는 값이에요", core));
         p.Children.Add(Ui.Row("메모리 클럭 오프셋", "기본 클럭에 더하거나 빼는 값이에요", mem));

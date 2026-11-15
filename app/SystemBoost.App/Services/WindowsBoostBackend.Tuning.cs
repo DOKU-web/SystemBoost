@@ -23,6 +23,9 @@ public sealed class GpuChoice
     public int CoreMHz { get; set; }
     public int MemMHz { get; set; }
     public bool RiskAccepted { get; set; }
+    /// Which wording of the risk checkbox RiskAccepted answers: 2 = from 0.8.13, which adds that the user answers
+    /// for the results of applied values. 0 (older files) asks again. See WindowsBoostBackend.GpuRiskAccepted.
+    public int RiskTerms { get; set; }
     public int TempLimitC { get; set; } = 85;
 }
 
@@ -123,9 +126,14 @@ public sealed partial class WindowsBoostBackend
     public bool GpuTuned => Has("gpu.oc");
     public int? GpuConfirmLeft => _gpuConfirmBy is DateTime t ? Math.Max(0, (int)Math.Ceiling((t - DateTime.UtcNow).TotalSeconds)) : null;
 
+    private const int GpuRiskTerms = 2;
+    /// The risk checkbox was ticked for its current wording (an older tick does not count).
+    public bool GpuRiskAccepted => _s.Gpu.RiskAccepted && _s.Gpu.RiskTerms >= GpuRiskTerms;
+
     public void SetGpuChoice(int powerW, int coreMHz, int memMHz, bool riskAccepted)
     {
         (_s.Gpu.PowerW, _s.Gpu.CoreMHz, _s.Gpu.MemMHz, _s.Gpu.RiskAccepted) = (powerW, coreMHz, memMHz, riskAccepted);
+        _s.Gpu.RiskTerms = riskAccepted ? GpuRiskTerms : 0;
         Save();
     }
 
@@ -139,7 +147,7 @@ public sealed partial class WindowsBoostBackend
         if (power == gpu.PowerNowW && c.CoreMHz == gpu.CoreMHz && c.MemMHz == gpu.MemMHz)
             return "아래에서 값을 바꾼 뒤 켜 주세요 (바뀐 것 없음)";
         bool raises = power > gpu.PowerDefaultW || c.CoreMHz > 0 || c.MemMHz > 0;
-        if (raises && !c.RiskAccepted) return "아래 안내를 읽고 체크해 주세요 (바뀐 것 없음)";
+        if (raises && !GpuRiskAccepted) return "아래 안내를 읽고 체크해 주세요 (바뀐 것 없음)";
         var e = await _helper.EnsureAsync();
         if (e != null) return e;
         // on disk before anything changes, so a crash can still find its way back
