@@ -19,6 +19,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
 h1{color:var(--accent);margin:0;font-size:26px}h2{font-size:19px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px}
 a{color:var(--accent)}.m{color:var(--muted);font-size:14px}
+footer.m{font-size:12px;margin-top:40px;padding-top:12px;border-top:1px solid var(--line)}
 nav{display:flex;flex-wrap:wrap;gap:8px 16px;margin:16px 0 8px;font-size:14px}
 section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:16px}
 .box{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:16px;white-space:pre-wrap}.warn{border-color:var(--bad)}
@@ -47,6 +48,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <noscript><div class="box warn"><p>이 페이지는 JavaScript가 있어야 동작해요. SystemBoost 앱의 '고객센터'에서도 문의할 수 있어요.</p><p>This page needs JavaScript. You can also send a request from 'Support' in the SystemBoost app.</p></div></noscript>
 <header><h1 data-t="title"></h1><a id="langLink" href="?lang=en"></a></header>
 <p class="m" data-t="lead"></p>
+<p class="m" data-t="about"></p>
 <nav><a href="#s-faq" data-t="faq"></a><a href="#s-refund" data-t="refund"></a><a href="#s-seller" data-t="seller"></a><a href="#s-ask" data-t="ask"></a><a href="#s-mine" data-t="mine"></a><a id="privacyNav" href="/privacy" data-t="privacy"></a><a id="termsNav" href="/terms" data-t="termsNav"></a></nav>
 <div id="offline" class="box warn" hidden></div>
 <div id="notice" class="box" hidden></div>
@@ -121,6 +123,8 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 </div>
 </section>
 
+<footer class="m" data-t="trademark"></footer>
+
 <script nonce="__NONCE__">
 (function () {
   "use strict";
@@ -128,6 +132,9 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
   var TX = {
     ko: {
       title: "SystemBoost 고객센터", other: "English", lead: "자주 묻는 질문과 환불 안내를 보고, 앱 없이도 문의를 남길 수 있어요.",
+      about: "지원 환경: 현재 윈도우만 지원해요 · 출시일: 2026년 12월 9일",
+      // Only the names this page and the default FAQ actually show (a FAQ written on the dashboard may add others).
+      trademark: "Windows(윈도우)는 Microsoft 그룹 회사의 상표예요. Cloudflare, Supabase, Lemon Squeezy는 각 소유자의 상표이고, 판매자가 쓰는 서비스를 가리키려고만 써요. SystemBoost는 Microsoft가 만들거나 승인한 제품이 아니에요.",
       faq: "자주 묻는 질문", refund: "환불 · 청약철회", seller: "판매자 정보", ask: "문의하기", mine: "내 문의", loading: "불러오는 중…",
       privacy: "개인정보 처리방침", privacyMore: "자세한 내용은 개인정보 처리방침에서 볼 수 있어요",
       termsNav: "사용권 계약", termsTitle: "사용권 계약 변경 안내 · 2027년 1월 1일 시행", termsLink: "바뀐 사용권 계약 전문 보기",
@@ -188,6 +195,8 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     },
     en: {
       title: "SystemBoost Support", other: "한국어", lead: "Read the FAQ and the refund policy, and send a request without the app.",
+      about: "Supported system: Windows only for now · Release date: December 9, 2026",
+      trademark: "Windows is a trademark of the Microsoft group of companies. Cloudflare, Supabase and Lemon Squeezy are trademarks of their owners, named only to identify services the seller uses. SystemBoost is not made or endorsed by Microsoft.",
       faq: "FAQ", refund: "Refunds and withdrawal", seller: "Seller", ask: "Send a request", mine: "My requests", loading: "Loading…",
       privacy: "Privacy policy", privacyMore: "Details are in the privacy policy",
       termsNav: "License agreement", termsTitle: "License agreement changes · in force January 1, 2027", termsLink: "Read the changed license agreement",

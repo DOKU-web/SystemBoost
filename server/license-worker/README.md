@@ -250,6 +250,11 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 자주 묻는 질문을 비우면 서버의 기본 질문이 나옵니다. 기본 질문은 이 README, 사용권 계약, 앱 문구에 있는 내용으로만 썼습니다.
 - 청약철회 기간은 화면에 보여 주기만 합니다. 7일보다 짧게 넣어도 앱과 /help에는 법정 7일이 나오고, 7일보다 길게 넣으면 그 기간이 판매자가 더 주는 기간으로 나옵니다.
 - 사용권 계약 제9조나 앱 메뉴 이름을 바꾸면 `src/support.js`의 `ARTICLE_9`, `DEFAULT_FAQ`도 함께 고칩니다.
+- 0.8.14부터 윈도우만 팝니다. /help 맨 위에 '지원 환경: 현재 윈도우만 지원해요 · 출시일: 2026년 12월 9일', 맨 아래에 상표 안내가
+  나옵니다(`src/help_page.js` TX의 `about`, `trademark`, 영어도 함께). 상표 안내는 이 페이지와 기본 질문에 나오는 이름(Windows,
+  Cloudflare, Supabase, Lemon Squeezy)만 다룹니다. 대시보드에서 쓴 질문이나 공지에 다른 회사 이름을 넣으면 `trademark`도 고칩니다.
+  사용자가 읽는 글(/help, 기본 질문, /privacy, 구매 확인, 대시보드의 답장 문구와 디스코드 다운로드 양식)에는 Mac · macOS · Apple ·
+  GPTK · Wine · Steam이 없습니다. 통계 코드는 예전 버전이 보내는 os "mac"을 그대로 받습니다.
 - 테스트: `node test_support.mjs`(새 소식은 `node test_stats.mjs`에도)
 
 ## 개인정보 처리방침 (`/privacy`)
@@ -258,6 +263,8 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 빈칸 네 개는 요청마다 `config:support`에서 채웁니다: 보호책임자(판매자 정보의 대표자, 없으면 상호), 메일(판매자 정보의 메일), 회원 DB 위치, 시행일. 마지막 두 개는 대시보드 '고객센터' → 설정의 '개인정보 처리방침' 칸입니다(회원 DB 위치는 Supabase 프로젝트의 지역). 비어 있으면 페이지에 '판매자가 아직 입력하지 않았어요'가 나오고, 대시보드 설정에 경고가 뜹니다.
 - 값은 모두 HTML로 이스케이프하고, 페이지는 /help처럼 요청마다 nonce를 쓰는 CSP로 보내며 스크립트와 외부 자원이 없습니다.
 - 방침의 내용은 코드를 읽고 쓴 것입니다. 저장하는 항목, 보관 기간, 국외 이전을 바꾸면 방침과 사용권 계약 제8조를 함께 고치고 `Eula.Version`을 올립니다.
+- 제12조(EU · EEA · 영국 이용자)는 처리의 법적 근거, 권리, 감독기관 민원, 국외 이전만 적습니다. EU 대리인, 개인정보 보호 담당관(DPO),
+  인증은 정해진 것이 없어 적지 않았습니다. EU 대리인을 둘지는 소유자가 정합니다 [사용자 필요].
 
 ## 설치
 1. `npm i -g wrangler` → `wrangler login`
@@ -297,7 +304,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
 - `node test_kv_public.mjs` (공개 저장 몫이 차도 키 확인 · 갱신 · 웹훅 · 승인은 됨, `PUBLIC_KV_DAY`), `node test_kv_writes.mjs` (동작마다 KV 쓰기 수, `docs/KV_BUDGET.md`)
-- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림)
+- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내)
 
 ## 확인 필요
 - Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.
