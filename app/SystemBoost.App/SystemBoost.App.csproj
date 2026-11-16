@@ -28,7 +28,8 @@
     <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Assets/wine-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Wine download list for the macOS "윈도우 게임" page only; Windows packages leave it out (0.8.14, Windows-only release) -->
+    <None Include="Assets/wine-manifest.json" CopyToOutputDirectory="PreserveNewest" Condition="!$(RuntimeIdentifier.StartsWith('win'))" />
     <None Include="..\..\THIRD_PARTY_NOTICES.txt" Link="THIRD_PARTY_NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets\SystemBoost.ico" />
