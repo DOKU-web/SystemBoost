@@ -203,7 +203,7 @@ button.todoRow:hover{border-color:var(--or)}
   <div class="usage" id="usage">
     <div class="card">
       <h2>실시간 사용 현황 <small id="uNote">불러오는 중</small></h2>
-      <div class="hero"><span class="dot" id="uDot"></span><div><div class="hn" id="uLive">—</div><div class="mut" id="uLiveL">지금 켜져 있는 앱</div></div></div>
+      <div class="hero"><span class="dot" id="uDot"></span><div><div class="hn" id="uLive">—</div><div class="mut" id="uLiveL">지금 켜져 있는 앱</div><div class="mut" id="uOptIn">통계를 켠 사용자만 셉니다</div></div></div>
       <div class="stats in" id="uStats" style="margin-bottom:0"></div>
     </div>
 
@@ -737,15 +737,17 @@ function drawCharts() {
 }
 addEventListener("resize", drawCharts);
 
+// every number here comes from usage pings, which only apps with usage statistics turned on send
+const OPT_IN = "통계를 켠 사용자만 셉니다";
 function renderStats(s) {
   const clock = new Date(s.now).toLocaleTimeString("ko-KR");
   const mins = Math.round(s.liveFor / 60);
-  $("uNote").textContent = `${mins}분 안에 신호를 보낸 앱을 세요. 15초마다 갱신 · ${clock}. 0.8.6 이후 버전에서 사용 통계를 켠 앱만 포함돼요.`;
+  $("uNote").textContent = `${mins}분 안에 신호를 보낸 앱을 세요. 15초마다 갱신 · ${clock}. 0.8.6 이후 버전에서 사용 통계를 켠 앱만 포함돼요(0.8.14부터 사용 통계는 처음에 꺼져 있어요).`;
   $("uLive").textContent = num(s.live.total);
   $("uDot").classList.toggle("on", s.live.total > 0);
   const each = s.today.active ? Math.round(s.today.seconds / s.today.active) : 0;
   $("uStats").innerHTML = tiles([
-    ["오늘 사용자", num(s.today.active)], ["최근 7일 사용자", num(s.week)], ["최근 30일 사용자", num(s.month)], ["누적 설치", num(s.installs)], ["오늘 새 설치", num(s.today.installs)],
+    ["오늘 사용자", num(s.today.active)], ["최근 7일 사용자", num(s.week)], ["최근 30일 사용자", num(s.month)], ["누적 설치", num(s.installs), OPT_IN], ["오늘 새 설치", num(s.today.installs), OPT_IN],
     ["오늘 앱을 켜 둔 시간", dur(s.today.seconds), s.today.active ? "1인 평균 " + dur(each) : ""], ["오늘 프레임 생성", dur(s.today.frameGenSeconds)],
     ["지금 프레임 생성", num(s.live.frameGen)], ["지금 원클릭 부스트", num(s.live.boost), "Windows만"]]);
 
