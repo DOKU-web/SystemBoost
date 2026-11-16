@@ -102,6 +102,12 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 대시보드 홈에 '오늘 3일 체험' · '전체 3일 체험' 숫자가 나옵니다.
 - 테스트: `node test_trial.mjs`
 
+## KV 쓰기 예산 (`docs/KV_BUDGET.md`)
+- 누구나 보낼 수 있는 요청(주문, '결제했어요', 선물, 체험)의 하루 KV 쓰기 몫은 기본 400번입니다. `wrangler.toml` `[vars]`에
+  `PUBLIC_KV_DAY = "600"`처럼 넣으면 바뀝니다(정수 50~100,000, 그 밖의 값은 무시하고 400). 무료 플랜(하루 1,000번)에서는
+  올리지 마세요. 판매자 작업과 카드 웹훅에 남는 몫이 줄어듭니다.
+- 출시일 계산(설치 300, 체험 100, 주문 30)과 결론은 `docs/KV_BUDGET.md`에 있습니다.
+
 ## 계좌이체 입금 확인 (0.8.14)
 - 안내 문구는 한 곳(`src/support.js` `DEPOSIT_GUIDE`)에서 나와 FAQ, `/help`, 구매 확인서(`/thanks`)에 똑같이 들어갑니다:
   주문 코드(SB-XXXX-XXXX)를 받고 → 판매자 계좌로 입금하고 → 앱에서 '고객센터에 입금 알리기'를 누르면 → 판매자가 확인한 뒤 24시간 안에 키를 보내요. 24시간은 입금을 알린 때부터예요.
@@ -288,6 +294,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - `node test_card.mjs`: 가짜 Lemon Squeezy와 서명한 웹훅으로 카드 결제 전부(플랜별 결제창, 울트라 키, 중복 없음, 갱신 기간,
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
+- `node test_kv_public.mjs` (공개 저장 몫이 차도 키 확인 · 갱신 · 웹훅 · 승인은 됨, `PUBLIC_KV_DAY`), `node test_kv_writes.mjs` (동작마다 KV 쓰기 수, `docs/KV_BUDGET.md`)
 - `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림)
 
 ## 확인 필요

@@ -211,7 +211,7 @@ button.todoRow:hover{border-color:var(--or)}
   <div class="card" id="budgetCard">
     <h2>오늘 서버 저장 횟수 <small>Cloudflare 무료 요금제는 서버 전체가 하루 1,000번까지 저장할 수 있어요. 한국 시간 오전 9시(UTC 자정)에 0으로 돌아가요.</small></h2>
     <div class="budget" id="budget"></div>
-    <p class="mut" style="margin:0">구매자가 보내는 요청만 세고, 선물 하나는 저장 3번으로 세요. 판매자 작업(승인, 키 발급, 설정 저장)과 카드 결제 알림은 세지도 막지도 않아서 칸이 다 차도 하루 350번 넘게 남아요. 칸이 다 차면 그날 남은 시간 동안 그 요청에는 '잠시 뒤 다시 시도'가 떠요.</p>
+    <p class="mut" style="margin:0">구매자가 보내는 요청만 세고, 선물 하나는 저장 3번으로 세요. 판매자 작업(승인, 키 발급, 설정 저장)과 카드 결제 알림은 세지도 막지도 않아서 칸이 다 차도 하루 <span id="kvLeft">350</span>번 넘게 남아요(무료 요금제 기준). 칸이 다 차면 그날 남은 시간 동안 그 요청에는 '잠시 뒤 다시 시도'가 떠요.</p>
   </div>
 </section>
 <section class="tab hide" data-tab="sales" aria-label="판매·키">
@@ -963,6 +963,8 @@ let budgetNow = null;   // GET /summary budget: [count, cap] each, counted in th
 const BUDGET_ROWS = [["pub", "주문 · 입금 알림 · 선물", "번"], ["gifts", "추천 · 초대 선물", "개"], ["support", "고객센터 문의와 답장", "번"]];
 function renderBudget(b) {
   budgetNow = b || null;
+  // what stays for the seller on the free plan's 1,000 a day: the caps can move (env PUBLIC_KV_DAY)
+  if (b && Array.isArray(b.pub) && Array.isArray(b.support)) $("kvLeft").textContent = num(Math.max(0, 1000 - Number(b.pub[1]) - Number(b.support[1])));
   if (!b) { $("budget").innerHTML = `<div class="mut">통계 저장소에 연결하지 못해 지금은 보여 줄 수 없어요.</div>`; return; }
   $("budget").innerHTML = BUDGET_ROWS.filter(([k]) => Array.isArray(b[k])).map(([k, label, unit]) => {
     const [n, max] = b[k].map(Number), pct = max ? Math.min(100, n / max * 100) : 0;

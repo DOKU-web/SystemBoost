@@ -161,22 +161,30 @@ async function openPlans(env) {   // plans the app may sell right now, per metho
 const isPlan = p => typeof p === "string" && Object.hasOwn(PLANS, p);
 
 // Calls per IP address an hour on the public routes that write KV or call Lemon Squeezy (src/iplimit.js: no KV writes
-// for the counting). Approximate; the day's share of KV writes (PUBLIC_KV_DAY) and REF_DAILY stay the backstop.
+// for the counting). Approximate; the day's share of KV writes (publicKvDay) and REF_DAILY stay the backstop.
 const IP_LIMIT = { order: 20, paid: 30, checkout: 20, change: 10, referral: 30, trial: 10 };
 
 // The Workers free plan allows 1,000 KV writes a day (UTC) for the whole worker; past that every put fails until
-// 09:00 KST, approvals and card webhooks included. Requests anyone can make share PUBLIC_KV_DAY of them: new orders,
-// "I paid" notes and referral / invite gifts (support has its own 150 + 100, support.js LIMITS). The count lives in
-// the Stats object, so counting writes no KV. The seller's actions, keys of approved orders and Lemon Squeezy
-// webhooks are never counted or refused: at least 350 writes a day stay for them. While the object cannot be reached
-// the old KV caps hold (300 orders, REF_DAILY gifts), as before the object counted.
-const PUBLIC_KV_DAY = 400;
+// 09:00 KST, approvals and card webhooks included. Requests anyone can make share publicKvDay(env) of them (default
+// PUBLIC_KV_DAY_DEFAULT): new orders, "I paid" notes, referral / invite gifts and 3-day trials (support has its own
+// 150 + 100, support.js LIMITS). The count lives in the Stats object, so counting writes no KV. The seller's actions,
+// keys of approved orders and Lemon Squeezy webhooks are never counted or refused: with the default, at least 350
+// writes a day stay for them (docs/KV_BUDGET.md). While the object cannot be reached the old KV caps hold (300
+// orders, REF_DAILY gifts, TRIAL_DAILY trials), as before the object counted.
+// env PUBLIC_KV_DAY (wrangler.toml [vars]) moves the share: a whole number from PUBLIC_KV_MIN to PUBLIC_KV_MAX
+// (a paid Workers plan allows far more writes); anything else, or nothing, keeps the default.
+const PUBLIC_KV_DAY_DEFAULT = 400, PUBLIC_KV_MIN = 50, PUBLIC_KV_MAX = 100000;
+function publicKvDay(env) {
+  const v = env?.PUBLIC_KV_DAY;
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\s*\d{1,6}\s*$/.test(v) ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= PUBLIC_KV_MIN && n <= PUBLIC_KV_MAX ? n : PUBLIC_KV_DAY_DEFAULT;
+}
 const pubName = () => "kv:pub:" + now().slice(0, 10);
 // cap = true: "" counted, "full" today's share would be passed (nothing counted); "down": the object did not answer.
 // cap = false: counted whatever the total (after the checks were made), "" or "down".
 async function takePublic(env, writes, more = [], cap = true) {
   try {
-    const r = await stats(env, "/take", { items: [{ name: pubName(), ttl: 2 * 86400, by: writes, ...(cap ? { max: PUBLIC_KV_DAY } : {}) }, ...more] });
+    const r = await stats(env, "/take", { items: [{ name: pubName(), ttl: 2 * 86400, by: writes, ...(cap ? { max: publicKvDay(env) } : {}) }, ...more] });
     if (r?.ok === true) return "";
     if (r?.ok === false) return "full";
   } catch { /* below */ }
@@ -1151,7 +1159,7 @@ function depositsDue(keys, tickets, t = Date.now()) {
   return out.sort((a, b) => a.paidAt.localeCompare(b.paidAt)).slice(0, 50);
 }
 // Today's share of KV writes for requests anyone can make (Workers free plan), as [count, cap] for the dashboard's
-// home: orders, "I paid" notes and gifts (PUBLIC_KV_DAY), gifts (REF_DAILY) and support (both lanes). One read of the
+// home: orders, "I paid" notes, gifts and trials (publicKvDay), gifts (REF_DAILY) and support (both lanes). One read of the
 // Stats object, no KV; null when it does not answer (the counts are then in KV, and the caps still hold).
 async function kvBudget(env) {
   const s = budgetNames(), names = [pubName(), refName(), s.w, s.vw];
@@ -1159,7 +1167,7 @@ async function kvBudget(env) {
     const r = await stats(env, "/peek", { names });
     if (!r?.n) return null;
     const v = k => Number(r.n[k]) || 0;
-    return { pub: [v(names[0]), PUBLIC_KV_DAY], gifts: [v(names[1]), REF_DAILY],
+    return { pub: [v(names[0]), publicKvDay(env)], gifts: [v(names[1]), REF_DAILY],
              support: [v(s.w) + v(s.vw), SUPPORT_LIMITS.writesPerDay + SUPPORT_LIMITS.vWritesPerDay] };
   } catch { return null; }
 }
@@ -1210,7 +1218,7 @@ async function refBlocked(env, device) {
   let full = false;
   try {
     const r = await stats(env, "/peek", { names: [refName(), pubName()] });
-    full = (Number(r?.n?.[refName()]) || 0) >= REF_DAILY || (Number(r?.n?.[pubName()]) || 0) + GIFT_WRITES > PUBLIC_KV_DAY;
+    full = (Number(r?.n?.[refName()]) || 0) >= REF_DAILY || (Number(r?.n?.[pubName()]) || 0) + GIFT_WRITES > publicKvDay(env);
   } catch { /* the KV count below */ }
   // the KV count is read too: it holds the gifts of a day the object could not count (and of the day of the update)
   if (full || Number((await env.LICENSES.get(refDay())) || 0) >= REF_DAILY) return { status: 429, error: "busy" };
