@@ -45,11 +45,11 @@ export function textToHtml(text) {
 const TEXT = {
   ko: { title: "SystemBoost 사용권 계약", help: "고객센터", helpHref: "/help", other: "English", otherHref: "/terms?lang=en", otherLang: "en",
         privacy: "개인정보 처리방침", privacyHref: "/privacy", toc: "목차",
-        lead: v => "앱의 동의 화면에 나오는 사용권 계약 그대로예요(판 " + v + ", 앱 0.8.12부터). 2027년 1월 1일에 바뀌는 조항의 요약은 고객센터의 '사용권 계약 변경 안내'에 있어요.",
+        lead: v => "SystemBoost는 Windows용 프로그램이고 2026년 12월 9일에 출시해요. 앱의 동의 화면에 나오는 사용권 계약 그대로예요(판 " + v + ", 앱 0.8.14부터). 2027년 1월 1일에 바뀌는 조항의 요약은 고객센터의 '사용권 계약 변경 안내'에 있어요.",
         notice: "/help#terms" },
   en: { title: "SystemBoost License Agreement", help: "Support", helpHref: "/help?lang=en", other: "한국어 (the agreement)", otherHref: "/terms", otherLang: "ko",
         privacy: "Privacy policy", privacyHref: "/privacy?lang=en", toc: "Contents",
-        lead: v => "The agreement as the app's consent screen shows it (version " + v + ", from app 0.8.12), in a reference translation: the Korean text governs. A summary of the articles that change on January 1, 2027 is under 'License agreement changes' in Support.",
+        lead: v => "SystemBoost is a program for Windows, released on December 9, 2026. The agreement as the app's consent screen shows it (version " + v + ", from app 0.8.14), in a reference translation: the Korean text governs. A summary of the articles that change on January 1, 2027 is under 'License agreement changes' in Support.",
         notice: "/help?lang=en#terms" },
 };
 
