@@ -114,6 +114,20 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
   답장 템플릿 '확인 필요'도 있습니다.
 - 테스트: `node test_deposit.mjs`
 
+### 판매자 디스코드 알림 (`src/seller_alert.js`, 비밀 `ADMIN_ALERT_WEBHOOK`)
+- 판매자만 보는 디스코드 채널의 웹후크 주소를 비밀로 넣습니다. 소유자가 직접 실행합니다(코드 · KV · 커밋에 넣지 않음):
+  `wrangler secret put ADMIN_ALERT_WEBHOOK`
+- 넣지 않았거나 디스코드 웹후크 주소가 아니면 아무것도 보내지 않고, 다른 동작도 그대로입니다.
+- 보내는 때: 구매자가 계좌이체 주문에 처음 '결제했어요'(`POST /order/paid`, requested → paid)를 했을 때 한 번,
+  20시간이 지나도 아직 '결제 확인 요청'이면 매시간 cron(`7 * * * *`)이 한 번 더.
+- 보내는 내용: 주문 코드, 플랜, 남은 시간(예: `입금 알림 · SB-XXXX-XXXX · 프로 연간 · 24시간 안에 확인 (12-10 14:05까지, 한국 시간)`)뿐입니다.
+  구매자의 메일, 이름, 입금자명, 메모, IP 주소는 보내지 않습니다. 금액은 서버에 가격표가 없어 보내지 않습니다.
+- 알림을 기록하려고 KV에 쓰지 않습니다. cron은 예정 시각 기준으로 처음 '결제했어요'가 20시간 전 ~ 21시간 전 사이인 주문만 고르므로,
+  한 시간마다 돌면 주문마다 한 번씩만 갑니다(cron이 한 번 빠지면 그 시간의 주문은 다시 알리지 않음).
+  웹후크가 있을 때만 cron이 주문 목록을 한 번 읽습니다(KV list, 하루 24번).
+- 디스코드가 느리거나 실패해도 `/order/paid`는 실패하지 않습니다(`ctx.waitUntil`, 5초 제한, 예외 없음).
+- 테스트: `node test_alert.mjs`
+
 ## 사용 통계 (`src/stats.js`)
 - 앱은 동의 후 `POST /ping`으로 무작위 설치 번호, 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 부스트 여부를 보냅니다. 끌 수 있고, 무엇을 보내는지는 사용권 계약 제8조에 적혀 있습니다. 보내는 항목을 바꾸면 계약 문구도 함께 고치고 `Eula.Version`을 올려야 합니다.
 - 저장 위치는 Durable Object(SQLite)입니다. 신호마다 쓰기가 생기는데 KV 무료 플랜은 하루 1,000번까지만 쓸 수 있어서입니다. `wrangler deploy`가 알아서 만듭니다.
@@ -274,7 +288,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - `node test_card.mjs`: 가짜 Lemon Squeezy와 서명한 웹훅으로 카드 결제 전부(플랜별 결제창, 울트라 키, 중복 없음, 갱신 기간,
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
-- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험), `node test_deposit.mjs` (입금 확인)
+- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림)
 
 ## 확인 필요
 - Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.

@@ -5,6 +5,7 @@ import { cleanPing } from "./stats.js";
 import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
 import { overIp } from "./iplimit.js";
 import { purchaseNote } from "./purchase_note.js";
+import { alertOn, dueForReminder, paidText, reminderText, sellerAlert } from "./seller_alert.js";
 export { Stats } from "./stats.js";
 // SystemBoost license server (Cloudflare Workers, free plan is enough).
 //
@@ -238,7 +239,8 @@ async function order(req, url, env) {
 // The order code is what claims the key, so the app sends it in the body; apps up to 0.8.11 put it in the address.
 // Anyone with a code can call this, so it writes KV only when something changes: requested -> paid, or a new
 // payer / memo, at most PAID_EDITS times after the first. Repeating the same note is answered without a write.
-async function orderPaid(req, url, env) {
+// The first note (requested -> paid) also tells the seller's Discord (seller_alert.js: code, plan, time left only).
+async function orderPaid(req, url, env, ctx) {
   const b = await readJson(req);
   const code = String(url.searchParams.get("code") || b.code || "").toUpperCase();
   if (!CODE_RE.test(code)) return json({ error: "bad code" }, 400);
@@ -256,11 +258,38 @@ async function orderPaid(req, url, env) {
     o.edits = (o.edits || 0) + 1;
   } else o.paidAt = now();
   if (await takePublic(env, 1) === "full") return json({ error: "busy" }, 429);   // the day's share is used up (KV free plan)
+  const first = o.status === "requested";
   o.status = "paid";
   o.payer = payer;
   o.msg = msg;
   await putOrder(env, o);
+  if (first) await later(ctx, sellerAlert(env, paidText(o.code, PLANS[o.plan] || o.plan, o.paidAt)));
   return json({ status: "paid" });
+}
+// Work the answer must not wait for (the Worker keeps running it); awaited where there is no ctx (tests).
+async function later(ctx, p) {
+  if (ctx?.waitUntil) { try { ctx.waitUntil(p); return; } catch { /* awaited below */ } }
+  await p;
+}
+// The hourly cron: one Discord message for the bank transfers still waiting DEPOSIT_WARN_HOURS after their first
+// "I paid" (seller_alert.js dueForReminder: the hour before the run's scheduled time, so once each, no KV write).
+// Without ADMIN_ALERT_WEBHOOK it does not even list the orders. Never throws.
+async function depositReminders(env, at) {
+  try {
+    if (!alertOn(env)) return 0;
+    const paid = [];
+    let cursor;
+    for (let i = 0; i < 10; i++) {
+      const l = await env.LICENSES.list({ prefix: "ord:", cursor, limit: 1000 });
+      for (const k of l.keys) if (k.metadata?.status === "paid" && k.metadata.paidAt)
+        paid.push({ code: k.name.slice(4), plan: PLANS[k.metadata.plan] || k.metadata.plan || "", paidAt: k.metadata.paidAt });
+      if (l.list_complete) break;
+      cursor = l.cursor;
+    }
+    const due = dueForReminder(paid, at).sort((a, b) => a.paidAt.localeCompare(b.paidAt));
+    if (due.length) await sellerAlert(env, reminderText(due));
+    return due.length;
+  } catch { return 0; }
 }
 
 const SESSION_TTL = 60 * 60 * 24 * 7;   // claim within 7 days
@@ -296,7 +325,7 @@ export default {
       if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
-      if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env);
+      if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
@@ -315,6 +344,7 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(stats(env, "/tick"));
     ctx.waitUntil(accounts(env, "ping", {}));
+    ctx.waitUntil(depositReminders(env, Number(event?.scheduledTime) || Date.now()));
   },
 };
 
