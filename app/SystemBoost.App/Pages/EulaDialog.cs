@@ -22,7 +22,7 @@ public sealed class EulaDialog : Window
         "안티치트를 쓰는 게임에서는 시험하지 않았어요. 게임 정책은 쓰기 전에 직접 확인해 주세요.",
         "오버클럭은 게임 강제 종료, 시스템 멈춤, 드라이버 오류를 일으킬 수 있고 보증에 영향을 줄 수 있어요.",
         "키를 등록해 유료 기능을 쓰기 시작하면 청약철회가 제한될 수 있어요.",
-        "사용 통계는 선택이에요. 아래 '사용 통계 보내기'를 켜 두면 앱이 켜져 있는 동안 무작위 설치 번호로 판매자 서버에 보내고, 끄면 아무것도 보내지 않아요. 키, 메일, 게임 이름은 보내지 않아요.",
+        "사용 통계는 선택이고 처음에는 꺼져 있어요. 아래 '사용 통계 보내기'를 켜면 앱이 켜져 있는 동안 무작위 설치 번호로 판매자 서버에 보내고, 끄면 아무것도 보내지 않아요. 키, 메일, 게임 이름은 보내지 않아요.",
         "추천 코드를 입력하면 코드와 무작위 기기 번호를 판매자 서버로 보내요. 기기 번호는 90일 뒤 지워요.",
     };
 
@@ -106,8 +106,8 @@ public sealed class EulaDialog : Window
     {
         var p = new StackPanel { Spacing = 10, Margin = new Thickness(0, 12, 0, 0) };
         // Usage statistics are a choice of their own, made here before anything is sent (Telemetry waits for this
-        // dialog). Ticked unless this PC turned them off before; a first start has no file, so it is ticked.
-        var stats = new CheckBox { Content = "사용 통계 보내기 (선택)", IsChecked = Telemetry.Enabled };
+        // dialog). Always unticked: someone who sent them before chooses again too.
+        var stats = new CheckBox { Content = "사용 통계 보내기 (선택)", IsChecked = false };
         p.Children.Add(stats);
         p.Children.Add(Ui.Text("무작위 설치 번호, 앱 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 게임 부스트 사용 여부예요. 꺼도 앱은 똑같이 쓸 수 있고, 나중에 설정에서 바꿀 수 있어요.", "muted", wrap: true));
         var agree = new CheckBox { Content = "계약 내용을 읽었고 이 계약에 동의합니다" };
@@ -120,9 +120,7 @@ public sealed class EulaDialog : Window
         agree.IsCheckedChanged += (_, _) => accept.IsEnabled = agree.IsChecked == true;
         accept.Click += (_, _) =>
         {
-            // written only when it changes: setting it also forgets the install number, which would count as a new install
-            var send = stats.IsChecked == true;
-            if (Telemetry.Enabled != send) Telemetry.Enabled = send;
+            Telemetry.Choose(stats.IsChecked == true);
             Close(true);
         };
         row.Children.Add(refuse);

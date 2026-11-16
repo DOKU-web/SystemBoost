@@ -2,9 +2,10 @@
 // keep those two and server/license-worker/src/stats.js in step with what is sent here.
 // Sent while the app runs: a random install number made on this PC, app version, operating system, plan,
 // frame generation multiplier, one-click boost on or off. Never a key, mail address, game name or hardware detail.
-// Optional: the agreement dialog (EulaDialog) has its own box "사용 통계 보내기", and nothing is sent before that
-// dialog is done (Start waits for Eula.WhenAccepted). Off sends nothing at all. Turning it off also forgets the
-// install number.
+// Optional and off until the user turns it on (0.8.14): the agreement dialog (EulaDialog) has its own box
+// "사용 통계 보내기", unticked, and nothing is sent before that dialog is done (Start waits for Eula.WhenAccepted).
+// A choice made before 0.8.14 (when the box started ticked) counts as off until the user chooses again (Asked).
+// Off sends nothing at all. Turning it off also forgets the install number.
 using System;
 using System.IO;
 using System.Net.Http;
@@ -23,14 +24,19 @@ public static class Telemetry
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
     private static bool _started;
 
-    private sealed record Prefs(bool On = true, string Id = "");
+    // Asked: the round of the question the saved choice answers. 1 = 0.8.14, where statistics start off; files
+    // from before have 0 (the field is missing) and send nothing until the user chooses again.
+    private const int Round = 1;
+    private sealed record Prefs(bool On = false, string Id = "", int Asked = 0);
     private static string PrefsFile => Path.Combine(Platform.DataDir, "telemetry.json");
 
     private static Prefs Read()
     {
-        try { return File.Exists(PrefsFile) ? JsonSerializer.Deserialize<Prefs>(File.ReadAllText(PrefsFile)) ?? new Prefs(false) : new Prefs(); }
-        catch (Exception) { return new Prefs(false); }   // a damaged file may have said "off"
+        try { return File.Exists(PrefsFile) ? JsonSerializer.Deserialize<Prefs>(File.ReadAllText(PrefsFile)) ?? new Prefs() : new Prefs(); }
+        catch (Exception) { return new Prefs(); }   // a damaged file: off
     }
+
+    private static bool IsOn(Prefs p) => p.On && p.Asked >= Round;
 
     private static bool Write(Prefs p)
     {
@@ -43,8 +49,18 @@ public static class Telemetry
 
     public static bool Enabled
     {
-        get => _choice ?? Read().On;
-        set { _choice = value; Write(new Prefs(value)); }
+        get => _choice ?? IsOn(Read());
+        set { _choice = value; Write(new Prefs(value, "", Round)); }
+    }
+
+    /// The agreement dialog's answer. Writes only what changes: a new install number would count as a new install,
+    /// so someone who sent statistics before and says yes again keeps theirs.
+    public static void Choose(bool on)
+    {
+        var p = Read();
+        if (IsOn(p) == on && (p.Asked >= Round || !File.Exists(PrefsFile))) { _choice = on; return; }
+        if (on && p.On && p.Id.Length > 0) { _choice = true; Write(p with { Asked = Round }); }
+        else Enabled = on;
     }
 
     /// Call once, after the agreement is accepted. usageNow reports the frame generation multiplier (0 = off) and the one-click boost.
@@ -64,10 +80,10 @@ public static class Telemetry
     private static async Task<int> PingAsync(Func<Task<(int frameGen, bool boost)>> usageNow)
     {
         var prefs = Read();
-        if (!(_choice ?? prefs.On)) return DefaultSeconds;
+        if (!(_choice ?? IsOn(prefs))) return DefaultSeconds;
         if (prefs.Id.Length == 0)
         {
-            prefs = prefs with { On = true, Id = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant() };
+            prefs = prefs with { On = true, Id = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant(), Asked = Round };
             if (!Write(prefs)) return DefaultSeconds;   // a new number every start would count as a new install each time
         }
         try

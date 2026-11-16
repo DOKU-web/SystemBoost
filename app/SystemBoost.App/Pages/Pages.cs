@@ -274,7 +274,7 @@ public sealed class SettingsPage : UserControl
         on.IsCheckedChanged += (_, _) => Telemetry.Enabled = on.IsChecked == true;
         p.Children.Add(on);
         p.Children.Add(Ui.Text("앱이 켜져 있는 동안 무작위 설치 번호, 앱 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 게임 부스트 사용 여부를 판매자 서버로 보내요. " +
-                               "서버는 접속한 국가를 함께 기록하고 IP 주소는 저장하지 않아요. 키, 메일, 게임 이름, 하드웨어 정보는 보내지 않아요. 끄면 이 PC의 설치 번호도 지워요.", "muted", wrap: true));
+                               "서버는 접속한 국가를 함께 기록하고 IP 주소는 저장하지 않아요. 키, 메일, 게임 이름, 하드웨어 정보는 보내지 않아요. 처음에는 꺼져 있고, 끄면 이 PC의 설치 번호도 지워요.", "muted", wrap: true));
         return p;
     }
 
