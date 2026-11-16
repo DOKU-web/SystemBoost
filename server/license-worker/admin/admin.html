@@ -170,6 +170,7 @@ button.todoRow:hover{border-color:var(--or)}
 .todoRow .tn{font-size:26px;font-weight:700;min-width:2.2em;text-align:center;font-variant-numeric:tabular-nums}
 .todoRow .tt{flex:1;min-width:0;display:grid;gap:2px}.todoRow .tg{color:var(--mut);white-space:nowrap}
 .todoRow.warn{border-color:#6a5420}.todoRow.warn .tn{color:var(--warn)}
+.todoRow.bad{border-color:#6a2626}.todoRow.bad .tn{color:var(--bad)}
 .todoDone{color:var(--ok);padding:6px 2px}
 .budget{display:grid;gap:10px;margin-bottom:12px}
 .bRow{display:grid;grid-template-columns:minmax(120px,210px) 1fr auto;gap:12px;align-items:center;font-size:14px}
@@ -586,7 +587,7 @@ async function loadRefs() {
     <td style="text-align:right;white-space:nowrap"><button data-ref-set="${esc(r.code)}" data-on="${r.on ? "" : "1"}">${r.on ? "끄기" : "켜기"}</button> <button class="d" data-ref-del="${esc(r.code)}">지우기</button></td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">아직 추천 코드가 없어요</td></tr>`;
 }
-let sumCounts = null;
+let sumCounts = null, sellerNow = null;   // sellerNow: GET /summary sellerMissing (empty seller fields) and sellerBlocked (live mode)
 function sumTiles(c) {
   $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["답변할 문의", c.ticketsOpen || 0, "var(--or)"], ["환불 진행 중", c.refundsOpen || 0, "var(--bad)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total]]
     .map(([l, n, col]) => `<div class="stat"><div class="n" style="color:${col || "inherit"}">${n}</div><div class="l">${l}</div></div>`).join("");
@@ -594,6 +595,7 @@ function sumTiles(c) {
 }
 async function loadSummary() {
   const s = await api("/summary"), c = s.counts;
+  sellerNow = { missing: s.sellerMissing || [], blocked: !!s.sellerBlocked };
   sumCounts = c; renderBudget(s.budget); supBadge(c); sumTiles(c);
   const partial = [c.keysMore && "키가 2만 개를 넘어 앞의 2만 개만 셌어요", c.ordersMore && "주문이 1,000개를 넘어 앞의 1,000개만 셌어요",
                    c.ticketsMore && "문의가 1,000개를 넘어 앞의 1,000개만 셌어요"].filter(Boolean);
@@ -972,6 +974,9 @@ function renderTodo(c) {
                 [c.refundsOpen, "환불 진행 중", "환불 요청을 승인하거나 거절하고, 돈을 돌려준 뒤 '환불 완료'를 누르세요.", "support", "refund", "var(--bad)"]]
     .filter(r => Number(r[0]) > 0);
   let html = rows.map(([n, label, what, tab, seg, col]) => `<button class="todoRow" data-go="${tab}" data-seg="${seg}"><span class="tn" style="color:${col}">${num(n)}</span><span class="tt"><b>${esc(label)}</b><span class="mut">${esc(what)}</span></span><span class="tg">보기 ›</span></button>`).join("");
+  // the seller's details a buyer must see (전자상거래법): in live mode the server sells nothing while one is empty
+  const gaps = (sellerNow && sellerNow.missing) || [];
+  if (gaps.length) html = `<button class="todoRow ${sellerNow.blocked ? "bad" : "warn"}" data-go="support" data-seg="" data-scroll="sfCard"><span class="tn">${num(gaps.length)}</span><span class="tt"><b>판매자 정보 ${num(gaps.length)}개 비어 있음</b><span class="mut">${esc(gaps.map(k => (SELLER.find(([f]) => f === k) || [k, k])[1]).join(", "))}. ${sellerNow.blocked ? "실판매 중이라 다 채울 때까지 앱에서 결제할 수 없어요(계좌이체 포함)." : "판매 모드가 '실판매'이면 다 채울 때까지 앱에서 결제할 수 없어요(계좌이체 포함)."}</span></span><span class="tg">채우기 ›</span></button>` + html;
   const near = budgetNow ? BUDGET_ROWS.filter(([k]) => Array.isArray(budgetNow[k]) && budgetNow[k][1] && budgetNow[k][0] >= budgetNow[k][1] * 0.8) : [];
   if (near.length) html += `<div class="todoRow warn"><span class="tn">!</span><span class="tt"><b>오늘 서버 저장 한도가 거의 찼어요</b><span class="mut">${esc(near.map(([k, label]) => label + " " + num(budgetNow[k][0]) + " / " + num(budgetNow[k][1])).join(" · "))}. 아래 '오늘 서버 저장 횟수'를 보세요.</span></span></div>`;
   if (!html) html = `<div class="todoDone">지금 처리할 일이 없어요.</div>`;
@@ -986,6 +991,7 @@ $("todo").addEventListener("click", e => {
   showTab(b.dataset.go);
   if (b.dataset.go === "sales" && ostatus !== "open") document.querySelector('#oseg [data-o="open"]').click();
   if (b.dataset.seg && sstatus !== b.dataset.seg) document.querySelector('#tkSeg [data-ts="' + b.dataset.seg + '"]').click();
+  if (b.dataset.scroll) $(b.dataset.scroll).scrollIntoView();
 });
 $("out").onclick = () => logout("");
 function logout(msg) { token = ""; feedNew = 0; feedTitle(); try { sessionStorage.removeItem("sbAdmin"); } catch (e) {} $("app").classList.add("hide"); $("login").classList.remove("hide"); $("lerr").textContent = msg; }
@@ -1755,7 +1761,9 @@ function demoApi(path, b) {
     demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length;
     c.ordersOpen = demo.orders.filter(o => ["requested", "paid"].includes(o.status)).length;
     c.ticketsOpen = demo.tickets.filter(t => t.status === "open").length; c.refundsOpen = demo.tickets.filter(t => t.refund && ["requested", "approved"].includes(t.refund.status)).length;
-    return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c, budget: { pub: [137, 400], gifts: [4, 60], support: [212, 250] } }); }
+    const sellerMissing = ["name", "rep", "address", "bizNo", "mailOrderNo", "email", "phone"].filter(k => !String(demo.supCfg.seller[k] || "").trim());
+    return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c, budget: { pub: [137, 400], gifts: [4, 60], support: [212, 250] },
+               sellerMissing, sellerBlocked: demo.mode === "live" && sellerMissing.length > 0 }); }
   if (p.startsWith("/support")) return demoSupport(p, q, b, { st, L, R });
   if (p === "/orders") { const w = q.get("status"); const count = { requested: 0, paid: 0, approved: 0, rejected: 0, refunded: 0 }; demo.orders.forEach(o => count[o.status]++);
     return R({ count, orders: demo.orders.filter(o => w === "all" || (w === "open" ? ["requested", "paid"].includes(o.status) : o.status === w)) }); }

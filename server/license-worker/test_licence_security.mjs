@@ -7,6 +7,8 @@ import { createHash, createHmac, generateKeyPairSync, sign, verify } from "node:
 import worker from "./src/index.js";
 
 const kv = new Map(), md = new Map();
+// 0.8.14: live sales need the seller's details (index.js sellerBlocked); made-up but complete, so this test sells as before
+kv.set("config:support", JSON.stringify({ seller: { name: "Test Seller", rep: "Test Rep", address: "Test Address 1", bizNo: "000-00-00000", mailOrderNo: "2026-Test-0000", email: "seller@example.com", phone: "000-0000-0000" } }));
 const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const forger = generateKeyPairSync("ec", { namedCurve: "P-256" });   // a key that is not the shop's
 const SECRET = "made-up-webhook-signing-secret";

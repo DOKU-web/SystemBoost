@@ -2,7 +2,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
-import { budgetNames, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, support, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
+import { budgetNames, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
 import { overIp } from "./iplimit.js";
 import { purchaseNote } from "./purchase_note.js";
 export { Stats } from "./stats.js";
@@ -18,7 +18,8 @@ export { Stats } from "./stats.js";
 //   POST /subscription/change {key, plan}
 //                                plan change of a card subscription (Lemon Squeezy), asked by the holder of its key
 //   GET  /status                 {sales, pay:{monthly,yearly}} - the app enables "결제하기" only for plans
-//                                that have a payment link (links are set in the dashboard)
+//                                that have a payment link (links are set in the dashboard); in live mode nothing
+//                                while the seller's details are incomplete (sellerBlocked)
 //   POST /order?plan=…           app gets an order code (SB-XXXX-XXXX) to write in the payment memo;
 //                                the owner confirms the payment and issues the key for that code in /admin,
 //                                and the app (polling /claim?session=<code>) pops it up
@@ -138,7 +139,19 @@ async function cardPlans(env) {   // plans a card checkout can be made for
   const c = await lsConfig(env);
   return c.store && env.LS_API_KEY ? SINGLE_PLANS.filter(p => c.variants[p]) : [];
 }
+// The seller's details (전자상거래법: who sells must be shown before a sale) are entered in the dashboard (고객센터 설정,
+// KV config:support). In live sales mode nothing new is sold while one of support.js SELLER_REQUIRED is empty: /status
+// offers no plan, and /order, /checkout and a card plan change (a new payment) answer 503 {"error":"seller info"}.
+// Test mode is as before. Key checks, renewals, webhooks, refunds, support, an "I paid" note on an existing order and
+// the seller's own actions never look at this.
+async function sellerBlocked(env, mode) {
+  if ((mode ?? (await salesMode(env))) !== "live") return false;
+  return sellerGaps(await supportConfig(env)).length > 0;
+}
+const sellerInfo = () => json({ error: "seller info" }, 503);
+
 async function openPlans(env) {   // plans the app may sell right now, per method
+  if (await sellerBlocked(env)) return { methods: { card: [], manual: [] } };
   return { methods: { card: (await cardOpen(env)) ? await cardPlans(env) : [],
                       manual: Object.keys(await payLinks(env)).filter(p => PLANS[p] && (seatsOf(p) === 1 || bundleOpen(env))) } };
 }
@@ -190,6 +203,7 @@ async function extendable(env, key, plan) {
 async function order(req, url, env) {
   const plan = url.searchParams.get("plan");
   if (!isPlan(plan)) return json({ error: "bad plan" }, 400);
+  if (await sellerBlocked(env)) return sellerInfo();
   const { methods } = await openPlans(env);
   let method = url.searchParams.get("method");
   if (!method) method = methods.card.includes(plan) ? "card" : "manual";
@@ -316,6 +330,7 @@ async function ping(req, env) {
 
 // ---------------------------------------------------------------- checkout (automatic payments)
 async function checkout(req, url, env) {   // kept for direct use; the app goes through /order
+  if (await sellerBlocked(env)) return sellerInfo();
   if (!(await cardOpen(env))) return json({ error: "sales closed" }, 503);
   const plan = url.searchParams.get("plan");
   const session = url.searchParams.get("session") || "";
@@ -502,6 +517,7 @@ async function cancelSubscription(env, sub, why = "") {
 // A new checkout instead would start a second subscription and leave this one charging. Reads only, plus a log line.
 async function subscriptionChange(req, env) {
   if (await overIp(req, env, "change", IP_LIMIT.change)) return json({ error: "busy" }, 429);
+  if (await sellerBlocked(env)) return sellerInfo();   // a plan change bills the difference: a new payment
   const b = await readJson(req);
   const plan = String(b.plan ?? "");
   if (!isPlan(plan) || seatsOf(plan) !== 1) return json({ error: "bad plan" }, 400);
@@ -1091,8 +1107,11 @@ async function summary(env) {
   if (!op.list_complete) c.ordersMore = true;     // counted from the first 1,000 orders only
   if (all.truncated) c.keysMore = true;           // counted from the first 20,000 keys only
   Object.assign(c, await supportCounts(env));   // ticketsOpen, refundsOpen (ticketsMore: from the first 1,000)
-  return { sales: await salesMode(env), autoReady: await cardPlans(env), cardLiveOpen: cardLiveOpen(env),
-           salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c, budget: await kvBudget(env) };
+  const sales = await salesMode(env), sellerMissing = sellerGaps(await supportConfig(env));
+  return { sales, autoReady: await cardPlans(env), cardLiveOpen: cardLiveOpen(env),
+           salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c, budget: await kvBudget(env),
+           // the dashboard's 할 일: which of the seller's details are empty, and whether that stops sales now (live mode)
+           sellerMissing, sellerBlocked: sales === "live" && sellerMissing.length > 0 };
 }
 // Today's share of KV writes for requests anyone can make (Workers free plan), as [count, cap] for the dashboard's
 // home: orders, "I paid" notes and gifts (PUBLIC_KV_DAY), gifts (REF_DAILY) and support (both lanes). One read of the

@@ -85,6 +85,10 @@ const NOTE_ORDER_RE = /^(SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})(?![A-Z0-9-])/;
 const KEY_RE = /^[0-9a-f]{16}$/;
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 const SELLER_FIELDS = ["name", "rep", "address", "bizNo", "mailOrderNo", "email", "phone", "hours"];
+// The seller's details a buyer must see before buying (전자상거래법 seller disclosure); the hours are optional. In live
+// sales mode nothing new is sold while one of them is empty (index.js sellerBlocked).
+export const SELLER_REQUIRED = SELLER_FIELDS.filter(f => f !== "hours");
+export const sellerGaps = c => SELLER_REQUIRED.filter(f => !String(c?.seller?.[f] ?? "").trim());
 
 export const CATEGORIES = [
   { id: "pay", ko: "결제", en: "Payment" },
