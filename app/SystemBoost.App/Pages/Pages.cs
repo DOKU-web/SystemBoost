@@ -290,6 +290,8 @@ public sealed class SettingsPage : UserControl
             "NuGet.Versioning (Apache-2.0) · Tmds.DBus.Protocol (MIT) · Velopack (MIT) · .NET 8 (MIT) · NVAPI (MIT) · " +
             "C++/WinRT (MIT) · Microsoft C/C++ runtime · " +
             "Velopack Rust crates (MIT, Apache-2.0, ISC, BSD-3-Clause, Zlib, Unicode-3.0, CDLA-Permissive-2.0)", "muted", wrap: true));
+        // Only the names the app itself shows (THIRD_PARTY_NOTICES.txt has the same line).
+        p.Children.Add(Ui.Text("NVIDIA, DLSS는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의, Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.", "muted", wrap: true));
         if (Platform.IsMac)
             p.Children.Add(Ui.Text("윈도우 게임 기능은 Wine (LGPL-2.1-or-later), DXVK-macOS (zlib), MoltenVK (Apache-2.0)를 처음 쓸 때 내려받아요. Wine 소스: https://gitlab.winehq.org/wine/wine", "muted", wrap: true));
         var status = Ui.Text("전문 파일을 찾을 수 없어요. 앱을 다시 설치해 주세요.", "muted", wrap: true);
@@ -327,7 +329,7 @@ public sealed class SettingsPage : UserControl
         p.Children.Add(Ui.Text("업데이트", "h2"));
         if (!Updater.Supported)
         {
-            p.Children.Add(Ui.Text("이 버전은 자동 업데이트를 쓰지 않아요. 스팀에서 받았다면 스팀이 업데이트해 줘요.", "muted", wrap: true));
+            p.Children.Add(Ui.Text("이 버전은 자동 업데이트를 쓰지 않아요. 새 버전은 다운로드 페이지에서 받아 주세요.", "muted", wrap: true));
             return p;
         }
         var auto = new CheckBox { Content = "새 버전을 자동으로 확인하고 미리 받아 두기", IsChecked = Updater.AutoCheck };

@@ -1,8 +1,13 @@
-# Builds every platform on each push and pull request.
+# Builds Windows on each push and pull request. Since 0.8.14 SystemBoost is sold and released for Windows only:
+# the macOS job runs only when started by hand (Actions -> build -> Run workflow) and never feeds a release.
+# The Mac code stays in the repository.
 # Releasing: write RELEASE_NOTES.md, then push a tag (git tag v0.7.0 && git push origin v0.7.0).
 # The tag build packs with Velopack (installer, portable, update packages + deltas) and publishes a
 # GitHub Release; installed and portable apps pick it up by themselves (Services/Updater.cs), and the
 # download page always points at the newest release (releases/latest/download/...).
+# The release holds the two downloads (SystemBoost-Windows-Setup.exe, SystemBoost-Windows-Portable.zip) plus the
+# Velopack update files the apps read (releases.win.json, *.nupkg, SystemBoost-win-*); without those, installed
+# apps cannot update.
 #
 # 코드 서명 준비 (2026-11-05 조사, 인증서를 사기 전까지는 지금처럼 서명 없이 빌드됩니다)
 # 가격은 조사일의 판매 페이지 기준이니 구매 전에 다시 확인하세요. 서명을 켜는 단계는 windows, macos 잡의 주석에 있습니다.
@@ -24,7 +29,7 @@
 #    SimplySign 앱이 접속 코드를 만드는 방식이고 무인 CI 서명 방법은 공식 페이지에 없습니다.
 # 5) Azure Artifact Signing: 월 $9.99이지만 쓸 수 없습니다. 조직은 미국·캐나다·EU·영국, 개인은 미국·캐나다만 가입할 수 있습니다.
 #
-# macOS: Apple Developer Program 연 $99 (개인 가입 가능, 한국 원화 가격은 가입 화면에 표시됩니다).
+# macOS: Apple Developer Program 연 $99 (개인 가입 가능, 한국 원화 가격은 가입 화면에 표시됩니다). 지금은 맥을 출시하지 않습니다.
 name: build
 on:
   push:
@@ -46,7 +51,10 @@ jobs:
       - run: native/framegen/tests/run_all.sh
       # The generated text differs between tool versions, so this uses the Vulkan SDK that
       # made the committed file. Update the version here when regenerating with a newer one.
+      # Mac only: reported, but no longer blocks a Windows build or release.
       - name: Metal shaders are up to date with the HLSL
+        id: metal
+        continue-on-error: true
         run: |
           mkdir -p "$RUNNER_TEMP/vk"
           curl -sSfL https://sdk.lunarg.com/sdk/download/1.4.363.0/linux/vulkansdk-linux-x86_64-1.4.363.0.tar.xz \
@@ -55,7 +63,7 @@ jobs:
           tools/gen_metal.sh
           git diff --exit-code native/framegen-mac/Sources/SBFrameGenMac/GeneratedShaders.swift
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: steps.metal.outcome == 'failure'
         with: { name: GeneratedShaders, path: native/framegen-mac/Sources/SBFrameGenMac/GeneratedShaders.swift }
 
   windows:
@@ -106,7 +114,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: download-Windows, path: 'dist/windows/download/*' }
 
+  # Started by hand only; a tag or push never builds or releases the Mac app.
   macos:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -176,7 +186,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [tests, windows, macos]
+    needs: [tests, windows]
     runs-on: ubuntu-24.04
     permissions: { contents: write }
     env:
@@ -190,14 +200,12 @@ jobs:
       - run: dotnet tool install -g vpk --version 0.0.1298
       - uses: actions/download-artifact@v4
         with: { path: dist }
-      - name: Upload update packages (one release, three channels)
+      - name: Upload update packages (Windows only)
         run: |
           NAME="SystemBoost ${TAG#v}"
           vpk upload github --repoUrl "$REPO_URL" --token "$TOKEN" --tag "$TAG" --releaseName "$NAME" -o dist/SystemBoost-Windows --channel win --publish
-          vpk upload github --repoUrl "$REPO_URL" --token "$TOKEN" --tag "$TAG" --releaseName "$NAME" -o dist/SystemBoost-macOS-AppleSilicon --channel osx-arm64 --merge --publish
-          vpk upload github --repoUrl "$REPO_URL" --token "$TOKEN" --tag "$TAG" --releaseName "$NAME" -o dist/SystemBoost-macOS-Intel --channel osx-x64 --merge --publish
       - name: Add the fixed-name downloads for the download page
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
-          gh release upload "$TAG" dist/download-Windows/* dist/download-macOS/* --clobber --repo "${{ github.repository }}"
+          gh release upload "$TAG" dist/download-Windows/SystemBoost-Windows-Setup.exe dist/download-Windows/SystemBoost-Windows-Portable.zip --clobber --repo "${{ github.repository }}"
           [ -f RELEASE_NOTES.md ] && gh release edit "$TAG" --notes-file RELEASE_NOTES.md --repo "${{ github.repository }}" || true

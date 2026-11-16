@@ -1,30 +1,34 @@
-# SystemBoost (Windows + macOS)
+# SystemBoost (Windows)
+
+현재 윈도우만 지원해요. 판매와 출시는 Windows용만 합니다. 맥용 코드(`native/framegen-mac`, `build/macos`, `Services/Mac*`, `Services/WineManager.cs`)는 저장소에 남아 있지만 출시하지 않고, 태그 릴리스에도 들어가지 않습니다(맥 빌드는 Actions에서 손으로 실행할 때만 돕니다).
 
 게임 최적화 + 화면 캡처 방식 프레임 생성·업스케일 프로그램. 게임에 주입하지 않습니다. 지금 버전은 `app/SystemBoost.App/SystemBoost.App.csproj`의 `<Version>`, 바뀐 점은 `RELEASE_NOTES.md`.
 
 성능 문구는 모두 같은 뜻으로 씁니다(앱, 다운로드 페이지 `site/download.html`, 이 문서):
 - 프레임 생성 "2~8배"는 캡처한 프레임 사이에 만들어 넣는 **표시 프레임의 배수**입니다. 게임 자체의 FPS가 그만큼 오른다는 뜻이 아니고, 화면에는 모니터 주사율까지만 표시됩니다. 실제 게임에서 원래 화면보다 나은지는 아직 확인하지 못했습니다(아래 '지금 상태').
 - 게임 부스트(RAM·GPU·CPU 항목)는 설정을 바꾸고 되돌리는 것까지 확인했고, **게임 FPS 효과는 아직 재지 않았습니다**. FPS가 오른다고 쓰지 않습니다.
-- GPU 오버클럭 / 전력 제한은 Windows의 NVIDIA 그래픽카드만, 듀얼 GPU는 내장 + 외장 그래픽이 모두 있는 PC나 Intel Mac만 됩니다(Apple Silicon은 GPU가 하나).
+- GPU 오버클럭 / 전력 제한은 NVIDIA 그래픽카드만, 듀얼 GPU는 내장 + 외장 그래픽이 모두 있는 PC만 됩니다.
 
 ## 구성
 
 ```
-app/SystemBoost.App/        공통 화면 (Avalonia, .NET 8) - Windows·macOS 같은 코드
+app/SystemBoost.App/        앱 화면 (Avalonia, .NET 8)
   Pages/                    프레임 생성(동작), 대시보드, 부스트, 벤치마크, 백업, 설정
   Services/FrameGenEngine   OS에 맞는 엔진 실행 + JSON 통신
   Services/BoostCatalog     부스트 기능 목록 + IBoostBackend
   Services/WindowsBoostBackend  Windows 부스트 구현 (백업·적용·되돌리기·게임 감시)
   Services/BoostHelper      관리자 도우미 실행 + 파이프 통신
 native/framegen/            Windows 엔진 (C++ / D3D11)  - README_FRAMEGEN.md 참고
-native/framegen-mac/        macOS 엔진 (Swift / Metal / ScreenCaptureKit)
+native/framegen-mac/        macOS 엔진 (Swift / Metal / ScreenCaptureKit) - 출시하지 않음
 native/helper/              관리자 도우미 sb_helper.exe (C++, 명령 허용 목록)
-tools/gen_metal.sh          HLSL -> Metal 셰이더 생성 (두 OS가 같은 알고리즘 사용)
+tools/gen_metal.sh          HLSL -> Metal 셰이더 생성 (맥 엔진용, 출시하지 않음)
 build/windows/              build.ps1 (Velopack 설치판 + 포터블 + 업데이트 패키지)
-build/macos/                build.sh, Info.plist, entitlements (Velopack .pkg + 업데이트 패키지)
-.github/workflows/build.yml 테스트 + Windows·macOS 빌드 + 태그 시 릴리스·업데이트 배포
-RELEASE_NOTES.md            다음 버전의 바뀐 점 (앱 업데이트 화면과 릴리스에 그대로 표시)
-site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 선택)
+build/macos/                build.sh, Info.plist, entitlements (출시하지 않음)
+.github/workflows/build.yml 테스트 + Windows 빌드 + 태그 시 릴리스·업데이트 배포 (macOS 빌드는 손으로 실행할 때만)
+RELEASE_NOTES.md            최근 버전의 바뀐 점 (앱 업데이트 화면과 릴리스에 그대로 표시)
+docs/RELEASE_HISTORY.md     0.8.11 이전의 바뀐 점 (보관용, 사용자에게 표시하지 않음)
+docs/HOTFIX.md              긴급 수정, 릴리스 되돌리기, 서버 롤백 절차
+site/download.html          옛 다운로드 페이지 (실제 사이트는 gh-pages 브랜치의 index.html, 9개 언어)
 ```
 
 ## 배포 파일 (다운로드할 때 선택)
@@ -33,14 +37,11 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
 |---|---|
 | `SystemBoost-Windows-Setup.exe` | 설치판. 관리자 권한 없이 설치되고 바로 실행, 바로가기·제거 포함 |
 | `SystemBoost-Windows-Portable.zip` | 포터블. 압축 풀고 `SystemBoost.exe` 실행. 설정·기록은 그 폴더(`data\`)에 저장 |
-| `SystemBoost-macOS-AppleSilicon.pkg` | M1 이후 Mac 설치 파일 |
-| `SystemBoost-macOS-Intel.pkg` | Intel Mac 설치 파일 |
 
 파일 이름에 버전이 없어서 다운로드 페이지는 항상 최신 릴리스를 가리킵니다(`releases/latest/download/...`).
-네 가지 모두 **자동 업데이트**됩니다(아래).
+두 가지 모두 **자동 업데이트**됩니다(아래). 릴리스에는 이 두 파일과 자동 업데이트용 파일(`releases.win.json`, `*.nupkg`, `SystemBoost-win-*`)만 올라갑니다.
 
 모두 .NET 런타임이 포함된 자체 실행형이라 따로 설치할 것이 없습니다.
-스팀판은 **아직 없습니다**(스팀에서 팔지 않음). 나중에 스팀에 올린다면 Windows 깊이(depot)에 설치판 대신 `dist\windows\SystemBoost` 폴더를, macOS 깊이에 `SystemBoost.app`을 올리면 스팀이 OS에 맞는 것을 자동으로 내려줍니다.
 
 ## 업데이트 내보내기 (자동 업데이트)
 
@@ -54,16 +55,16 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
   아무것도 안 해도 앱을 끌 때 조용히 적용돼요. 게임 중에 창을 띄우거나 강제로 재시작하지 않습니다.
 - 설정 → 업데이트: 현재 버전, 지금 확인, 바뀐 점, 자동 확인 끄기.
 - 설정·라이선스 키·기록은 앱 폴더 밖(포터블은 `data\`)에 있어서 업데이트해도 그대로입니다.
-- Velopack 설치본이 아니면(예: 나중의 스팀판, 아직 없음) 이 기능은 아무것도 하지 않습니다.
+- Velopack 설치본이 아니면(예: 개발용 빌드) 이 기능은 아무것도 하지 않습니다.
 
 확인 필요: Velopack은 첫 CI 빌드에서 처음 돌아갑니다. `vpk` 결과 파일 이름(`*-Setup.exe`, `*-Portable.zip`, `*-Setup.pkg`)과
 업로드 결과를 첫 태그 릴리스에서 확인하세요. 저장소가 비공개면 업데이트 확인에 토큰이 필요하니 공개 저장소(또는 공개 릴리스 전용 저장소)를 쓰세요.
 
 ## 빌드
 
-- **자동 (권장)**: GitHub에 올리면 `.github/workflows/build.yml`이 테스트 → Windows 빌드 → macOS 빌드를 돌리고 결과 파일을 Actions 아티팩트로 남깁니다. `v0.6.0` 태그를 붙이면 릴리스와 자동 업데이트까지 배포됩니다(위).
+- **자동 (권장)**: GitHub에 올리면 `.github/workflows/build.yml`이 테스트 → Windows 빌드를 돌리고 결과 파일을 Actions 아티팩트로 남깁니다. `v0.6.0` 태그를 붙이면 릴리스와 자동 업데이트까지 배포됩니다(위).
 - **Windows 수동**: `dotnet tool install -g vpk --version 0.0.1298` 후 `powershell -ExecutionPolicy Bypass -File build\windows\build.ps1`
-- **macOS 수동**: `build/macos/build.sh`
+- **macOS 수동**(출시하지 않음): `build/macos/build.sh`
 
 서명: Windows는 `SIGN_CERT_THUMBPRINT`, macOS는 `SIGN_IDENTITY` + `INSTALL_IDENTITY` + `NOTARY_PROFILE` 환경 변수(CI에서는 저장소 Secrets `MAC_SIGN_IDENTITY` 등)를 넣으면 서명·공증까지 합니다. 서명하지 않으면 Windows SmartScreen, macOS Gatekeeper 경고가 뜹니다.
 
@@ -117,7 +118,7 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
 - 설치 폴더가 사용자 쓰기 가능하고 서명 전이라, 같은 사용자 권한의 악성 프로그램이 UAC 전에 파일을 바꿀 수는 있습니다. 코드 서명을 하면 UAC에 발행자가 보입니다.
 - NVAPI는 CMake가 고정된 커밋과 SHA-256으로 내려받습니다.
 
-## macOS: 윈도우 게임 실행 (Wine)
+## (출시하지 않음) macOS: 윈도우 게임 실행 (Wine)
 - 메뉴 "🍷 윈도우 게임"에서 실행 환경을 설치합니다. Wine·DXVK는 처음 쓸 때 GitHub 릴리스에서 내려받고, `Assets/wine-manifest.json`의 SHA-256과 다르면 설치하지 않습니다. CI(macOS 빌드)가 `tools/update_wine_manifest.sh`로 매니페스트를 최신 릴리스 기준으로 갱신합니다.
 - 그래픽 방식: DXVK(DirectX 10·11, 기본) / WineD3D(DirectX 9 이하) / D3DMetal(DirectX 11·12 — 사용자가 Apple Game Porting Toolkit을 직접 받아 폴더를 지정. SystemBoost는 배포하지 않음).
 - Apple Silicon은 Rosetta 2가 필요하고, 앱에서 Apple 설치 명령을 열어 줍니다.
@@ -160,7 +161,7 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
 - 메모리를 강제로 막는 제한은 앱이 튕길 수 있어 넣지 않았습니다.
 - 확인 필요: macOS `taskpolicy -b/-B -p` 동작(OS 버전별), Windows에서 관리자 권한으로 실행된 앱은 권한 부족으로 바꾸지 못함(메시지 표시).
 
-## macOS: 게임 부스트
+## (출시하지 않음) macOS: 게임 부스트
 `Services/MacBoostBackend.cs` — macOS가 허용하고 효과가 있는 것만 넣었습니다. 바꾸기 전 상태를 `mac-backup.json`에 저장하고, 항목별 또는 "백업 · 되돌리기"에서 한 번에 되돌립니다(관리자 암호는 macOS 표준 창으로 받음).
 - 저전력 모드 끄기 (`pmset`)
 - Time Machine 자동 백업 멈추기 (`tmutil disable` / `enable`)
@@ -169,7 +170,7 @@ site/download.html          다운로드 페이지 (OS 자동 감지 + 직접 �
 - 상태: 발열(CPU 속도 제한), 메모리 여유, 저전력 모드
 - 넣지 않은 것(macOS가 막아 둠): RAM 정리, GPU 클럭, 프로세스 우선순위 올리기, 코어 배치
 
-## macOS에서 다른 점
+## (출시하지 않음) macOS에서 다른 점
 - 처음 실행할 때 **화면 기록 권한**이 필요합니다 (시스템 설정 → 개인정보 보호 및 보안 → 화면 기록).
 - 게임 창 위의 출력 창은 다른 캡처·녹화에 잡히지 않습니다(sharingType = none).
 - RAM 정리·GPU 오버클럭·CPU 우선순위는 macOS가 앱에 열어 두지 않아 넣지 않았습니다(위 "게임 부스트" 참고).

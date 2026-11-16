@@ -236,7 +236,7 @@
 "라이선스 전문 보기": "View full licenses",
 "사용권 계약 보기": "View License Agreement",
 "업데이트": "Updates",
-"이 버전은 자동 업데이트를 쓰지 않아요. 스팀에서 받았다면 스팀이 업데이트해 줘요.": "This version does not update itself. If you got it from Steam, Steam updates it.",
+"이 버전은 자동 업데이트를 쓰지 않아요. 새 버전은 다운로드 페이지에서 받아 주세요.": "This version does not update itself. Get new versions from the download page.",
 "새 버전을 자동으로 확인하고 미리 받아 두기": "Check for new versions and download them automatically",
 "지금 확인": "Check now",
 "다시 시작해서 업데이트": "Restart to update",
@@ -277,7 +277,6 @@
 "연간": "Yearly",
 "평생": "Lifetime",
 "월간·연간은 그 기간 동안 써요.": "Monthly and yearly last for that period.",
-"스팀에서 받았다면 스팀 상점의 'SystemBoost Premium'({0}, 한 번 결제)으로 구매하세요.": "If you got it from Steam, buy 'SystemBoost Premium' ({0}, one payment) in the Steam store.",
 "카드 결제": "Card payment",
 "계좌이체 · 직접 결제": "Bank transfer · direct payment",
 "주문 코드": "Order code",
@@ -1210,5 +1209,6 @@
 "이 기기의 라이선스 키가 판매자에 의해 해제됐어요(환불 또는 키 공유). 카드 구독이 해지됐는지는 결제 메일의 구독 관리 링크에서 확인할 수 있어요. 문의는 고객센터 '문의하기'로 보내 주세요.": "The seller removed this device's license key (refund or key sharing). You can check whether the card subscription was cancelled with the subscription management link in your payment email. Send questions with Support 'Send a request'.",
 "이 기기의 라이선스 키가 판매자에 의해 해제됐어요(환불 또는 키 공유). 문의는 고객센터 '문의하기'로 보내 주세요.": "The seller removed this device's license key (refund or key sharing). Send questions with Support 'Send a request'.",
 "지금 키의 남은 기간은 더해지지 않아요.": "The days left on your current key are not added.",
+"NVIDIA, DLSS는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의, Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.": "NVIDIA and DLSS are trademarks of NVIDIA Corporation; AMD and Radeon of Advanced Micro Devices, Inc.; Intel of Intel Corporation; Windows of Microsoft Corporation. SystemBoost is not affiliated with or endorsed by these companies.",
 "기간 없는 키": "A key with no end date"
 }
