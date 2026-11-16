@@ -466,7 +466,7 @@ public sealed class PremiumPage : UserControl
     {
         var (reachable, methods) = await License.GetShopStatusAsync();
         _methods = methods;
-        UpdateBuy();
+        Refresh();   // the trial card follows the server's "trial"; Refresh also runs UpdateBuy
         bool closed = methods["card"].Count == 0 && methods["manual"].Count == 0;
         _buyCard.IsVisible = !closed || License.Pending != null;   // an open order stays reachable
         _keyNote.IsVisible = closed;
@@ -734,7 +734,7 @@ public sealed class PremiumPage : UserControl
     private void Refresh()
     {
         if (_trialCard != null)
-            _trialCard.IsVisible = Platform.IsWindows && License.ServerConfigured && !License.IsPremium && !License.TrialUsed;
+            _trialCard.IsVisible = Platform.IsWindows && License.TrialOffered && !License.IsPremium && !License.TrialUsed;
         var info = License.Info is { } i && (i.Expires == null || i.Expires > DateTime.UtcNow) ? i : null;   // a key that ran out is shown below only
         if (License.IsPremium)
         {

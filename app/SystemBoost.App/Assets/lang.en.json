@@ -888,7 +888,7 @@
 "라이선스 키는 어디에 등록하나요?": "Where do I enter a license key?",
 "왼쪽 '★ 플랜' 화면의 '라이선스 키' 칸에 붙여 넣고 '등록'을 누르세요.": "Paste it into the 'License key' box on the '★ Plans' page on the left and press 'Register'.",
 "결제했는데 키가 오지 않아요": "I paid but no key arrived",
-"카드 결제는 결제가 확인되면 키가 자동으로 떠요. 계좌이체 · 직접 결제는 '결제했어요'를 누른 뒤 판매자가 확인하면 키가 떠요. 앱을 껐다 켜도 이어서 기다려요. 오래 걸리면 주문 코드를 적어 문의해 주세요.": "With a card payment the key appears by itself once the payment is confirmed. With bank transfer or direct payment the key appears after you press 'I have paid' and the seller confirms it. The app keeps waiting even if you restart it. If it takes long, ask with your order code.",
+"카드 결제는 결제가 확인되면 키가 자동으로 떠요. 계좌이체 · 직접 결제는 입금한 뒤 '고객센터에 입금 알리기'를 누르고 문의를 보내면, 판매자가 확인한 뒤 키가 떠요. 앱을 껐다 켜도 이어서 기다려요. 오래 걸리면 주문 코드를 적어 문의해 주세요.": "With a card payment the key appears by itself once the payment is confirmed. With bank transfer or direct payment, press 'Tell Support you have paid' after you pay and send the request; the key appears once the seller confirms it. The app keeps waiting even if you restart it. If it takes long, ask with your order code.",
 "카드 구독은 어떻게 해지하나요?": "How do I cancel a card subscription?",
 "결제 메일의 구독 관리 링크에서 해지할 수 있어요. 이 화면에 '구독 관리' 버튼이 보이면 거기서도 열 수 있어요.": "Use the subscription management link in your payment email. If this page shows a 'Manage subscription' button, you can open it there too.",
 "환불은 어떻게 요청하나요?": "How do I ask for a refund?",

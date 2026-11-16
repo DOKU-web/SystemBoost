@@ -516,6 +516,8 @@ public sealed class SupportPage : UserControl
     {
         _askCats.Children.Clear();
         var cats = _info.Categories.Where(c => c.Id != "refund").ToList();   // refunds have their own tab
+        // a prefilled 입금 확인 meets a server from before 0.8.14 (its list came after the prefill): 결제 still reaches the seller
+        if (_askCat == "deposit" && cats.All(c => c.Id != "deposit") && cats.Any(c => c.Id == "pay")) _askCat = "pay";
         if (_askCat != null && cats.All(c => c.Id != _askCat)) _askCat = null;
         foreach (var c in cats)
         {

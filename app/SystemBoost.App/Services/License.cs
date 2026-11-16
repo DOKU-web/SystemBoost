@@ -159,6 +159,8 @@ public static class License
 
     // ------------------------------------------------------------ 3-day trial (0.8.14)
     private static string TrialFile => Path.Combine(Platform.DataDir, "trial.txt");
+    /// The server hands out trials (its /status says "trial": true). Servers from before 0.8.14 say nothing: no trial card.
+    public static bool TrialOffered { get; private set; }
     /// This PC took its trial, as far as this PC knows (the server keeps the record that counts).
     public static bool TrialUsed => File.Exists(TrialFile);
 
@@ -297,6 +299,7 @@ public static class License
         try
         {
             using var doc = JsonDocument.Parse(await Http.GetStringAsync($"{ServerUrl}/status"));
+            TrialOffered = doc.RootElement.TryGetProperty("trial", out var t) && t.ValueKind == JsonValueKind.True;
             if (doc.RootElement.TryGetProperty("methods", out var ms) && ms.ValueKind == JsonValueKind.Object)
                 foreach (var m in ms.EnumerateObject())
                     if (methods.TryGetValue(m.Name, out var set) && m.Value.ValueKind == JsonValueKind.Array)
