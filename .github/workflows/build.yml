@@ -209,3 +209,17 @@ jobs:
         run: |
           gh release upload "$TAG" dist/download-Windows/SystemBoost-Windows-Setup.exe dist/download-Windows/SystemBoost-Windows-Portable.zip --clobber --repo "${{ github.repository }}"
           [ -f RELEASE_NOTES.md ] && gh release edit "$TAG" --notes-file RELEASE_NOTES.md --repo "${{ github.repository }}" || true
+      # The public release-only repository (0.8.14+; Services/Updater.cs asks it first). Needs the repository secret
+      # RELEASES_REPO_TOKEN: a fine-grained token with "Contents: read and write" on DOKU-web/SystemBoost-releases
+      # only, which must exist with at least one commit. Without the secret this step warns and skips, and the
+      # release stays in this repository only (apps still find it there).
+      - name: Also publish to the release repository
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          RELEASES_REPO: DOKU-web/SystemBoost-releases
+        run: |
+          if [ -z "$RELEASES_TOKEN" ]; then echo "::warning::RELEASES_REPO_TOKEN is not set: released in ${{ github.repository }} only"; exit 0; fi
+          NAME="SystemBoost ${TAG#v}"
+          vpk upload github --repoUrl "https://github.com/$RELEASES_REPO" --token "$RELEASES_TOKEN" --tag "$TAG" --releaseName "$NAME" -o dist/SystemBoost-Windows --channel win --publish
+          GH_TOKEN="$RELEASES_TOKEN" gh release upload "$TAG" dist/download-Windows/SystemBoost-Windows-Setup.exe dist/download-Windows/SystemBoost-Windows-Portable.zip --clobber --repo "$RELEASES_REPO"
+          if [ -f RELEASE_NOTES.md ]; then GH_TOKEN="$RELEASES_TOKEN" gh release edit "$TAG" --notes-file RELEASE_NOTES.md --repo "$RELEASES_REPO"; fi

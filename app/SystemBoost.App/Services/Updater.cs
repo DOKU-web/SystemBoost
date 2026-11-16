@@ -1,11 +1,15 @@
-// Automatic updates for the direct-download builds (installer, portable, macOS) with Velopack.
+// Automatic updates for the direct-download builds (installer, portable) with Velopack.
 // Releases live on GitHub Releases; CI packs them with `vpk pack` and uploads them (see build.yml).
+// Two repositories (0.8.14): the public release-only repository (ReleasesRepo) and the code repository the apps
+// up to 0.8.13 read (CodeRepo). Both are asked and the newer release wins, so this works before the release
+// repository exists, while both carry the same release, and after the code repository turns private (then it
+// answers 404, which counts as "nothing there").
 //
 //  - Checks 15 s after start and then every 6 hours (can be turned off in Settings).
 //  - Downloads in the background (only the changed parts when a delta exists).
 //  - Never interrupts: shows a bar; the user picks "restart now", or it is applied when the app closes.
 //  - A background check that fails stays silent; errors show only after the user presses "check now".
-//  - Steam builds and dev builds are not Velopack installs (IsInstalled = false): this does nothing there.
+//  - Dev builds are not Velopack installs (IsInstalled = false): this does nothing there.
 //  - Settings, license key and records are outside the app folder, so updates keep them.
 using System;
 using System.IO;
@@ -23,10 +27,10 @@ public enum UpdateState { Unsupported, Idle, Checking, UpToDate, Downloading, Re
 
 public static class Updater
 {
-    // Same repository as the download page (site/download.html). TODO: set the real one.
-    public const string RepoUrl = "https://github.com/DOKU-web/SystemBoost";
+    public const string ReleasesRepo = "https://github.com/DOKU-web/SystemBoost-releases";
+    public const string CodeRepo = "https://github.com/DOKU-web/SystemBoost";
 
-    private static UpdateManager? _mgr;
+    private static UpdateManager? _mgr, _oldMgr;
     private static bool _mgrTried;
     private static UpdateManager? Mgr
     {
@@ -34,13 +38,27 @@ public static class Updater
         {
             if (_mgrTried) return _mgr;
             _mgrTried = true;
-            try { _mgr = new UpdateManager(new GithubSource(RepoUrl, null, false)); }
+            try { _mgr = new UpdateManager(new GithubSource(ReleasesRepo, null, false)); }
             catch (Exception) { _mgr = null; }
+            try { _oldMgr = new UpdateManager(new GithubSource(CodeRepo, null, false)); }
+            catch (Exception) { _oldMgr = null; }
             return _mgr;
         }
     }
 
-    /// Installed with the Velopack installer or portable zip (not Steam, not a dev build).
+    // The manager whose repository holds the update found last; downloads and applies go through it.
+    private static UpdateManager? _from;
+
+    // Asks one repository. A repository that does not exist, or has no releases, answers 404: nothing there.
+    private static async Task<(UpdateInfo? info, Exception? error)> AskAsync(UpdateManager? m)
+    {
+        if (m == null) return (null, null);
+        try { return (await m.CheckForUpdatesAsync(), null); }
+        catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound) { return (null, null); }
+        catch (Exception e) { return (null, e); }
+    }
+
+    /// Installed with the Velopack installer or portable zip (not a dev build).
     public static bool Supported { get { try { return Mgr?.IsInstalled == true; } catch (Exception) { return false; } } }
     public static bool IsPortable { get { try { return Mgr?.IsPortable == true; } catch (Exception) { return false; } } }
     public static string CurrentVersion
@@ -100,20 +118,27 @@ public static class Updater
         {
             Error = null;
             Set(UpdateState.Checking);
-            _info = await Mgr!.CheckForUpdatesAsync();
+            var (info, error) = await AskAsync(Mgr);
+            var (oldInfo, oldError) = await AskAsync(_oldMgr);
+            if (error != null && oldError != null) throw error;       // neither could be asked
+            _from = Mgr;
+            if (oldInfo != null && (info == null || oldInfo.TargetFullRelease.Version > info.TargetFullRelease.Version))
+                (info, _from) = (oldInfo, _oldMgr);
+            _info = info;
             LastCheck = DateTime.Now;
-            if (_info == null) { Set(UpdateState.UpToDate); return; }
+            if (_info == null)
+            {
+                // one repository failed and the other had nothing: unknown, not "up to date"
+                if (error != null || oldError != null) throw (error ?? oldError)!;
+                Set(UpdateState.UpToDate);
+                return;
+            }
             NewVersion = _info.TargetFullRelease.Version.ToString();
             ReleaseNotes = _info.TargetFullRelease.NotesMarkdown ?? "";
             Progress = 0;
             Set(UpdateState.Downloading);
-            await Mgr.DownloadUpdatesAsync(_info, p => { Progress = p; Set(UpdateState.Downloading); });
+            await _from!.DownloadUpdatesAsync(_info, p => { Progress = p; Set(UpdateState.Downloading); });
             Set(UpdateState.Ready);
-        }
-        catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)
-        {
-            LastCheck = DateTime.Now;                                 // no releases published: nothing newer exists
-            Set(UpdateState.UpToDate);
         }
         catch (Exception e)
         {
@@ -129,7 +154,7 @@ public static class Updater
     {
         if (State != UpdateState.Ready || _info == null) return;
         _applied = true;
-        Mgr!.ApplyUpdatesAndRestart(_info.TargetFullRelease);
+        (_from ?? Mgr)!.ApplyUpdatesAndRestart(_info.TargetFullRelease);
     }
 
     private static bool _applied;
@@ -138,7 +163,7 @@ public static class Updater
     {
         if (_applied || State != UpdateState.Ready || _info == null) return;
         _applied = true;
-        try { Mgr!.WaitExitThenApplyUpdates(_info.TargetFullRelease, true, false); } catch (Exception) { }
+        try { (_from ?? Mgr)!.WaitExitThenApplyUpdates(_info.TargetFullRelease, true, false); } catch (Exception) { }
     }
 
     private static void Set(UpdateState s)
