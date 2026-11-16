@@ -24,6 +24,7 @@ public static class PlanStatus
         {
             "paid" => "결제로 받은 키",
             "referral" => "추천 코드로 받은 키",
+            "trial" => "3일 체험 키 · 끝나면 무료 플랜으로 돌아가요",
             "invite" => "초대 코드로 받은 키",
             "reward" => "초대 보상으로 받은 키",
             _ => "등록한 라이선스 키",

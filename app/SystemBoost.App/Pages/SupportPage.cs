@@ -53,6 +53,36 @@ public sealed class SupportPage : UserControl
     private readonly StackPanel _askPanel = new() { Spacing = 10 };
     private readonly StackPanel _askCats = new() { Orientation = Orientation.Horizontal };
     private string? _askCat;
+    // 입금 확인 (0.8.14): the order code the deposit is for; the server needs it for that category
+    private readonly TextBox _askOrder = Input("주문 코드 (SB-XXXX-XXXX)", 20);
+
+    /// What the plan page's "고객센터에 입금 알리기" fills in: the ask tab, 입금 확인, the order code. Taken by the next
+    /// support page shown (pages are kept, so the one that exists takes it when it is shown again).
+    public sealed record Prefill(string Order, string Subject, string Text);
+    private static Prefill? _prefill;
+    /// MainWindow shows the support page when this is raised.
+    public static event Action? PrefillRequested;
+    public static void RequestDeposit(Prefill p)
+    {
+        _prefill = p;
+        PrefillRequested?.Invoke();
+    }
+
+    private void TakePrefill()
+    {
+        if (_prefill is not { } p) return;
+        _prefill = null;
+        // a server from before 0.8.14 has no 입금 확인: 결제 with the code in the text still reaches the seller
+        _askCat = _info.Categories.Any(c => c.Id == "deposit") ? "deposit" : "pay";
+        FillCategories();
+        _askSubject.Text = p.Subject;
+        _askText.Text = p.Text;
+        _askOrder.Text = p.Order;
+        _askOrder.IsVisible = true;
+        _askMsg.Text = "내용을 확인하고 '보내기'를 눌러 주세요. 보내야 판매자에게 알림이 가요.";
+        _tab = Tab.Ask;
+        ShowTab();
+    }
     private readonly TextBox _askSubject = Input($"제목 ({Support.MaxSubject}자까지)", Support.MaxSubject);
     private readonly TextBox _askText = Area($"내용 ({Support.MaxText}자까지)", Support.MaxText);
     private readonly TextBlock _askCount = Counter();
@@ -154,6 +184,7 @@ public sealed class SupportPage : UserControl
 
         Content = new ScrollViewer { Content = root };
         _timer.Tick += async (_, _) => { if (Awake) await Poll(); };
+        AttachedToVisualTree += (_, _) => TakePrefill();
         AttachedToVisualTree += (_, _) =>
         {
             Support.Changed += OnTicketsChanged;
@@ -430,6 +461,8 @@ public sealed class SupportPage : UserControl
         var catBox = new Border { Child = _askCats, HorizontalAlignment = HorizontalAlignment.Left };
         catBox.Classes.Add("segbox");
         p.Children.Add(catBox);
+        _askOrder.IsVisible = _askCat == "deposit";
+        p.Children.Add(_askOrder);
         p.Children.Add(_askSubject);
         p.Children.Add(_askText);
         Count(_askText, _askCount);
@@ -446,15 +479,18 @@ public sealed class SupportPage : UserControl
         _askSend.Click += async (_, _) =>
         {
             if (_askConsent.IsChecked != true) { _askMsg.Text = "보관에 동의해야 보낼 수 있어요"; return; }
+            var order = License.NormalizeOrderCode(_askOrder.Text);
+            if (_askCat == "deposit" && order == null) { _askMsg.Text = "입금한 주문의 코드(SB-로 시작)를 적어 주세요"; return; }
             _askSending = true;
             _askSend.IsEnabled = false;
             _askMsg.Text = "보내는 중…";
             var diag = _askDiag.IsChecked == true ? await Support.DiagAsync() : null;
-            var (id, error) = await Support.CreateAsync(new SupportDraft(_askCat ?? "", _askSubject.Text ?? "", _askText.Text ?? "", _askContact.Text, diag));
+            var (id, error) = await Support.CreateAsync(new SupportDraft(_askCat ?? "", _askSubject.Text ?? "", _askText.Text ?? "", _askContact.Text, diag,
+                                                                         Order: order));
             _askSending = false;
             _askSend.IsEnabled = _info.Open;
             if (id == null) { _askMsg.Text = error ?? ""; return; }
-            _askSubject.Text = _askText.Text = _askContact.Text = "";
+            _askSubject.Text = _askText.Text = _askContact.Text = _askOrder.Text = "";
             _askMsg.Text = "";
             OpenThread(id, $"보냈어요. 문의 번호 {id}");
         };
@@ -489,6 +525,7 @@ public sealed class SupportPage : UserControl
             {
                 _askCat = c.Id;
                 foreach (var o in _askCats.Children.OfType<ToggleButton>()) o.IsChecked = (string?)o.Tag == c.Id;
+                _askOrder.IsVisible = c.Id == "deposit";
             };
             _askCats.Children.Add(t);
         }

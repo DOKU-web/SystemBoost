@@ -152,7 +152,7 @@ public sealed class PremiumPage : UserControl
         _boostReady = boostReady;
         var root = new StackPanel();
         root.Children.Add(Ui.Header("플랜", Platform.IsWindows
-            ? "무료로도 기본 기능은 계속 쓸 수 있어요. 프로는 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭까지 더해요. 산업은 울트라에 방송 모드, 업무 모드, 시작 프로그램 정리를 더해요. 효과는 게임과 PC마다 달라요. 무료 플랜의 프레임 생성 2배와 벤치마크로 이 PC에서 먼저 확인해 보세요. 유료 플랜에만 있는 기능은 구매 전에 써 볼 수 없어요."
+            ? "무료로도 기본 기능은 계속 쓸 수 있어요. 프로는 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 6·8배, 듀얼 GPU, 게임별 자동 최적화, GPU 오버클럭까지 더해요. 산업은 울트라에 방송 모드, 업무 모드, 시작 프로그램 정리를 더해요. 효과는 게임과 PC마다 달라요. 무료 플랜의 프레임 생성 2배와 벤치마크로 이 PC에서 먼저 확인해 보세요. 울트라 기능은 결제 전에 3일 체험으로 써 볼 수 있어요(PC마다 한 번)."
             : "무료로도 기본 기능은 계속 쓸 수 있어요. 프로는 자동·3·4배와 품질 모드를 열고, 울트라는 여기에 6·8배와 듀얼 GPU(내장 + 외장 그래픽이 있는 Intel Mac)까지 더해요. 효과는 게임과 Mac마다 달라요. 무료 플랜의 프레임 생성 2배와 벤치마크로 이 Mac에서 먼저 확인해 보세요. 유료 플랜에만 있는 기능은 구매 전에 써 볼 수 없어요."));
 
         var status = new StackPanel { Spacing = 4 };
@@ -299,24 +299,31 @@ public sealed class PremiumPage : UserControl
         var paidRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         paidRow.Children.Add(_payer);
         paidRow.Children.Add(_memo);
-        var paidBtn = Ui.Button("결제했어요", "primary");
+        // 0.8.14: the order turns into 결제 확인 요청 and the support form opens filled in (입금 확인, the order code);
+        // the seller's 24 hours count from this notice
+        var paidBtn = Ui.Button("고객센터에 입금 알리기", "primary");
         paidBtn.Click += async (_, _) =>
         {
             if (string.IsNullOrWhiteSpace(_payer.Text)) { _buyMsg.Text = "판매자가 결제를 찾을 수 있게 입금자명(결제자 이름)을 적어 주세요."; return; }
             paidBtn.IsEnabled = false;
-            var err = _shown == null ? "주문이 없어요" : await License.MarkPaidAsync(_payer.Text!.Trim(), (_memo.Text ?? "").Trim(), _shown);
+            var code = _shown;
+            var err = code == null ? "주문이 없어요" : await License.MarkPaidAsync(_payer.Text!.Trim(), (_memo.Text ?? "").Trim(), code);
             paidBtn.IsEnabled = true;
-            _buyMsg.Text = err ?? "판매자에게 알렸어요. 확인되면 키가 자동으로 떠요.";
+            _buyMsg.Text = err ?? "주문을 '결제 확인 요청'으로 바꿨어요. 이어서 고객센터 문의를 보내 주세요.";
             ShowPending();
+            if (err == null && code != null) AskDeposit(code, _payer.Text!.Trim());
         };
         paidRow.Children.Add(paidBtn);
-        _paidPanel.Children.Add(Ui.Text("결제를 마쳤다면 알려 주세요", "label"));
+        _paidPanel.Children.Add(Ui.Text("입금을 마쳤다면 고객센터에 알려 주세요", "label"));
         _paidPanel.Children.Add(paidRow);
         _orderPanel.Children.Add(_paidPanel);
+        _askAgain.Click += (_, _) => { if (_shown is { } c) AskDeposit(c, ""); };
+        _orderPanel.Children.Add(_askAgain);
         _orderPanel.Children.Add(_otherOrders);   // a new order never replaces one still waiting: each is listed
         buy.Children.Add(_orderPanel);
         _buyCard = Ui.Card(buy);
         _buyCard.IsVisible = false;
+        root.Children.Add(_trialCard = Ui.Card(TrialPanel()));   // above the buy card: the notice is read before either button
         root.Children.Add(_buyCard);
 
         // key
@@ -498,7 +505,7 @@ public sealed class PremiumPage : UserControl
                               "카드 구독은 결제한 날부터 시작해요(지금 키의 남은 기간은 더해지지 않아요).";
         else
         {
-            var note = "판매자 결제 페이지에서 결제한 뒤 '결제했어요'를 누르면, 판매자가 확인하고 키를 보내 줘요.";
+            var note = "계좌이체는 이렇게 해요: 결제하기를 눌러 주문 코드(SB-XXXX-XXXX)를 받고 → 판매자 계좌로 입금하고 → '고객센터에 입금 알리기'를 누르면 → 판매자가 확인한 뒤 24시간 안에 키를 보내요. 24시간은 입금을 알린 때부터예요.";
             if (License.ExtendsFrom(PlanId, "manual") is DateTime end)
                 note += " " + $"지금 키가 끝나는 {end.ToLocalTime():yyyy-MM-dd}부터 이어서 새 기간이 더해져요.";
             else if (_seats == 1)
@@ -523,11 +530,12 @@ public sealed class PremiumPage : UserControl
         var plan = o.Plan.Length > 0 ? PlanLabel(o.Plan) : "주문 코드로 확인한";   // a code typed in: the plan is not known here
         var auto = o.Method is "card" or "auto";
         _paidPanel.IsVisible = !auto && o.Status != "paid";
+        _askAgain.IsVisible = !auto && o.Status == "paid";
         _orderSub.Text = auto
             ? $"{plan} 카드 결제 · 결제창에서 결제를 마치면 키가 자동으로 만들어져 이 앱에 떠요. 앱을 껐다 켜도 이어서 기다려요."
             : o.Status == "paid"
-                ? $"{plan} 주문 · 결제 확인 요청을 보냈어요. 판매자가 확인하면 키가 자동으로 떠요(시간이 걸릴 수 있어요). 앱을 껐다 켜도 주문한 날부터 90일까지 기다려요."
-                : $"{plan} 주문 · 결제할 때 요청사항(메모)에 이 코드를 꼭 적어 주세요. 결제를 마친 뒤 아래에 입금자명을 적고 '결제했어요'를 누르면 판매자가 확인해요.";
+                ? $"{plan} 주문 · 결제 확인 요청을 보냈어요. 판매자가 확인한 뒤 입금을 알린 때부터 24시간 안에 키를 보내요. 키는 이 앱에 자동으로 떠요. 고객센터 문의를 아직 보내지 않았다면 아래 버튼으로 보내 주세요."
+                : $"{plan} 주문 · 입금할 때 받는 분 통장 표시(메모)에 이 코드를 꼭 적어 주세요. 입금한 뒤 아래에 입금자명을 적고 '고객센터에 입금 알리기'를 누르면 판매자가 확인해요.";
         if (o.Extends is DateTime end) _orderSub.Text += "\n" + $"지금 키가 끝나는 {end.ToLocalTime():yyyy-MM-dd}부터 이어서 새 기간이 더해져요.";
         if (all.Length < 2) return;
         _otherOrders.Children.Add(Ui.Text("기다리는 다른 주문 · 누르면 그 주문을 보여 줘요", "label"));
@@ -644,8 +652,47 @@ public sealed class PremiumPage : UserControl
         await Open(url);
     }
 
+    private Border? _trialCard;
+    private readonly TextBlock _trialMsg = Ui.Text("", "muted", wrap: true);
+    private readonly Button _askAgain = Ui.Button("고객센터 입금 확인 문의 열기", "ghost");
+
+    // The 3-day trial (사용권 계약 제3조 제12항, 제9조 제2항). The notice comes first, above this button and the buy card.
+    private Control TrialPanel()
+    {
+        var p = new StackPanel { Spacing = 10 };
+        p.Children.Add(Ui.Text("3일 체험", "h2"));
+        p.Children.Add(Ui.Text("체험은 PC마다 한 번, 받은 때부터 3일 동안 울트라 기능을 열어요. 결제 수단을 받지 않고 자동으로 결제되지 않으며, 3일이 지나면 무료 플랜으로 돌아가요. " +
+                               "PC마다 한 번만 받도록 이 PC의 기기 식별값으로 만든 해시값을 판매자 서버로 보내고, 서버는 400일 뒤 지워요.", "muted", wrap: true));
+        var start = Ui.Button("3일 체험 시작", "primary");
+        start.HorizontalAlignment = HorizontalAlignment.Left;
+        start.Click += async (_, _) =>
+        {
+            start.IsEnabled = false;
+            _trialMsg.Text = "체험 키를 받는 중…";
+            var err = await License.StartTrialAsync();
+            start.IsEnabled = true;
+            _trialMsg.Text = err ?? "체험을 시작했어요. 3일 동안 울트라 기능을 쓸 수 있어요.";
+            Refresh();
+        };
+        p.Children.Add(start);
+        p.Children.Add(_trialMsg);
+        return p;
+    }
+
+    private void AskDeposit(string code, string payer)
+    {
+        var plan = License.PendingOrders.FirstOrDefault(o => o.Code == code) is { Plan.Length: > 0 } o ? PlanLabel(o.Plan) : "";
+        // what the buyer sends, in the screen's language (a TextBox is not translated)
+        var text = Lang.Translating
+            ? $"I have paid for order {code}" + (plan.Length > 0 ? $" ({Lang.T(plan)})" : "") + "." + (payer.Length > 0 ? $" Payer name: {payer}." : "") + " Please check it."
+            : $"주문 코드 {code}" + (plan.Length > 0 ? $" ({plan})" : "") + "의 금액을 입금했어요." + (payer.Length > 0 ? $" 입금자명은 {payer}예요." : "") + " 확인 부탁드려요.";
+        SupportPage.RequestDeposit(new SupportPage.Prefill(code, (Lang.Translating ? "Payment sent · " : "입금 확인 · ") + code, text));
+    }
+
     private void Refresh()
     {
+        if (_trialCard != null)
+            _trialCard.IsVisible = Platform.IsWindows && License.ServerConfigured && !License.IsPremium && !License.TrialUsed;
         var info = License.Info is { } i && (i.Expires == null || i.Expires > DateTime.UtcNow) ? i : null;   // a key that ran out is shown below only
         if (License.IsPremium)
         {

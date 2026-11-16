@@ -120,7 +120,7 @@ public static class Support
     // ------------------------------------------------------------ built-in texts (offline, or nothing set on the server)
     public static readonly IReadOnlyList<SupportChoice> BuiltInCategories = new SupportChoice[]
     {
-        new("pay", "결제"), new("refund", "환불"), new("bug", "오류 신고"), new("howto", "사용 방법"), new("idea", "제안"), new("other", "기타"),
+        new("pay", "결제"), new("deposit", "입금 확인"), new("refund", "환불"), new("bug", "오류 신고"), new("howto", "사용 방법"), new("idea", "제안"), new("other", "기타"),
     };
 
     public static readonly IReadOnlyList<SupportChoice> BuiltInReasons = new SupportChoice[]

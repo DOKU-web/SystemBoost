@@ -50,6 +50,7 @@ public partial class MainWindow : Window
         AddNav("★   플랜", "premium", () => new PremiumPage(_backend.Connected));
         AddNav("◈   계정", "account", () => new AccountPage(OpenPlans));
         AddNav("✉   고객센터", "support", () => new SupportPage());
+        SupportPage.PrefillRequested += () => Go("support");   // ★ 플랜 -> 고객센터에 입금 알리기
         SupportNav();
         AddNav("↺   백업 · 되돌리기", "backup", () => new BackupPage(_backend));
         NavSettings.Click += (_, _) => Show(NavSettings, "settings", () => new SettingsPage(_backend));
