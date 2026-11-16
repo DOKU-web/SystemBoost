@@ -159,6 +159,11 @@ public sealed class PremiumPage : UserControl
         status.Children.Add(_state);
         status.Children.Add(_stateSub);
         root.Children.Add(Ui.Card(status));
+        _priceCard.Child = _priceP;
+        _priceCard.Classes.Add("tile");
+        _priceCard.Padding = new Thickness(16);
+        _priceCard.IsVisible = false;
+        root.Children.Add(_priceCard);
 
         // comparison
         var table = new Grid { ColumnDefinitions = new ColumnDefinitions(SellsBiz ? "*,110,170,170,170" : "*,140,190,190") };
@@ -434,6 +439,7 @@ public sealed class PremiumPage : UserControl
         Refresh();
         ShowPending();
         AttachedToVisualTree += async (_, _) => await LoadShop();   // links may change in the dashboard
+        AttachedToVisualTree += async (_, _) => await LoadPriceNotice();
         AttachedToVisualTree += async (_, _) => await LoadTicket();
         AttachedToVisualTree += async (_, _) => await License.CheckStoppedAsync();   // an order approved after it stopped being watched
     }
@@ -653,6 +659,42 @@ public sealed class PremiumPage : UserControl
     }
 
     private Border? _trialCard;
+    private readonly Border _priceCard = new();
+    private readonly StackPanel _priceP = new() { Spacing = 10 };
+
+    // A price change for this card subscription: both answers look the same and nothing is chosen for the user.
+    private async System.Threading.Tasks.Task LoadPriceNotice()
+    {
+        var n = await License.GetPriceNoticeAsync();
+        _priceP.Children.Clear();
+        _priceCard.IsVisible = n != null;
+        if (n == null) return;
+        _priceP.Children.Add(Ui.Text("구독 가격 변경 안내", "h2"));
+        if (n.Text.Length > 0) _priceP.Children.Add(Ui.Text(n.Text, "label", wrap: true));
+        _priceP.Children.Add(Ui.Text($"{PlanLabel(n.Plan)} · 지금 가격 {n.OldPrice} → 새 가격 {n.NewPrice} · {n.Effective}부터", "label", wrap: true));
+        _priceP.Children.Add(Ui.Text("동의하면 시행일 뒤 첫 결제부터 새 가격으로 결제돼요. 동의하지 않으면 이미 결제한 기간이 끝날 때 구독이 해지되고 더 결제되지 않아요. 고르지 않으면 판매자는 새 가격으로 결제하지 않아요.", "muted", wrap: true));
+        var msg = Ui.Text(n.Choice switch
+        {
+            "agree" => "새 가격에 동의했어요.",
+            "cancel" => "동의하지 않고 해지를 골랐어요. 이미 결제한 기간이 끝나면 구독이 끝나요.",
+            _ => "",
+        }, "muted", wrap: true);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        foreach (var (agree, text) in new[] { (true, "새 가격에 동의해요"), (false, "동의하지 않고 해지해요") })
+        {
+            var b = Ui.Button(text, "ghost");   // the same style for both: no answer is pushed
+            b.Click += async (_, _) =>
+            {
+                foreach (var x in row.Children.OfType<Button>()) x.IsEnabled = false;
+                var err = await License.ChoosePriceAsync(n.Id, agree);
+                foreach (var x in row.Children.OfType<Button>()) x.IsEnabled = true;
+                msg.Text = err ?? (agree ? "새 가격에 동의했어요." : "동의하지 않고 해지를 골랐어요. 이미 결제한 기간이 끝나면 구독이 끝나요.");
+            };
+            row.Children.Add(b);
+        }
+        _priceP.Children.Add(row);
+        _priceP.Children.Add(msg);
+    }
     private readonly TextBlock _trialMsg = Ui.Text("", "muted", wrap: true);
     private readonly Button _askAgain = Ui.Button("고객센터 입금 확인 문의 열기", "ghost");
 

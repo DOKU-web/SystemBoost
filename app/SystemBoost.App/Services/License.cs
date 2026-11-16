@@ -950,6 +950,42 @@ public static class License
     // An order code claims its key and the key in hand renews a subscription, so both travel in a POST body,
     // which addresses (and request logs) do not carry. The fallbacks above are for a license worker from before
     // 2026-11-12, which knows only the address forms; drop them once that worker is replaced.
+    // ------------------------------------------------------------ subscription price change (전자상거래법 제13조 제6항)
+    // A card subscription keeps the price it started with. When the seller raises a price, the subscriber is asked
+    // here at least 30 days before; only "agree" moves the subscription to the new price, "cancel" ends it when the
+    // paid period ends, and no answer leaves the price as it is.
+    public sealed record PriceNotice(string Id, string Plan, string OldPrice, string NewPrice, string Effective, string Text, string Choice);
+
+    /// The price change waiting for this PC's card subscription, or null (none, no subscription, offline, an older server).
+    public static async System.Threading.Tasks.Task<PriceNotice?> GetPriceNoticeAsync()
+    {
+        if (!ServerConfigured || !SubscriptionActive || KeyText() is not { } raw) return null;
+        try
+        {
+            using var r = await PostJsonAsync("/sub/price", new { key = Canonical(raw) });
+            if (!r.IsSuccessStatusCode) return null;
+            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+            if (!doc.RootElement.TryGetProperty("notice", out var n) || n.ValueKind != JsonValueKind.Object) return null;
+            string S(string name) => n.TryGetProperty(name, out var v) ? (v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : v.ToString()) : "";
+            var choice = doc.RootElement.TryGetProperty("choice", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() ?? "" : "";
+            var id = S("id");
+            return id.Length == 0 ? null : new PriceNotice(id, S("plan"), S("oldPrice"), S("newPrice"), S("effective"), S("text"), choice);
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// Records the subscriber's answer. Returns null on success, else a message.
+    public static async System.Threading.Tasks.Task<string?> ChoosePriceAsync(string id, bool agree)
+    {
+        if (!ServerConfigured || KeyText() is not { } raw) return "구독 키가 없어요";
+        try
+        {
+            using var r = await PostJsonAsync("/sub/price/choose", new { key = Canonical(raw), id, choice = agree ? "agree" : "cancel" });
+            return r.IsSuccessStatusCode ? null : "답을 보내지 못했어요. 잠시 뒤 다시 해 주세요";
+        }
+        catch (Exception) { return "서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요"; }
+    }
+
     private static System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> PostJsonAsync(string path, object body) =>
         Http.PostAsync($"{ServerUrl}{path}", new System.Net.Http.StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
 

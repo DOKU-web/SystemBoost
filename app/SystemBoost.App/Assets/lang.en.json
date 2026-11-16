@@ -1236,5 +1236,14 @@
 "3일 체험 시작": "Start the 3-day trial",
 "체험 키를 받는 중…": "Getting the trial key…",
 "체험을 시작했어요. 3일 동안 울트라 기능을 쓸 수 있어요.": "The trial has started. You can use the Ultra features for 3 days.",
+"구독 가격 변경 안내": "Subscription price change",
+"{0} · 지금 가격 {1} → 새 가격 {2} · {3}부터": "{0} · current price {1} → new price {2} · from {3}",
+"동의하면 시행일 뒤 첫 결제부터 새 가격으로 결제돼요. 동의하지 않으면 이미 결제한 기간이 끝날 때 구독이 해지되고 더 결제되지 않아요. 고르지 않으면 판매자는 새 가격으로 결제하지 않아요.": "If you agree, the new price is charged from the first payment after the effective date. If you do not agree, the subscription ends when the period you have paid for ends and nothing more is charged. If you choose nothing, the seller does not charge the new price.",
+"새 가격에 동의해요": "I agree to the new price",
+"동의하지 않고 해지해요": "I do not agree; cancel the subscription",
+"새 가격에 동의했어요.": "You agreed to the new price.",
+"동의하지 않고 해지를 골랐어요. 이미 결제한 기간이 끝나면 구독이 끝나요.": "You chose not to agree and to cancel. The subscription ends when the period you have paid for ends.",
+"구독 키가 없어요": "There is no subscription key",
+"답을 보내지 못했어요. 잠시 뒤 다시 해 주세요": "Your answer could not be sent. Please try again later",
 "기간 없는 키": "A key with no end date"
 }
