@@ -2,7 +2,7 @@ import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
-import { budgetNames, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
+import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
 import { overIp } from "./iplimit.js";
 import { purchaseNote } from "./purchase_note.js";
 export { Stats } from "./stats.js";
@@ -274,8 +274,9 @@ const HOOK_TTL = 60 * 60 * 24 * 400;    // "this webhook was handled" markers (h
 // {ok: true} or {ok: false, reason}. stats: the same Durable Object's counters (per-address limits, the support write
 // budget, the portal cap). canonicalKey / heldKey: one spelling per key, and "a key this server issued and still
 // honours" (see keyId).
+// approveOrder / rejectOrder: the 판매·키 buttons, also behind a 입금 확인 ticket's buttons (POST /admin/api/support/deposit).
 const SUPPORT = { getOrder, putOrder, revoke, revokeSub, cancelSubscription, audit, accounts, verifySig, unb64url, allRecords, state, keyId,
-                  canonicalKey, heldKey,
+                  canonicalKey, heldKey, approveOrder, rejectOrder,
                   events: (env, path, body) => stats(env, path, body), stats: (env, path, body) => stats(env, path, body) };
 
 export default {
@@ -992,26 +993,8 @@ async function admin(req, url, env) {
                       .sort((a, b) => (b.status === "paid") - (a.status === "paid") || String(b.updated || b.at).localeCompare(String(a.updated || a.at)));
       return json({ orders: list.slice(0, 300), count, ...(list.length > 300 ? { more: true } : {}), ...(truncated ? { truncated: true } : {}) }, 200, false);
     }
-    case "POST /orders/approve": {
-      const o = CODE_RE.test(body.code || "") ? await getOrder(env, body.code) : null;
-      if (!o) return json({ error: "주문을 찾지 못했어요" }, 404, false);
-      if (o.status === "approved") return json({ error: "이미 승인된 주문이에요" }, 409, false);
-      if (o.status === "refunded") return json({ error: "환불한 주문이에요" }, 409, false);
-      const r = await adminIssue(env, { code: o.code, plan: o.plan, email: body.email, note: body.note || [o.payer, o.msg].filter(Boolean).join(" · ") });
-      if (!r.error && o.ticket) await accounts(env, "ticket/used", { order: o.code });
-      return json(r, r.error ? 400 : 200, false);
-    }
-    case "POST /orders/reject": {
-      const o = CODE_RE.test(body.code || "") ? await getOrder(env, body.code) : null;
-      if (!o) return json({ error: "주문을 찾지 못했어요" }, 404, false);
-      if (o.status === "approved") return json({ error: "승인된 주문은 거절할 수 없어요. 키를 차단하세요" }, 409, false);
-      if (o.status === "refunded") return json({ error: "환불한 주문이에요" }, 409, false);
-      o.status = "rejected"; o.reason = String(body.reason || "").trim().slice(0, 100) || "결제를 확인하지 못했어요";
-      await putOrder(env, o);
-      if (o.ticket) await accounts(env, "ticket/release", { order: o.code });
-      await audit(env, "admin", "거절", o.code + " · " + o.reason);
-      return json({ ok: true }, 200, false);
-    }
+    case "POST /orders/approve": { const a = await approveOrder(env, body); return json(a.body, a.http, false); }
+    case "POST /orders/reject": { const a = await rejectOrder(env, body); return json(a.body, a.http, false); }
     case "POST /orders/delete": {
       if (!CODE_RE.test(body.code || "")) return json({ error: "bad code" }, 400, false);
       const o = await getOrder(env, body.code);
@@ -1109,12 +1092,33 @@ async function summary(env) {
   c.ordersPaid = op.keys.filter(k => k.metadata?.status === "paid").length;
   if (!op.list_complete) c.ordersMore = true;     // counted from the first 1,000 orders only
   if (all.truncated) c.keysMore = true;           // counted from the first 20,000 keys only
-  Object.assign(c, await supportCounts(env));   // ticketsOpen, refundsOpen (ticketsMore: from the first 1,000)
+  const { depositTickets = {}, ...sc } = await supportCounts(env);
+  Object.assign(c, sc);   // ticketsOpen, refundsOpen (ticketsMore: from the first 1,000)
   const sales = await salesMode(env), sellerMissing = sellerGaps(await supportConfig(env));
   return { sales, autoReady: await cardPlans(env), cardLiveOpen: cardLiveOpen(env),
            salesFromDashboard: MODES.includes(await env.LICENSES.get("config:sales_mode")), counts: c, budget: await kvBudget(env),
            // the dashboard's 할 일: which of the seller's details are empty, and whether that stops sales now (live mode)
-           sellerMissing, sellerBlocked: sales === "live" && sellerMissing.length > 0 };
+           sellerMissing, sellerBlocked: sales === "live" && sellerMissing.length > 0,
+           deposits: depositsDue(op.keys, depositTickets, t) };
+}
+// The dashboard's 할 일 for bank transfers: every order whose buyer said "I paid" and that the seller has not decided
+// yet, oldest first, with the 24 hours (DEPOSIT_HOURS) counted from its first "I paid" (paidAt). state: "ok", "warn"
+// from DEPOSIT_WARN_HOURS, "late" from DEPOSIT_HOURS. ticket: its open 입금 확인 ticket, if any. From the summary's
+// own order list (no extra KV call); at most 50.
+function depositsDue(keys, tickets, t = Date.now()) {
+  const out = [];
+  for (const k of keys) {
+    const m = k.metadata;
+    if (m?.status !== "paid") continue;
+    const code = k.name.slice(4), from = Date.parse(m.paidAt || m.updated || m.at || "");
+    if (!Number.isFinite(from)) continue;
+    const hours = (t - from) / 36e5;
+    out.push({ code, plan: m.plan || "", paidAt: new Date(from).toISOString().replace(/\.\d+Z$/, "Z"),
+               due: new Date(from + DEPOSIT_HOURS * 36e5).toISOString().replace(/\.\d+Z$/, "Z"),
+               hoursLeft: Math.round((DEPOSIT_HOURS - hours) * 10) / 10,
+               state: hours >= DEPOSIT_HOURS ? "late" : hours >= DEPOSIT_WARN_HOURS ? "warn" : "ok", ...(tickets[code] ? { ticket: tickets[code] } : {}) });
+  }
+  return out.sort((a, b) => a.paidAt.localeCompare(b.paidAt)).slice(0, 50);
 }
 // Today's share of KV writes for requests anyone can make (Workers free plan), as [count, cap] for the dashboard's
 // home: orders, "I paid" notes and gifts (PUBLIC_KV_DAY), gifts (REF_DAILY) and support (both lanes). One read of the
@@ -1317,6 +1321,29 @@ async function addRef(env, b) {
   await putRef(env, r);
   await audit(env, "admin", "추천 코드 생성", code + " · " + r.days + "일 · " + r.max + "회" + (r.label ? " · " + r.label : ""));
   return { ok: true, code, ref: r };
+}
+
+// The seller approves or rejects an order: 판매·키's buttons (POST /orders/approve | reject) and a 입금 확인 ticket's
+// (support.js POST /support/deposit) do the same thing. {http, body}: the HTTP status and what those routes answer.
+async function approveOrder(env, b) {
+  const o = CODE_RE.test(b.code || "") ? await getOrder(env, b.code) : null;
+  if (!o) return { http: 404, body: { error: "주문을 찾지 못했어요" } };
+  if (o.status === "approved") return { http: 409, body: { error: "이미 승인된 주문이에요" } };
+  if (o.status === "refunded") return { http: 409, body: { error: "환불한 주문이에요" } };
+  const r = await adminIssue(env, { code: o.code, plan: o.plan, email: b.email, note: b.note || [o.payer, o.msg].filter(Boolean).join(" · ") });
+  if (!r.error && o.ticket) await accounts(env, "ticket/used", { order: o.code });
+  return { http: r.error ? 400 : 200, body: r };
+}
+async function rejectOrder(env, b) {
+  const o = CODE_RE.test(b.code || "") ? await getOrder(env, b.code) : null;
+  if (!o) return { http: 404, body: { error: "주문을 찾지 못했어요" } };
+  if (o.status === "approved") return { http: 409, body: { error: "승인된 주문은 거절할 수 없어요. 키를 차단하세요" } };
+  if (o.status === "refunded") return { http: 409, body: { error: "환불한 주문이에요" } };
+  o.status = "rejected"; o.reason = String(b.reason || "").trim().slice(0, 100) || "결제를 확인하지 못했어요";
+  await putOrder(env, o);
+  if (o.ticket) await accounts(env, "ticket/release", { order: o.code });
+  await audit(env, "admin", "거절", o.code + " · " + o.reason);
+  return { http: 200, body: { ok: true } };
 }
 
 async function adminIssue(env, b) {

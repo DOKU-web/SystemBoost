@@ -102,6 +102,18 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 대시보드 홈에 '오늘 3일 체험' · '전체 3일 체험' 숫자가 나옵니다.
 - 테스트: `node test_trial.mjs`
 
+## 계좌이체 입금 확인 (0.8.14)
+- 안내 문구는 한 곳(`src/support.js` `DEPOSIT_GUIDE`)에서 나와 FAQ, `/help`, 구매 확인서(`/thanks`)에 똑같이 들어갑니다:
+  주문 코드(SB-XXXX-XXXX)를 받고 → 판매자 계좌로 입금하고 → 앱에서 '고객센터에 입금 알리기'를 누르면 → 판매자가 확인한 뒤 24시간 안에 키를 보내요. 24시간은 입금을 알린 때부터예요.
+- 24시간은 주문의 `paidAt`(처음 `POST /order/paid`로 '결제했어요'가 된 때, 한 번만 기록)부터 셉니다. `/help`의 '입금 확인' 문의는 문의를 보내기 전에 `/order/paid`를 먼저 부릅니다.
+- 대시보드 홈 할 일: 판매자 결정을 기다리는 주문마다 한 줄, 남은 시간과 함께. 20시간부터 노란색, 24시간부터 빨간색(`DEPOSIT_WARN_HOURS`, `DEPOSIT_HOURS`).
+  `GET /admin/api/summary`의 `deposits: [{code, plan, paidAt, due, hoursLeft, state: "ok"|"warn"|"late", ticket?}]`.
+- '입금 확인' 문의 화면에서 바로 승인 · 거절: `POST /admin/api/support/deposit {id, action: "approve", email?, note?}` 또는
+  `{id, action: "reject", reason}`(사유 1~100자, 구매자에게 그대로 보임). 판매·키의 '승인' · '거절'과 같은 코드(`approveOrder`, `rejectOrder`)로
+  키를 만들고, 문의에 자동으로 답장합니다(승인: "입금을 확인했어요. 키를 보냈어요. …", 거절: "입금을 확인하지 못해 이 주문을 거절했어요. 사유: …").
+  답장 템플릿 '확인 필요'도 있습니다.
+- 테스트: `node test_deposit.mjs`
+
 ## 사용 통계 (`src/stats.js`)
 - 앱은 동의 후 `POST /ping`으로 무작위 설치 번호, 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 부스트 여부를 보냅니다. 끌 수 있고, 무엇을 보내는지는 사용권 계약 제8조에 적혀 있습니다. 보내는 항목을 바꾸면 계약 문구도 함께 고치고 `Eula.Version`을 올려야 합니다.
 - 저장 위치는 Durable Object(SQLite)입니다. 신호마다 쓰기가 생기는데 KV 무료 플랜은 하루 1,000번까지만 쓸 수 있어서입니다. `wrangler deploy`가 알아서 만듭니다.
@@ -119,6 +131,8 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - `GET /support/info`: 판매자 정보, 공지, 자주 묻는 질문, 문의 종류, 환불 사유, 제9조(`?lang=en`).
 - `POST /support/ticket`: 새 문의 → `{id, token}`. 확인 코드(`token`)는 이때 한 번만 보여 줍니다.
   키는 `key`(키 전체)나 `keyId`(키 식별 번호, 16자리)로 받습니다. `key`는 서명을 확인한 뒤 키 식별 번호와 `keyVerified: true`만 남기고, 키 자체는 저장하지도, 로그에 남기지도, 돌려주지도 않습니다. 서명이 틀리면 400 `bad key`, `key`와 다른 `keyId`를 함께 보내면 400 `keyId`입니다. `keyId`만 보내면 `keyVerified: false`입니다.
+  문의 종류 `deposit`(입금 확인, 0.8.14)은 `order`(주문 코드, `SB-XXXX-XXXX`)가 꼭 있어야 하고, 없거나 형식이 틀리면 400 `{"error":"order"}`입니다.
+  주문이 서버에 있는지는 묻지 않습니다(대시보드가 보여 줍니다). 결제 · 환불 문의처럼 3년 보관합니다.
 - `GET /support/ticket?id=<번호>`: 문의 보기. 확인 코드는 헤더 `X-Ticket-Token`으로 보냅니다.
 - `POST /support/ticket/reply` `{id, token, text}`, `POST /support/ticket/close` `{id, token}`.
 - `POST /support/tickets/status`: 앱의 답장 확인(아래).
@@ -260,7 +274,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - `node test_card.mjs`: 가짜 Lemon Squeezy와 서명한 웹훅으로 카드 결제 전부(플랜별 결제창, 울트라 키, 중복 없음, 갱신 기간,
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
-- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험)
+- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험), `node test_deposit.mjs` (입금 확인)
 
 ## 확인 필요
 - Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.

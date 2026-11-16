@@ -145,7 +145,7 @@ assert.equal(info.open, true);
 assert.equal(info.refundDays, 7);
 assert.deepEqual(info.faq, DEFAULT_FAQ.ko, "no FAQ in the dashboard: the built-in one");
 assert.equal(info.faqDefault, true);
-assert.deepEqual(info.categories.map(c => c.id), ["pay", "refund", "bug", "howto", "idea", "other"]);
+assert.deepEqual(info.categories.map(c => c.id), ["pay", "deposit", "refund", "bug", "howto", "idea", "other"]);   // 0.8.14: deposit (입금 확인)
 assert.deepEqual(info.refundReasons.map(c => c.id), ["change_mind", "not_working", "double", "other"]);
 assert.ok(info.categories.every(c => c.ko && c.en) && info.refundReasons.every(c => c.ko && c.en));
 assert.deepEqual(Object.values(info.seller), ["", "", "", "", "", "", "", ""], "no business registration yet: empty seller fields");

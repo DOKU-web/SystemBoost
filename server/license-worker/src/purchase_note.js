@@ -4,7 +4,7 @@
 // (config:support), as on /help and in the app; an empty field gets no line, so nothing hints at a registration
 // number that does not exist. Only relative links: the page is the server's own.
 //   thanks() in index.js:  ${await purchaseNote(env, key)}  after the key
-import { supportConfig } from "./support.js";
+import { DEPOSIT_GUIDE, supportConfig } from "./support.js";
 
 // The licence agreement the app asks for (app/SystemBoost.App/Services/Eula.cs Version; test_purchase_note.mjs
 // compares the two). Its text is in the app only: '설정' → '사용권 계약 보기'.
@@ -55,6 +55,7 @@ export async function purchaseLines(env, key) {
       ? "결제 방식: 카드 구독 · 해지할 때까지 같은 기간마다 자동으로 결제돼요. 해지는 결제 메일의 구독 관리 링크에서 언제든 할 수 있고, " +
         "해지하면 다음 결제가 멈추고 이미 결제한 기간은 끝까지 쓸 수 있어요(사용권 계약 제3조 제3항)."
       : "결제 방식: 직접 결제 · 자동으로 결제되지 않아요");
+    if (!p.sub) lines.push("계좌이체 안내: " + DEPOSIT_GUIDE.ko);   // the same words as the FAQ, /help and the app
     if (p.test) lines.push("시험 결제의 키예요. 실제로 결제되지 않았고 하루 뒤 끝나요.");
   } else lines.push(`청약철회: 키를 받은 날부터 ${days}일 안에`);
   lines.push("SystemBoost가 켜져 있으면 키가 이 PC에 바로 등록돼요. 등록한 키로 유료 기능을 쓰기 시작하면 청약철회가 제한될 수 있어요(사용권 계약 제9조 제2항).");

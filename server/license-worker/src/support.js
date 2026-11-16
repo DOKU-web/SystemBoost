@@ -92,6 +92,7 @@ export const sellerGaps = c => SELLER_REQUIRED.filter(f => !String(c?.seller?.[f
 
 export const CATEGORIES = [
   { id: "pay", ko: "결제", en: "Payment" },
+  { id: "deposit", ko: "입금 확인", en: "Payment sent" },   // 0.8.14: "I transferred the money" for an order code (required)
   { id: "refund", ko: "환불", en: "Refund" },
   { id: "bug", ko: "오류 신고", en: "Bug report" },
   { id: "howto", ko: "사용 방법", en: "How to use" },
@@ -104,6 +105,16 @@ export const REFUND_REASONS = [
   { id: "double", ko: "중복 결제", en: "Paid twice" },
   { id: "other", ko: "기타", en: "Other" },
 ];
+
+// Bank transfer, in one sentence: the same words in the FAQ below, on /help (help_page.js TX depositGuide), in the
+// purchase confirmation (purchase_note.js) and in the app (PremiumPage). The 24 hours count from the order's paidAt:
+// the first "I paid" note (index.js orderPaid). DEPOSIT_WARN_HOURS: the dashboard's to-do turns amber, and the seller's
+// Discord gets its second alert (index.js depositReminders).
+export const DEPOSIT_GUIDE = {
+  ko: "주문 코드(SB-XXXX-XXXX)를 받고 → 판매자 계좌로 입금하고 → 앱에서 '고객센터에 입금 알리기'를 누르면 → 판매자가 확인한 뒤 24시간 안에 키를 보내요. 24시간은 입금을 알린 때부터예요.",
+  en: "Get an order code (SB-XXXX-XXXX) → transfer the money to the seller's account → press 'Tell Support you have paid' in the app → the seller checks it and sends the key within 24 hours. The 24 hours count from when you tell us you have paid.",
+};
+export const DEPOSIT_HOURS = 24, DEPOSIT_WARN_HOURS = 20;
 
 // Article 9 of the licence agreement, word for word (app/SystemBoost.App/Assets/eula.txt, eula.en.txt; an item that
 // runs over two lines there is one string here, joined with a space). When the agreement changes, change this too:
@@ -132,7 +143,7 @@ export const DEFAULT_FAQ = {
     { q: "라이선스 키는 어디에 넣나요?",
       a: "앱 왼쪽의 '★ 플랜' 화면에서 '라이선스 키' 칸에 키를 붙여 넣고 '등록'을 누르세요. 결제한 뒤에는 앱이 키를 기다리다가(앱을 껐다 켜도 90일까지) 키가 나오면 팝업으로 보여 줘요." },
     { q: "계좌이체 · 직접 결제는 어떻게 하나요?",
-      a: "'★ 플랜'에서 '계좌이체 · 직접 결제'를 고르고 '결제하기'를 누르면 주문 코드(SB-XXXX-XXXX)와 판매자 결제 페이지가 열려요. 결제할 때 요청사항(메모)에 주문 코드를 적고, 결제를 마친 뒤 앱에 입금자명을 적어 '결제했어요'를 누르세요. 판매자가 결제를 확인하고 키를 보내요. 직접 결제로 산 키는 자동으로 결제되지 않아요(사용권 계약 제3조 제3항). 기간이 끝나기 전에 앱에서 다시 결제하면 새 키의 기간은 이 PC에 등록된 같거나 낮은 플랜의 키가 끝나는 날부터 이어서 세요(앱을 최신 버전으로 업데이트한 경우). 카드 구독은 결제한 날부터 시작해요." },
+      a: "'★ 플랜'에서 '계좌이체 · 직접 결제'를 고르고 '결제하기'를 누르면 주문 코드(SB-XXXX-XXXX)와 판매자 결제 페이지가 열려요. " + DEPOSIT_GUIDE.ko + " 입금할 때 받는 분 통장 표시(메모)에 주문 코드를 적어 주세요. 웹(/help)에서는 문의 종류 '입금 확인'에 주문 코드를 적어 알려도 돼요. 직접 결제로 산 키는 자동으로 결제되지 않아요(사용권 계약 제3조 제3항). 기간이 끝나기 전에 앱에서 다시 결제하면 새 키의 기간은 이 PC에 등록된 같거나 낮은 플랜의 키가 끝나는 날부터 이어서 세요(앱을 최신 버전으로 업데이트한 경우). 카드 구독은 결제한 날부터 시작해요." },
     { q: "카드 결제와 구독 해지는 어떻게 되나요?",
       a: "카드 정보는 Lemon Squeezy 결제창에서만 입력하고, SystemBoost 앱과 서버에는 오지도 저장되지도 않아요. 카드 구독으로 산 키는 해지할 때까지 같은 기간마다 자동으로 결제되고, 결제될 때마다 그 기간만큼 연장돼요. 해지는 결제 메일의 구독 관리 링크에서 언제든 할 수 있고, 해지하면 이미 결제한 기간이 끝날 때 무료 플랜으로 돌아가요(제3조 제3항, 2026년 12월 8일 시행)." },
     { q: "환불(청약철회)은 어떻게 요청하나요?",
@@ -156,7 +167,7 @@ export const DEFAULT_FAQ = {
     { q: "Where do I enter my license key?",
       a: "Paste the key into the 'License key' box on the '★ Plans' page on the left of the app and press 'Register'. After you pay, the app waits for the key (up to 90 days, even if you restart it) and shows it in a popup when it is issued." },
     { q: "How do bank transfer and direct payment work?",
-      a: "On '★ Plans', choose 'Bank transfer · direct payment', then press 'Pay': an order code (SB-XXXX-XXXX) and the seller's payment page open. Write the order code in the payment memo; after paying, type the payer's name in the app and press 'I have paid'. The seller checks the payment and sends the key. A key bought by direct payment is not charged automatically (license agreement, Article 3, Paragraph 3). If you pay again in the app before the period ends, the new key's period starts when the same- or lower-plan key registered on this PC ends (with the app updated to the latest version). A card subscription starts on the day you pay." },
+      a: "On '★ Plans', choose 'Bank transfer · direct payment', then press 'Pay': an order code (SB-XXXX-XXXX) and the seller's payment page open. " + DEPOSIT_GUIDE.en + " Put the order code in the transfer memo. On the web (/help) you can also tell us with the category 'Payment sent' and the order code. A key bought by direct payment is not charged automatically (license agreement, Article 3, Paragraph 3). If you pay again in the app before the period ends, the new key's period starts when the same- or lower-plan key registered on this PC ends (with the app updated to the latest version). A card subscription starts on the day you pay." },
     { q: "How do card payments and cancelling a subscription work?",
       a: "Card details are entered only in the Lemon Squeezy checkout; they never reach or stay in the SystemBoost app or server. A key bought as a card subscription is charged automatically every period until you cancel, and is extended by one period with each payment. You can cancel at any time through the subscription management link in the payment email; after cancelling, the app returns to the Free plan when the period already paid ends (Article 3, Paragraph 3, in force from December 8, 2026)." },
     { q: "How do I ask for a refund (withdrawal)?",
@@ -189,6 +200,11 @@ const SAY = {
               en: "The refund is complete. The refunded key is blocked (license agreement, Article 9, Paragraph 4)." },
   card:     { ko: "Lemon Squeezy에서 카드 환불이 처리됐어요. 환불한 키는 막았어요(사용권 계약 제9조 제4항).",
               en: "Lemon Squeezy has processed the card refund. The refunded key is blocked (license agreement, Article 9, Paragraph 4)." },
+  // a 입금 확인 (deposit) ticket, approved or rejected from the dashboard (POST /admin/api/support/deposit)
+  depositOk: { ko: code => "입금을 확인했어요. 키를 보냈어요. 앱의 '★ 플랜' 화면에서 바로 확인할 수 있어요. 키가 보이지 않으면 '★ 플랜'의 '주문 코드로 키 받기' 칸에 주문 코드 " + code + "를 넣어 주세요.",
+               en: code => "We have confirmed your payment and sent the key. You can see it right away on the '★ Plans' page in the app. If the key does not show, enter the order code " + code + " in the 'Get a key with an order code' box on '★ Plans'." },
+  depositNo: { ko: r => "입금을 확인하지 못해 이 주문을 거절했어요. 사유: " + r + "\n궁금한 점은 이 문의에 답장해 주세요.",
+               en: r => "We could not confirm the payment, so this order was declined. Reason: " + r + "\nReply here with any questions." },
 };
 
 // ---------------------------------------------------------------- helpers
@@ -198,7 +214,7 @@ const sha = async text => hex(await crypto.subtle.digest("SHA-256", enc.encode(t
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
 const chars = s => [...s].length;
 const cut = (s, n) => [...s].slice(0, n).join("");
-const keepFor = cat => (cat === "pay" || cat === "refund" ? LIMITS.keepLong : LIMITS.keepShort);
+const keepFor = cat => (cat === "pay" || cat === "deposit" || cat === "refund" ? LIMITS.keepLong : LIMITS.keepShort);
 const lang2 = v => (v === "en" ? "en" : "ko");
 function json(o, status = 200) {   // public endpoints: CORS like the rest
   return new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" } });
@@ -559,6 +575,7 @@ async function create(req, url, env, h, ctx) {
   if (chars(contact) > LIMITS.contact) return bad("contact");
   const order = b.order == null || b.order === "" ? "" : typeof b.order === "string" && b.order.length <= 64 ? b.order.trim().toUpperCase() : "?";
   if (order && !ORDER_RE.test(order)) return bad("order");
+  if (cat === "deposit" && !order) return bad("order");   // "I transferred the money": for which order
   let keyId = b.keyId == null || b.keyId === "" ? "" : typeof b.keyId === "string" && b.keyId.length <= 64 ? b.keyId.trim().toLowerCase() : "?";
   if (keyId && !KEY_RE.test(keyId)) return bad("keyId");
   // The full key (License.KeyText() in the app): only its shape here, the signature after the per-IP limit because
@@ -847,8 +864,26 @@ async function rows(env) {
 }
 export async function supportCounts(env) {   // for the dashboard summary: one list call (ticketsMore: counted from the first 1,000)
   const r = await env.LICENSES.list({ prefix: "tk:", limit: 1000 });
+  // depositTickets: order code -> the newest 입금 확인 ticket that is not closed, for the summary's deposit to-do
+  const newest = {};
+  for (const k of r.keys) {
+    const m = k.metadata;
+    if (m?.cat !== "deposit" || m.status === "closed" || !ORDER_RE.test(m.order || "")) continue;
+    if (!newest[m.order] || String(m.updated) > newest[m.order].updated) newest[m.order] = { id: k.name.slice(3), updated: String(m.updated) };
+  }
+  const depositTickets = Object.fromEntries(Object.entries(newest).map(([code, x]) => [code, x.id]));
   return { ticketsOpen: r.keys.filter(k => k.metadata?.status === "open").length, refundsOpen: r.keys.filter(k => refundOpen(k.metadata)).length,
-           ...(r.list_complete === false ? { ticketsMore: true } : {}) };
+           ...(r.list_complete === false ? { ticketsMore: true } : {}), depositTickets };
+}
+// The order a 입금 확인 ticket names, for the dashboard's ticket view: what the seller checks against the bank record,
+// and when the 24 hours (DEPOSIT_HOURS, from the first "I paid") run out. null: no such order (any more).
+async function depositOrder(env, h, code) {
+  const o = code && ORDER_RE.test(code) ? await h.getOrder(env, code) : null;
+  if (!o) return null;
+  const paid = Date.parse(o.paidAt || "");
+  return { code: o.code, plan: o.plan || "", status: o.status || "", method: o.method || "manual", at: o.at || "", paidAt: o.paidAt || "",
+           due: Number.isFinite(paid) ? new Date(paid + DEPOSIT_HOURS * 36e5).toISOString().replace(/\.\d+Z$/, "Z") : "",
+           payer: o.payer || "", msg: o.msg || "", keyId: o.keyId || "", reason: o.reason || "" };
 }
 // names: ticket numbers the dashboard's feed shows but its list does not (another tab, older): their row comes back
 // in `named` from the same list call, so the feed costs no KV list of its own.
@@ -968,7 +1003,33 @@ export async function supportAdmin(env, route, body, url, h) {
     case "GET /support/ticket": {
       if (!t) return nf;
       const other = await otherKeys(env, t, h);
-      return { ticket: adminView(t), keys: await keysFor(env, t, h), ...(other ? { otherKeys: other } : {}) };
+      return { ticket: adminView(t), keys: await keysFor(env, t, h), ...(other ? { otherKeys: other } : {}),
+               ...(t.cat === "deposit" ? { depositOrder: await depositOrder(env, h, t.order) } : {}) };
+    }
+    // A 입금 확인 ticket: approve (issue the key exactly as 판매·키's '승인' does, index.js approveOrder) or reject (the
+    // seller's reason, index.js rejectOrder) the order it names, and tell the buyer in the thread (SAY.depositOk / No).
+    case "POST /support/deposit": {
+      if (!t) return nf;
+      if (t.cat !== "deposit" || !ORDER_RE.test(t.order || "")) return { status: 400, error: "입금 확인 문의가 아니에요" };
+      const lang = lang2(t.lang);
+      let r, text;
+      if (body.action === "approve") {
+        r = await h.approveOrder(env, { code: t.order, email: body.email, note: body.note });
+        text = SAY.depositOk[lang](t.order);
+      } else if (body.action === "reject") {
+        const reason = clean(body.reason);
+        if (!reason || chars(reason) > 100) return { status: 400, error: "거절 사유를 1~100자로 적어 주세요. 구매자에게 그대로 보여요" };
+        r = await h.rejectOrder(env, { code: t.order, reason });
+        text = SAY.depositNo[lang](reason);
+      } else return { status: 400, error: "action은 approve 또는 reject예요" };
+      if (r.http !== 200) return { ...r.body, status: r.http };
+      const replied = say(t, text);   // false: the thread is full (30 messages); the order is decided anyway
+      t.status = "answered";
+      delete t.closedAt;
+      await save(env, t);
+      const { key, id, keys, ids } = r.body;
+      return { ticket: adminView(t), depositOrder: await depositOrder(env, h, t.order), replied,
+               ...(body.action === "approve" ? { key, id, keys, ids } : {}) };
     }
     case "POST /support/reply": {
       if (!t) return nf;
