@@ -91,6 +91,17 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 코드를 나눠 준 사람의 보상은 자동이 아닙니다. 사용 횟수를 보고 직접 키를 발급합니다.
 - 테스트: `node test_referral.mjs <임시 pem>`
 
+## 3일 체험 (0.8.14, `POST /trial`)
+- 요청: `POST /trial` 본문 `{"device": "<소문자 16진수 64자>"}`. 앱이 보내는 값은 PC의 Windows MachineGuid에 salt를 붙여 SHA-256으로 만든
+  값이고, MachineGuid 자체는 보내지 않습니다.
+- 성공: `200 {"key": "..."}`. 울트라 키, 3일(`TRIAL_DAYS`), 이메일 없음, 키 목록에 출처 '3일 체험', 메모 `3일 체험`.
+- 실패: `409 {"error":"already"}` 이 PC는 이미 체험함(`trialdev:<해시>`, 400일 뒤 삭제) · `429 {"error":"busy"}` 주소당 한 시간 10번
+  (`IP_LIMIT.trial`), 하루 공개 저장 몫(`PUBLIC_KV_DAY`)이나 하루 체험 150개(`TRIAL_DAILY`)가 다 참 · `400 {"error":"bad request"}`
+  · `503 {"error":"closed"}` 판매 모드 '꺼짐'이거나 `TRIAL = "off"`(wrangler.toml [vars]).
+- 체험 하나는 KV 저장 2번(`trialdev:`, `lic:`)이고 통계 저장소에서 셉니다. 통계 저장소가 응답하지 않으면 KV(`count:trial:<날짜>`)로 하루 150개를 셉니다.
+- 대시보드 홈에 '오늘 3일 체험' · '전체 3일 체험' 숫자가 나옵니다.
+- 테스트: `node test_trial.mjs`
+
 ## 사용 통계 (`src/stats.js`)
 - 앱은 동의 후 `POST /ping`으로 무작위 설치 번호, 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 부스트 여부를 보냅니다. 끌 수 있고, 무엇을 보내는지는 사용권 계약 제8조에 적혀 있습니다. 보내는 항목을 바꾸면 계약 문구도 함께 고치고 `Eula.Version`을 올려야 합니다.
 - 저장 위치는 Durable Object(SQLite)입니다. 신호마다 쓰기가 생기는데 KV 무료 플랜은 하루 1,000번까지만 쓸 수 있어서입니다. `wrangler deploy`가 알아서 만듭니다.
@@ -249,6 +260,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - `node test_card.mjs`: 가짜 Lemon Squeezy와 서명한 웹훅으로 카드 결제 전부(플랜별 결제창, 울트라 키, 중복 없음, 갱신 기간,
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
+- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험)
 
 ## 확인 필요
 - Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.

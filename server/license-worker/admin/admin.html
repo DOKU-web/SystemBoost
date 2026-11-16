@@ -589,7 +589,7 @@ async function loadRefs() {
 }
 let sumCounts = null, sellerNow = null;   // sellerNow: GET /summary sellerMissing (empty seller fields) and sellerBlocked (live mode)
 function sumTiles(c) {
-  $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["답변할 문의", c.ticketsOpen || 0, "var(--or)"], ["환불 진행 중", c.refundsOpen || 0, "var(--bad)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total]]
+  $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["답변할 문의", c.ticketsOpen || 0, "var(--or)"], ["환불 진행 중", c.refundsOpen || 0, "var(--bad)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total], ["오늘 3일 체험", c.trialsToday || 0], ["전체 3일 체험", c.trials || 0]]
     .map(([l, n, col]) => `<div class="stat"><div class="n" style="color:${col || "inherit"}">${n}</div><div class="l">${l}</div></div>`).join("");
   renderTodo(c);
 }
@@ -632,7 +632,7 @@ async function loadKeys() {
   $("keys").innerHTML = keys.length ? keys.map(k => `<tr>
     <td><code>${esc(k.id)}</code></td>
     <td>${esc(k.email) || '<span class="m">메일 없음</span>'}<div class="mut">${esc(k.note)}${k.revoked ? " · 차단 사유: " + esc(k.revoked) : ""}</div></td>
-    <td>${TIER_KO[k.plan] || "프로"} · ${k.expires ? (k.sub ? "구독" : "기간제") : "평생"}<div class="mut">${{ order: "자동 결제", subscription: "자동 구독", payment: "직접 결제", manual: "수동 발급" }[k.src] || ""}</div></td>
+    <td>${TIER_KO[k.plan] || "프로"} · ${k.expires ? (k.sub ? "구독" : "기간제") : "평생"}<div class="mut">${{ order: "자동 결제", subscription: "자동 구독", payment: "직접 결제", manual: "수동 발급", trial: "3일 체험" }[k.src] || ""}</div></td>
     <td class="m">${day(k.issued)}</td><td class="m">${k.expires ? day(k.expires) : "없음"}</td>
     <td><span class="tag t-${k.state}">${ST[k.state]}</span></td>
     <td style="text-align:right"><button data-copy="${esc(k.id)}">키 복사</button> ${k.revoked ? `<button data-unrev="${esc(k.id)}">해제</button>` : `<button class="d" data-rev="${esc(k.id)}" data-sub="${esc(k.sub || "")}">차단</button>`}</td></tr>`).join("")
@@ -1705,6 +1705,7 @@ function demoApi(path, b) {
         { id: "3fa91c0e5b7d2a14", email: "minsu@example.com", note: "SB-PX7Q-2MKC · 입금 김민수", plan: "premium", issued: d(-12), expires: "", src: "payment", revoked: "" },
         { id: "a07be2d9c4113f68", email: "jy.park@example.com", note: "SB-9TNE-WQ4A · 토스 결제", plan: "premium", issued: d(-20), expires: d(14), src: "payment", revoked: "" },
         { id: "c52d18e7aa90b3f1", email: "", note: "유튜버 리뷰용 선물", plan: "premium", issued: d(-5), expires: d(25), src: "manual", revoked: "" },
+        { id: "b4e19a7c03d58f21", email: "", note: "3일 체험", plan: "ultra", issued: d(-0.1), expires: d(2.9), src: "trial", revoked: "" },
         { id: "9e3b77f0d1c84a26", email: "old@example.com", note: "SB-CC3D-8HJK · 월간", plan: "premium", issued: d(-50), expires: d(-16), src: "payment", revoked: "" },
         { id: "1d6f0b9e82a7c355", email: "share@example.com", note: "SB-R2VX-6NFT · 평생", plan: "premium", issued: d(-40), expires: "", src: "payment", revoked: "커뮤니티에 키 공유" },
         { id: "5b0e9a2c7d41f8e3", email: "jihoon.park@example.com", note: "SB-M3QF-8TJW · 2대 묶음 1/2 · 박지훈 · 국민은행 39,800원", plan: "premium", issued: d(-3), expires: d(366), src: "payment", revoked: "" },
@@ -1760,6 +1761,7 @@ function demoApi(path, b) {
   if (p === "/summary") { const c = { total: demo.keys.length, active: 0, revoked: 0, expired: 0, test: 0, last30: demo.keys.filter(k => Date.parse(k.issued) > Date.now() - 30 * 864e5).length };
     demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length;
     c.ordersOpen = demo.orders.filter(o => ["requested", "paid"].includes(o.status)).length;
+    c.trials = demo.keys.filter(k => k.src === "trial").length; c.trialsToday = demo.keys.filter(k => k.src === "trial" && Date.parse(k.issued) > Date.now() - 864e5).length;
     c.ticketsOpen = demo.tickets.filter(t => t.status === "open").length; c.refundsOpen = demo.tickets.filter(t => t.refund && ["requested", "approved"].includes(t.refund.status)).length;
     const sellerMissing = ["name", "rep", "address", "bizNo", "mailOrderNo", "email", "phone"].filter(k => !String(demo.supCfg.seller[k] || "").trim());
     return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c, budget: { pub: [137, 400], gifts: [4, 60], support: [212, 250] },
