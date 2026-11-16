@@ -19,6 +19,8 @@ h1 em{font-style:normal;color:var(--or)}
 .lead{color:var(--mut);max-width:600px;margin:0 auto 30px}
 .btn{display:inline-flex;align-items:center;gap:10px;background:var(--or);color:#111;font-weight:700;text-decoration:none;padding:15px 30px;border-radius:14px;font-size:17px}
 .btn:hover{filter:brightness(1.08)}
+/* non-Windows visitors: the main button becomes a plain notice */
+.btn.off{background:var(--card);color:var(--txt);border:1px solid var(--line);cursor:default}.btn.off:hover{filter:none}
 .ver{color:var(--mut);font-size:14px;margin-top:12px}
 .others{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:22px}
 .others a{border:1px solid var(--line);background:var(--card);padding:9px 15px;border-radius:10px;text-decoration:none;font-size:14px}
@@ -31,6 +33,7 @@ h2{font-size:20px;margin:0 0 12px}
 .note p{margin:6px 0;color:var(--mut)}.note b{color:var(--txt)}
 ol{margin:6px 0 0;padding-left:20px;color:var(--mut)}
 footer{color:var(--mut);font-size:13px;padding:30px 0 20px;border-top:1px solid var(--line);margin-top:30px}
+footer .tm{font-size:12px}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:11px 8px;border-bottom:1px solid var(--line);text-align:center}th:first-child,td:first-child{text-align:left}
 th{color:var(--mut);font-weight:500;font-size:14px}td.p{color:var(--or)}td.n{color:#55545a}
 .discord{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:linear-gradient(135deg,#1b1530,#141416);border:1px solid #2e2650;border-radius:16px;padding:22px 24px;margin:34px 0 10px}
@@ -38,6 +41,7 @@ th{color:var(--mut);font-weight:500;font-size:14px}td.p{color:var(--or)}td.n{col
 .btn.dcb{background:#5865F2;color:#fff}
 .news{background:linear-gradient(150deg,#1d140b,#141416 60%);border:1px solid #4a2c10;border-radius:16px;padding:22px 24px;margin:0 0 44px}
 .news .nh{display:flex;align-items:center;gap:10px;margin-bottom:12px}.news h2{margin:0}
+.news .nd{color:var(--mut);font-size:14px;margin:-6px 0 12px}
 .badge{background:var(--or);color:#111;font-weight:700;font-size:12px;border-radius:99px;padding:3px 10px}
 .ng{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 .ni{background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:16px}

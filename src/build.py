@@ -1,21 +1,29 @@
-# Builds index.html and license.html (all languages in one file each; the page picks one).
-#   python3 build.py <eula.txt> <eula.en.txt>
-import base64, html, json, re, sys
-sys.path.insert(0, "/home/claude/work/site")
+# Builds index.html and license.html (all languages in one file each; the page picks one) in the site root,
+# the folder above this one. The agreement text comes from the app's own files, never from a copy here:
+#   python -X utf8 -I src/build.py <app>/Assets/eula.txt <app>/Assets/eula.en.txt
+# e.g. python -X utf8 -I src/build.py C:/dev/SystemBoost-preview/app/SystemBoost.App/Assets/eula.txt C:/dev/SystemBoost-preview/app/SystemBoost.App/Assets/eula.en.txt
+import html, json, os, re, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
 from i18n import LANGS, S, LIC_NOTE
 from i18n_plans import apply as apply_plans, BUNDLES
 apply_plans(S)
 
-DC = "https://discord.gg/zUyeV2SJwm"
-REPO = "DOKU-web/SystemBoost"
-REL = f"https://github.com/{REPO}/releases"
-LOGO = base64.b64encode(open("/home/claude/work/logo/icon_256.png", "rb").read()).decode()
-FAV = base64.b64encode(open("/home/claude/work/logo/favicon.png", "rb").read()).decode()
+def read(path): return open(path, encoding="utf-8").read()
 
-def f(s): return s.replace("{dc}", DC).replace("{rel}", f'<a href="{REL}">github.com/{REPO}/releases</a>')
+DC = "https://discord.gg/zUyeV2SJwm"
+# The GitHub repository whose releases the download buttons, the "official downloads" line and the release-notes
+# link point at. It becomes "DOKU-web/SystemBoost-releases" when the release-only repository goes live:
+# change this one line and rebuild.
+RELEASES_REPO = "DOKU-web/SystemBoost"
+REL = f"https://github.com/{RELEASES_REPO}/releases"
+
+def f(s): return (s.replace("{dc}", DC).replace("{rel_latest}", f"{REL}/latest")
+                   .replace("{rel}", f'<a href="{REL}">github.com/{RELEASES_REPO}/releases</a>'))
 def lis(items): return "".join(f"<li>{f(x)}</li>" for x in items)
 
-CSS = open("/home/claude/work/site/style.css").read()
+CSS = read(os.path.join(HERE, "style.css"))
 
 def lang_select(cur_label):
     opts = "".join(f'<option value="{c}">{n}</option>' for c, n in LANGS)
@@ -32,16 +40,15 @@ def header(s, page):
 def index_body(L):
     s = S[L]
     rows = s["r"]
-    W = '<span class="w">Windows</span>'
-    WN = '<span class="w">Windows · NVIDIA</span>'
+    NV = '<span class="w">NVIDIA</span>'   # GPU overclock / power limit: NVIDIA cards only
     n = '<td class="n">—</td>'
     dot, pd, ud, bd = "<td>●</td>", '<td class="p">●</td>', '<td class="u">●</td>', '<td class="b">●</td>'
     table = f'''<tr><th>{s["th"]}</th><th>{s["free"]}</th><th class="ph">{s["prem"]}</th><th class="uh">{s["ultra"]}</th><th class="bh">{s["biz"]}</th></tr>
 <tr><td>{rows[0]}</td><td>{s["x2"]}</td><td class="p">{s["xp"]}</td><td class="u">{s["xu"]}</td><td class="b">{s["xu"]}</td></tr>
 <tr><td>{rows[1]}</td><td>{s["qf"]}</td><td class="p">{s["qp"]}</td><td class="u">{s["qp"]}</td><td class="b">{s["qp"]}</td></tr>'''
     table += "".join(f"<tr><td>{rows[i]}</td>{dot}{pd}{ud}{bd}</tr>" for i in (2, 3, 4, 5))
-    table += f"<tr><td>{rows[6]} {W}</td>{n}{pd}{ud}{bd}</tr><tr><td>{rows[7]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[8]} {W}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[9]} {WN}</td>{n}{n}{ud}{bd}</tr>"
-    table += "".join(f"<tr><td>{r} {W}</td>{n}{n}{n}{bd}</tr>" for r in s["rb"])
+    table += f"<tr><td>{rows[6]}</td>{n}{pd}{ud}{bd}</tr><tr><td>{rows[7]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[8]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[9]} {NV}</td>{n}{n}{ud}{bd}</tr>"
+    table += "".join(f"<tr><td>{r}</td>{n}{n}{n}{bd}</tr>" for r in s["rb"])
     name = {"premium": ("prem", "p"), "ultra": ("ultra", "u"), "biz": ("biz", "b")}
     won = lambda v: f"₩{v:,}"
     btable = f'<tr><th></th><th>{s["b5"]}</th><th>{s["b10"]}</th></tr>' + "".join(
@@ -54,7 +61,7 @@ def index_body(L):
   <p class="lead">{s["lead"]}</p>
   <a class="btn main" href="#">{s["dl_win"]}</a>
   <div class="ver">{s["dl_sub"]}</div>
-  <div class="others"><a data-k="win-setup" href="#">{s["o_win"]}</a><a data-k="win-portable" href="#">{s["o_winp"]}</a><a data-k="mac-arm" href="#">{s["o_arm"]}</a><a data-k="mac-intel" href="#">{s["o_intel"]}</a></div>
+  <div class="others"><a data-k="win-setup" href="#">{s["o_win"]}</a><a data-k="win-portable" href="#">{s["o_winp"]}</a></div>
 </section>
 <div class="grid">
   <div class="card"><h3>{s["f1t"]}</h3><p>{s["f1d"]}</p></div><div class="card"><h3>{s["f2t"]}</h3><p>{s["f2d"]}</p></div>
@@ -62,6 +69,7 @@ def index_body(L):
 </div>
 <section id="news" class="news">
   <div class="nh"><span class="badge">{s["nb"]}</span><h2>{s["nt"]}</h2></div>
+  <p class="nd">{s["nd"]}</p>
   <div class="ng"><div class="ni"><h3>{s["n1t"]}</h3><p>{s["n1p"]}</p><ul>{lis(s["n1l"])}</ul></div>
   <div class="ni"><h3>{s["n2t"]}</h3><ul>{lis(s["n2l"])}</ul></div></div>
   <p class="nf">{f(s["nf"])}</p>
@@ -72,7 +80,7 @@ def index_body(L):
   <div class="tier"><div class="tn">{s["free"]}</div><div class="tp">₩0</div><div class="ts">{s["free_sub"]}</div></div>
   <div class="tier hot"><div class="tn">{s["prem"]}</div><div class="tp">₩2,900<small> {s["mo"]}</small></div><div class="ts">{s["py_p"]}</div></div>
   <div class="tier ultra"><div class="tn">{s["ultra"]}</div><div class="tp">₩8,900<small> {s["mo"]}</small></div><div class="ts">{s["py_u"]}</div></div>
-  <div class="tier biz"><div class="tn">{s["biz"]} <span class="w">{s["biz_w"]}</span></div><div class="tp">₩12,900<small> {s["mo"]}</small></div><div class="ts">{s["py_b"]}</div></div>
+  <div class="tier biz"><div class="tn">{s["biz"]}</div><div class="tp">₩12,900<small> {s["mo"]}</small></div><div class="ts">{s["py_b"]}</div></div>
 </div>
 <div class="card tbl"><table>{table}</table></div>
 <h3 class="bt">{s["bh"]}</h3>
@@ -81,14 +89,37 @@ def index_body(L):
 <ul class="fine"><li>{s["krw"]}</li>{lis(s["fine"])}</ul>
 <h2>{s["ih"]}</h2>
 <div class="note"><b>{s["iw"]}</b><ol>{lis(s["iwl"])}</ol></div>
-<div class="note"><b>{s["im"]}</b><ol>{lis(s["iml"])}</ol></div>
 <div class="note"><b>{s["kh"]}</b>{"".join(f"<p>{x}</p>" for x in s["kl"])}</div>
 <div class="discord"><div class="t"><h2>{s["dch"]}</h2><p>{s["dcp"]}</p></div><a class="btn dcb" href="{DC}">{s["dcb"]}</a></div>
-<footer>SystemBoost · DOKKU · <a href="license.html">{s["ft1"]}</a> · <a href="{DC}">{s["nav_discord"]}</a><br>{f(s["ft2"])}<br>{s["ft3"]}</footer>'''
+<footer>SystemBoost · DOKKU · <a href="license.html">{s["ft1"]}</a> · <a href="{DC}">{s["nav_discord"]}</a><br>{f(s["ft2"])}<br>{s["ft3"]}<br><span class="tm">{s["ft4"]}</span></footer>'''
+
+# ---------------------------------------------------------------- trademarks
+# The footer line ft4 names exactly the brands in TM_NAMES. The build stops if the visible text of index.html
+# mentions a brand the line leaves out, or the line names a brand the page no longer mentions; then fix TM_NAMES and
+# ft4 in all languages together. Full Korean wording with every brand we have used:
+#   NVIDIA, GeForce, DLSS는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의,
+#   Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.
+TM_NAMES = ["NVIDIA", "AMD", "Intel", "Windows"]
+TM_WORDS = {"NVIDIA": ["NVIDIA"], "GeForce": ["GeForce"], "DLSS": ["DLSS"], "AMD": ["AMD"], "Radeon": ["Radeon", "라데온"],
+            "Intel": ["Intel", "인텔"], "Windows": ["Windows", "윈도우"]}
+
+def visible_text(markup):
+    markup = re.sub(r"<(script|style)\b.*?</\1>", " ", markup, flags=re.S)
+    return html.unescape(re.sub(r"<[^>]+>", " ", markup))
+
+def check_trademarks(bodies):
+    for L, body in bodies.items():
+        text = visible_text(body.replace(S[L]["ft4"], ""))
+        used = [b for b, words in TM_WORDS.items() if any(w in text for w in words)]
+        named = [b for b in TM_WORDS if b in TM_NAMES]
+        if used != named:
+            raise SystemExit(f"trademark line ({L}) names {named} but the page mentions {used}: update TM_NAMES and ft4")
+        missing = [b for b in TM_NAMES if b not in S[L]["ft4"]]
+        if missing: raise SystemExit(f"trademark line ({L}) is missing {missing}")
 
 # ---------------------------------------------------------------- EULA
 def parse_eula(path):
-    lines = open(path).read().splitlines()
+    lines = read(path).splitlines()
     head, secs, cur, i = [], [], None, 0
     while not lines[i].startswith("## "):
         if lines[i].strip(): head.append(lines[i])
@@ -98,11 +129,22 @@ def parse_eula(path):
         elif cur and ln.strip(): cur["l"].append(ln)
     return head, secs
 
-# (article index from 0, paragraph) -> which revision changed it
-REVS = {(2, "3"): 8, (1, "1"): 9, (2, "2"): 9, (2, "5"): 9, (2, "8"): 9, (2, "9"): 9, (5, "1"): 9, (10, "2"): 9}
+# Which revision changed what, as listed in the agreement's own header lines (개정 시행일 ...). Only these marks are
+# added; the agreement text itself is rendered line by line from eula.txt / eula.en.txt as it is.
+R8, R9, R27 = "2026-12-08", "2026-12-09", "2027-01-01"
+# (article index from 0, paragraph) -> revisions
+REVS = {(1, "1"): (R9,),                                                      # Art. 2(1)
+        (2, "2"): (R9, R27), (2, "3"): (R8, R27), (2, "5"): (R9,), (2, "8"): (R9,), (2, "9"): (R9,),
+        (2, "10"): (R27,), (2, "11"): (R27,), (2, "12"): (R27,),              # Art. 3
+        (5, "1"): (R9,),                                                      # Art. 6(1)
+        (8, "2"): (R27,), (8, "5"): (R27,),                                   # Art. 9(2), 9(5)
+        (9, "3"): (R27,),                                                     # Art. 10(3)
+        (10, "2"): (R9,)}                                                     # Art. 11(2)
+# whole articles: Art. 1 (sales page, Windows program) and Art. 8 (personal information)
+REV_ARTICLES = {0: (R27,), 7: (R27,)}
 
-def eula_html(head, secs, rev_label, art3):
-    out, toc = [], []
+def eula_html(secs, rev_label):
+    out, toc, seen = [], [], set()
     for k, s in enumerate(secs):
         toc.append(f'<li><a href="#a{k+1}">{html.escape(s["t"])}</a></li>')
         body = []
@@ -110,67 +152,67 @@ def eula_html(head, secs, rev_label, art3):
             imp = ln.startswith("! "); t = html.escape((ln[2:] if imp else ln).strip())
             m = re.match(r"(\d+)\.\s+(.*)", t)
             changed = REVS.get((k, m.group(1))) if m else None
+            if changed: seen.add((k, m.group(1)))
             if m: t = f'<span class="no">{m.group(1)}.</span> {m.group(2)}'
-            if changed: t += f' <span class="rev">{rev_label[changed]}</span>'
+            if changed: t += "".join(f' <span class="rev">{rev_label[r]}</span>' for r in changed)
             cls = "chg" if changed else ("imp" if imp else ("cont" if not m and body else ""))
             body.append(f'<p class="{cls}">{t}</p>' if cls else f"<p>{t}</p>")
-        out.append(f'<h2 id="a{k+1}">{html.escape(s["t"])}</h2>\n' + "\n".join(body))
+        marks = "".join(f' <span class="rev">{rev_label[r]}</span>' for r in REV_ARTICLES.get(k, ()))
+        out.append(f'<h2 id="a{k+1}">{html.escape(s["t"])}{marks}</h2>\n' + "\n".join(body))
+    if seen != set(REVS): raise SystemExit(f"revision marks point at missing paragraphs: {sorted(set(REVS) - seen)}")
     return toc, "\n".join(out)
 
 LT = {
  "ko": dict(h1="사용권 계약 · 개인정보", sub='앱을 처음 실행할 때 보여 주는 사용권 계약과 같은 내용이에요. 앱의 설정 → "사용권 계약 보기"에서도 볼 수 있어요.',
-   revh="계약 개정 안내", revp='계약이 두 번 바뀌어요. 바뀐 조항에는 개정 날짜가 붙어 있어요.<br>• <b>2026년 12월 8일</b>: 카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요.<br>• <b>2026년 12월 9일</b>: 산업 플랜, 5대 · 10대 묶음 키, 플랜 이름에 맞춰 <a href="#a2">제2조 제1항</a>, <a href="#a3">제3조 제2항 · 제5항 · 제8항 · 제9항</a>, <a href="#a6">제6조 제1항</a>, <a href="#a11">제11조 제2항</a>이 바뀌어요. 프리미엄 플랜은 이름만 프로로 바뀌고 기능과 가격은 그대로예요. 묶음 키는 그날부터 팔아요.<br>앱을 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
-   rev="2026년 12월 8일 개정", rev9="2026년 12월 9일 개정", toc="목차", imp="표시가 있는 조항(주황 테두리)은 꼭 읽어 주세요.",
+   revh="계약 개정 안내", revp='계약이 세 번 바뀌어요. 바뀐 조항에는 개정 날짜가 붙어 있어요.<br>• <b>2026년 12월 8일</b>: 카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요.<br>• <b>2026년 12월 9일</b>: 산업 플랜, 5대 · 10대 묶음 키, 플랜 이름에 맞춰 <a href="#a2">제2조 제1항</a>, <a href="#a3">제3조 제2항 · 제5항 · 제8항 · 제9항</a>, <a href="#a6">제6조 제1항</a>, <a href="#a11">제11조 제2항</a>이 바뀌어요. 프리미엄 플랜은 이름만 프로로 바뀌고 기능과 가격은 그대로예요. 묶음 키는 그날부터 팔아요.<br>• <b>2027년 1월 1일</b>: <a href="#a1">제1조</a>의 판매 페이지와 Windows용 프로그램, <a href="#a3">제3조 제2항 · 제3항의 해지와 환급 · 제10항 · 제11항 · 제12항</a>, <a href="#a8">제8조</a> 개인정보, <a href="#a9">제9조 제2항 · 제5항</a>, <a href="#a10">제10조 제3항</a>이 바뀌어요. 3일 체험(제3조 제12항)과 처음에는 꺼져 있는 사용 통계(제8조 제3항)도 여기에 들어 있어요.<br>앱을 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
+   rev="2026년 12월 8일 개정", rev9="2026년 12월 9일 개정", rev27="2027년 1월 1일 개정", toc="목차", imp="표시가 있는 조항(주황 테두리)은 꼭 읽어 주세요.",
    priv="개인정보 처리 안내", oss="오픈소스 라이선스", contact="판매자 정보와 문의",
    privsum="사용권 계약 제8조를 표로 정리했어요. 보내는 정보는 아래가 전부예요.",
    cols=["언제", "어디로", "보내는 것", "보관"],
    rows=[["키 확인 (앱을 켤 때)", "판매자 라이선스 서버", "키의 식별 번호 (키 원문 아님)", "키 관리 동안"],
-         ["사용 통계 (켜져 있는 동안, 설정에서 끌 수 있음)", "판매자 서버", "무작위 설치 번호, 앱 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 게임 부스트 사용 여부. 서버가 접속 국가를 기록해요. 키·메일·게임 이름·하드웨어 정보는 보내지 않고, IP 주소는 저장하지 않아요.", "마지막 연결 뒤 90일"],
+         ["사용 통계 (선택, 처음에는 꺼져 있음. 켠 동안에만 보내고, 설정에서 바꿀 수 있음)", "판매자 서버", "무작위 설치 번호, 앱 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 게임 부스트 사용 여부. 서버가 접속 국가를 기록해요. 키·메일·게임 이름·하드웨어 정보는 보내지 않고, IP 주소는 저장하지 않아요.", "마지막 연결 뒤 90일"],
          ["결제 주문", "판매자 라이선스 서버", "플랜, 주문 코드, 사용자가 직접 적은 입금자명과 메모", "키 관리와 환불 처리 동안, 법정 보관 기간"],
          ["카드 구독 결제 (2026년 12월 8일부터)", "Lemon Squeezy 결제창 → 판매자 서버", "카드 정보는 Lemon Squeezy 결제창에만 입력하고, 판매자는 받지도 저장하지도 않아요. 판매자 서버는 결제 메일, 주문·구독 번호, 결제·해지 상태를 받아 키 발급과 연장에 써요.", "키 관리와 환불 처리 동안, 법정 보관 기간"],
          ["추천 코드 입력", "판매자 서버", "코드, 무작위 기기 번호", "90일"],
+         ["3일 체험을 받을 때", "판매자 서버", "PC 식별값의 해시값: 정해진 값(솔트)과 Windows가 이 PC에 붙인 MachineGuid를 합쳐 SHA-256으로 만든 값. MachineGuid 원문은 보내지 않고, PC마다 체험을 한 번만 주는 데에만 써요.", "400일"],
          ["회원 가입 (선택, 만 14세 이상)", "Supabase 데이터베이스", "아이디, 암호화한 비밀번호와 복구 코드, 가입·마지막 로그인·동의 시각, 초대 코드와 초대 관계. 메일은 받지 않아요.", "탈퇴하면 바로 삭제"],
          ["가입·로그인 남용 방지", "판매자 서버", "접속 IP를 되돌릴 수 없게 바꾼 값", "1시간"],
-         ["업데이트 확인", "GitHub", "없음 (최신 버전 목록만 받아요)", "—"],
-         ["맥에서 윈도우 게임 환경 설정", "GitHub (Wine, DXVK), 고른 경우 Steam", "없음 (필요한 파일만 내려받아요)", "—"]],
+         ["업데이트 확인", "GitHub", "없음 (최신 버전 목록만 받아요)", "—"]],
    privfoot=f'정보를 지우거나 확인하고 싶으면 <a href="{DC}">공식 디스코드</a> #help로 요청해 주세요. 회원 정보는 앱의 계정 메뉴에서 탈퇴하면 바로 지워져요.',
-   ossp="SystemBoost가 쓰거나 내려받는 다른 사람의 소프트웨어와 그 라이선스예요. 앱 설정 화면의 \"라이선스 전문 보기\"에서 전문을 볼 수 있어요.",
+   ossp="SystemBoost가 쓰는 다른 사람의 소프트웨어와 그 라이선스예요. 앱 설정 화면의 \"라이선스 전문 보기\"에서 전문을 볼 수 있어요.",
    osscols=["구성 요소", "라이선스", "쓰는 곳"],
-   ossuse=["앱 화면", "설치 파일에 함께 들어 있음", "설치와 자동 업데이트", "Windows NVIDIA 드라이버 설정", "맥의 윈도우 게임 기능. 원본 그대로 내려받아 별도 프로그램으로 실행해요.", "맥의 윈도우 게임 기능 (내려받음)", "Wine 빌드 안에 포함", "배포하지 않아요. 사용자가 Apple에서 직접 받아 연결해요."],
+   ossuse=["앱 화면", "설치 파일에 함께 들어 있음", "설치와 자동 업데이트", "Windows NVIDIA 드라이버 설정"],
    own="SystemBoost 자체 코드(앱, 프레임 생성 엔진, 셰이더)는 DOKKU가 직접 만든 것이에요.",
    contactp=f'판매자: DOKKU<br>라이선스, 키, 시험 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
  "en": dict(h1="License Agreement · Privacy", sub='This is the same agreement the app shows on first start. You can read it again in the app under Settings → "View license agreement".',
-   revh="Upcoming revisions", revp='The agreement changes twice. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>After updating the app you accept the revised agreement once.',
-   rev="Revised Dec 8, 2026", rev9="Revised Dec 9, 2026", toc="Contents", imp="Please read the marked articles (orange border) carefully.",
+   revh="Upcoming revisions", revp='The agreement changes three times. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>• <b>January 1, 2027</b>: the sales page and the Windows program in <a href="#a1">Article 1</a>; cancellation and refunds in <a href="#a3">Article 3(3)</a>; <a href="#a3">Article 3(2), (10), (11) and (12)</a>; personal information in <a href="#a8">Article 8</a>; <a href="#a9">Article 9(2) and (5)</a>; and <a href="#a10">Article 10(3)</a> change. This includes the 3-day trial (Article 3(12)) and usage statistics that start off (Article 8(3)).<br>After updating the app you accept the revised agreement once.',
+   rev="Revised Dec 8, 2026", rev9="Revised Dec 9, 2026", rev27="Revised Jan 1, 2027", toc="Contents", imp="Please read the marked articles (orange border) carefully.",
    priv="Privacy summary", oss="Open-source licenses", contact="Seller and contact",
    privsum="Article 8 of the agreement as a table. This is everything the app sends.",
    cols=["When", "Where", "What is sent", "Kept for"],
    rows=[["Key check (when the app starts)", "Seller's license server", "An identifier derived from the key (not the key itself)", "While the key is managed"],
-         ["Usage statistics (while running; can be turned off in Settings)", "Seller's server", "Random install ID, app version, OS, plan, frame-generation multiplier, whether one-click game boost is used. The server records the country. No key, email, game names or hardware info; IP addresses are not stored.", "90 days after last contact"],
+         ["Usage statistics (optional and off at first; sent only while turned on, can be changed in Settings)", "Seller's server", "Random install ID, app version, OS, plan, frame-generation multiplier, whether one-click game boost is used. The server records the country. No key, email, game names or hardware info; IP addresses are not stored.", "90 days after last contact"],
          ["Payment order", "Seller's license server", "Plan, order code, and the payer name and memo you type", "While the key and refunds are handled, plus legally required periods"],
          ["Card subscription (from Dec 8, 2026)", "Lemon Squeezy checkout → seller's server", "Card details are entered only in Lemon Squeezy's checkout; the seller never receives or stores them. The seller's server receives the payment email, order/subscription numbers and payment/cancellation status to issue and extend keys.", "While the key and refunds are handled, plus legally required periods"],
          ["Referral code", "Seller's server", "The code and a random device ID", "90 days"],
+         ["Taking the 3-day trial", "Seller's server", "A hash of this PC's identifier: SHA-256 of a fixed salt and the MachineGuid Windows keeps for this PC. The MachineGuid itself is not sent. Used only to give each PC one trial.", "400 days"],
          ["Account sign-up (optional, 14+)", "Supabase database", "Username, hashed password and recovery code, sign-up/last login/consent times, invite code and invite relations. No email.", "Deleted immediately when you delete the account"],
          ["Sign-up / login abuse prevention", "Seller's server", "A one-way hash of the connecting IP", "1 hour"],
-         ["Update check", "GitHub", "Nothing (only fetches the list of versions)", "—"],
-         ["Windows games on Mac setup", "GitHub (Wine, DXVK), Steam if chosen", "Nothing (downloads the needed files only)", "—"]],
+         ["Update check", "GitHub", "Nothing (only fetches the list of versions)", "—"]],
    privfoot=f'To check or delete your data, ask in #help on the <a href="{DC}">official Discord</a>. Account data is deleted immediately when you delete your account in the app.',
-   ossp="Other people's software that SystemBoost uses or downloads, and its licenses. Full texts are in the app under Settings → \"View full licenses\".",
+   ossp="Other people's software that SystemBoost uses, and its licenses. Full texts are in the app under Settings → \"View full licenses\".",
    osscols=["Component", "License", "Used for"],
-   ossuse=["App UI", "Bundled with the installer", "Installer and automatic updates", "Windows NVIDIA driver settings", "Windows games on Mac. Downloaded unmodified and run as a separate program.", "Windows games on Mac (downloaded)", "Included in the Wine build", "Not distributed. You download it from Apple and point the app to it."],
+   ossuse=["App UI", "Bundled with the installer", "Installer and automatic updates", "Windows NVIDIA driver settings"],
    own="SystemBoost's own code (app, frame-generation engine, shaders) is original work by DOKKU.",
    contactp=f'Seller: DOKKU<br>For license, key, trial key, payment, withdrawal/refund and privacy questions, post in #help on the <a href="{DC}">official Discord</a>. Never post your full key in a public channel. Staff never DM you first.'),
 }
 OSS = [('<a href="https://github.com/AvaloniaUI/Avalonia">Avalonia</a>', "MIT"), ('<a href="https://github.com/dotnet/runtime">.NET</a>', "MIT"),
-       ('<a href="https://github.com/velopack/velopack">Velopack</a>', "MIT"), ('<a href="https://github.com/NVIDIA/nvapi">NVAPI</a>', "MIT"),
-       ('<a href="https://gitlab.winehq.org/wine/wine">Wine</a> (<a href="https://github.com/Gcenx/macOS_Wine_builds">Gcenx</a>)', "LGPL-2.1+"),
-       ('<a href="https://github.com/Gcenx/DXVK-macOS">DXVK-macOS</a>', "zlib"), ('<a href="https://github.com/KhronosGroup/MoltenVK">MoltenVK</a>', "Apache-2.0"),
-       ('<a href="https://developer.apple.com/games/">Apple Game Porting Toolkit</a>', "Apple")]
+       ('<a href="https://github.com/velopack/velopack">Velopack</a>', "MIT"), ('<a href="https://github.com/NVIDIA/nvapi">NVAPI</a>', "MIT")]
 
 def license_body(L, eulas):
     s = S[L]; base = "ko" if L == "ko" else "en"; t = LT[base]
     head, secs = eulas[base]
-    toc, body = eula_html(head, secs, {8: t["rev"], 9: t["rev9"]}, 3)
+    toc, body = eula_html(secs, {R8: t["rev"], R9: t["rev9"], R27: t["rev27"]})
     rows = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in t["rows"])
     oss = "".join(f"<tr><td>{a}</td><td>{b}</td><td>{u}</td></tr>" for (a, b), u in zip(OSS, t["ossuse"]))
     note = f'<div class="langnote">{LIC_NOTE[L]}</div>' if L in LIC_NOTE else ""
@@ -221,21 +263,21 @@ function show(lang, keepScroll) {
 show(pick());
 </script>'''
 
+# SystemBoost is sold and released for Windows only. On Windows the big button downloads the installer; on any other
+# system (macOS, Linux, phones) it turns into a plain "Windows only for now" box. The two small Windows links stay
+# for people fetching the file for a Windows PC.
 DLJS = '''<script>
 const REPO = "%s";
-const FILES = { "win-setup": "SystemBoost-Windows-Setup.exe", "win-portable": "SystemBoost-Windows-Portable.zip",
-                "mac-arm": "SystemBoost-macOS-AppleSilicon.pkg", "mac-intel": "SystemBoost-macOS-Intel.pkg" };
+const FILES = { "win-setup": "SystemBoost-Windows-Setup.exe", "win-portable": "SystemBoost-Windows-Portable.zip" };
 const DLKEY = %s;
 const url = k => `https://github.com/${REPO}/releases/latest/download/${FILES[k]}`;
-let osKey = "win-setup";
-if (/Mac/i.test(navigator.platform) || /Mac OS X/i.test(navigator.userAgent)) {
-  osKey = "mac-arm";
-  try { const gl = document.createElement("canvas").getContext("webgl"); const r = gl && gl.getExtension("WEBGL_debug_renderer_info");
-        if (r && /Intel/i.test(gl.getParameter(r.UNMASKED_RENDERER_WEBGL))) osKey = "mac-intel"; } catch (e) {}
-}
+const plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+const isWin = plat ? /^win/i.test(plat) : /Windows NT/i.test(navigator.userAgent);
 function afterShow(lang) {
   document.querySelectorAll("[data-k]").forEach(a => a.href = url(a.dataset.k));
-  const m = document.querySelector(".btn.main"); if (m) { m.href = url(osKey); m.textContent = DLKEY[lang][osKey]; }
+  const m = document.querySelector(".btn.main"); if (!m) return;
+  if (isWin) { m.href = url("win-setup"); m.textContent = DLKEY[lang].win; return; }
+  m.removeAttribute("href"); m.classList.add("off"); m.setAttribute("role", "status"); m.textContent = DLKEY[lang].only;
 }
 </script>'''
 
@@ -262,13 +304,15 @@ def page(kind, bodies, meta, extra=""):
 if __name__ == "__main__":
     eulas = {"ko": parse_eula(sys.argv[1]), "en": parse_eula(sys.argv[2])}
     eulas["en"] = (eulas["en"][0][1:], eulas["en"][1])  # first line is the "reference translation" note, kept below
-    en_note = open(sys.argv[2]).read().splitlines()[0]
+    en_note = read(sys.argv[2]).splitlines()[0]
     LT["en"]["sub"] = html.escape(en_note) + " " + LT["en"]["sub"]
     meta = {c: {"title": S[c]["title"], "desc": S[c]["desc"]} for c, _ in LANGS}
-    dlkey = {c: {"win-setup": S[c]["dl_win"], "win-portable": S[c]["dl_winp"], "mac-arm": S[c]["dl_mac_arm"], "mac-intel": S[c]["dl_mac_intel"]} for c, _ in LANGS}
-    idx = page("index", {c: index_body(c) for c, _ in LANGS}, meta, DLJS % (REPO, json.dumps(dlkey, ensure_ascii=False)))
+    dlkey = {c: {"win": S[c]["dl_win"], "only": S[c]["dl_only"]} for c, _ in LANGS}
+    bodies = {c: index_body(c) for c, _ in LANGS}
+    check_trademarks(bodies)
+    idx = page("index", bodies, meta, DLJS % (RELEASES_REPO, json.dumps(dlkey, ensure_ascii=False)))
     lmeta = {c: {"title": ("SystemBoost 사용권 계약 · 개인정보" if c == "ko" else "SystemBoost License Agreement · Privacy"), "desc": S[c]["desc"]} for c, _ in LANGS}
     lic = page("license", {c: license_body(c, eulas) for c, _ in LANGS}, lmeta)
-    open("/home/claude/work/site/index.html", "w").write(idx)
-    open("/home/claude/work/site/license.html", "w").write(lic)
+    for name, text in (("index.html", idx), ("license.html", lic)):
+        with open(os.path.join(ROOT, name), "w", encoding="utf-8", newline="\n") as out: out.write(text)
     print("index", len(idx), "license", len(lic))
