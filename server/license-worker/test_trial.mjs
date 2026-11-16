@@ -129,4 +129,26 @@ assert.equal(kv.has("trialdev:" + dev(500)) || kv.has("trialdev:" + dev(502)), f
 c = await summary();
 assert.equal(c.trials, 14, "2 + 10 + 1 (object down) + 1 (test mode)");
 
+// 9. GET /status "trial": true exactly when POST /trial would give a key (sales test or live, TRIAL not "off");
+// the other fields are as before
+const setMode = mode => j("/admin/api/sales-mode", { method: "POST", headers: { Authorization: "Bearer " + env.ADMIN_TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ mode }) });
+for (const [mode, flag, want] of [["live", undefined, true], ["test", undefined, true], ["off", undefined, false],
+                                  ["live", "off", false], ["test", "off", false], ["live", "on", true]]) {
+  await setMode(mode);
+  if (flag === undefined) delete env.TRIAL; else env.TRIAL = flag;
+  const s = await j("/status");
+  assert.equal(s.trial, want, mode + " / TRIAL=" + flag);
+  assert.deepEqual(Object.keys(s).sort(), ["http", "methods", "sales", "trial"]);
+  assert.equal(s.sales, mode);
+  const r = await trial(dev(600 + ipN));
+  assert.equal(r.http === 200, want, "/status says what POST /trial does: " + JSON.stringify(r));
+  if (!want) assert.deepEqual([r.http, r.error], [503, "closed"]);
+}
+delete env.TRIAL;
+// the dashboard's mode wins over wrangler's SALES_MODE, for the flag as for /trial
+kv.delete("config:sales_mode");
+env.SALES_MODE = "off";
+assert.equal((await j("/status")).trial, false, "wrangler's SALES_MODE off");
+env.SALES_MODE = "live";
+
 console.log("test_trial: all passed");

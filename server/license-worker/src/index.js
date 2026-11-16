@@ -21,6 +21,8 @@ export { Stats } from "./stats.js";
 //   GET  /status                 {sales, pay:{monthly,yearly}} - the app enables "결제하기" only for plans
 //                                that have a payment link (links are set in the dashboard); in live mode nothing
 //                                while the seller's details are incomplete (sellerBlocked)
+//                                trial: true when POST /trial gives keys (sales test or live, TRIAL not "off")
+//   POST /trial {device}         3-day Ultra key, one per PC -> {key}
 //   POST /order?plan=…           app gets an order code (SB-XXXX-XXXX) to write in the payment memo;
 //                                the owner confirms the payment and issues the key for that code in /admin,
 //                                and the app (polling /claim?session=<code>) pops it up
@@ -331,7 +333,7 @@ export default {
       if (req.method === "POST" && url.pathname === "/renew") { const b = await readJson(req); return await renew(String(b.sub || ""), String(b.key || ""), env); }
       if (req.method === "GET" && url.pathname === "/renew") return await renew(url.searchParams.get("sub") || "", "", env);
       if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
-      if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
+      if (req.method === "GET" && url.pathname === "/status") { const sales = await salesMode(env); return json({ sales, ...(await openPlans(env)), trial: trialOpen(env, sales) }); }
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
@@ -1273,8 +1275,11 @@ const TRIAL_DAILY = 150;
 const trialName = () => "kv:trial:" + now().slice(0, 10);   // the Stats object's count of today's trials
 const trialDay = () => "count:trial:" + now().slice(0, 10);  // KV: only while the Stats object cannot be reached
 
+// Whether POST /trial gives keys at all (GET /status "trial": the app 0.8.14 shows its 3일 체험 card only then): sales
+// mode test or live, and env TRIAL not "off". The per-PC, per-address and daily limits are not part of it.
+const trialOpen = (env, sales) => env.TRIAL !== "off" && (sales === "test" || sales === "live");
 async function trial(req, env) {
-  if (env.TRIAL === "off" || (await salesMode(env)) === "off") return json({ error: "closed" }, 503);
+  if (!trialOpen(env, await salesMode(env))) return json({ error: "closed" }, 503);
   const b = await readJson(req);
   const device = typeof b.device === "string" ? b.device : "";
   if (!TRIAL_DEVICE.test(device)) return json({ error: "bad request" }, 400);

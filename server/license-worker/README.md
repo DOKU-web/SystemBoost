@@ -99,6 +99,8 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
   (`IP_LIMIT.trial`), 하루 공개 저장 몫(`PUBLIC_KV_DAY`)이나 하루 체험 150개(`TRIAL_DAILY`)가 다 참 · `400 {"error":"bad request"}`
   · `503 {"error":"closed"}` 판매 모드 '꺼짐'이거나 `TRIAL = "off"`(wrangler.toml [vars]).
 - 체험 하나는 KV 저장 2번(`trialdev:`, `lic:`)이고 통계 저장소에서 셉니다. 통계 저장소가 응답하지 않으면 KV(`count:trial:<날짜>`)로 하루 150개를 셉니다.
+- `GET /status`에 `"trial": true | false`가 붙습니다. `POST /trial`이 키를 줄 수 있는 상태(판매 모드 '테스트'나 '실판매', `TRIAL`이 "off"가 아님)일 때만
+  true입니다. 앱 0.8.14는 이 값이 true일 때만 '3일 체험' 카드를 보여 줍니다(PC별 · 주소별 · 하루 한도는 반영하지 않음).
 - 대시보드 홈에 '오늘 3일 체험' · '전체 3일 체험' 숫자가 나옵니다.
 - 테스트: `node test_trial.mjs`
 
