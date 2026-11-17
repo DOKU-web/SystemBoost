@@ -144,7 +144,7 @@ public sealed class AccountPage : UserControl
         var password = Input("비밀번호", secret: true);
         var go = Ui.Button("로그인", "primary");
         var msg = Message();
-        go.Click += async (_, _) => await Run(go, msg, () => Account.LogInAsync(id.Text ?? "", password.Text ?? ""));
+        go.Click += async (_, _) => await Run(go, msg, async () => (await Account.LogInAsync(id.Text ?? "", password.Text ?? "")).error);
         p.Children.Add(id);
         p.Children.Add(password);
         p.Children.Add(Left(go));
