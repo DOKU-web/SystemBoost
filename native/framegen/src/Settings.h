@@ -34,6 +34,11 @@ struct Settings {
     int gpuPriority = kGpuPriorityAuto; // this process's GPU scheduling class: auto, off, or 0..5 (tests)
     uint32_t parentPid = 0;            // the app: when its process ends, so does this one (0 = stdin only)
     std::string shaderDir;             // default: <exe dir>\shaders
+    // Benchmark mode (Bench.cpp): no window, no capture, synthetic pictures at benchW x benchH.
+    bool bench = false;                // --bench: GPU time per quality
+    int benchLoadSec = 0;              // --bench-load S: S seconds of balanced passes, 0 = off
+    unsigned benchW = 0, benchH = 0;   // --bench-width / --bench-height (required with either)
+    bool benchMode() const { return bench || benchLoadSec > 0; }
 
     // Pipeline parameters derived from quality (mirror ref PARAMS)
     int procFactor() const { return quality == Quality::Low ? 8 : quality == Quality::Performance ? 4 : 2; }
@@ -41,13 +46,39 @@ struct Settings {
     int coarseRadius() const { return quality == Quality::Low || quality == Quality::Performance ? 4 : 6; }
 };
 
+inline const char* QualityName(Quality q) {
+    static const char* const names[] = {"low", "performance", "balanced", "quality"};
+    return names[int(q)];
+}
+
+// The command line asks for the benchmark: main branches before anything of the normal engine runs.
+inline bool WantsBench(const std::vector<std::string>& a) {
+    for (const auto& k : a) if (k == "--bench" || k == "--bench-load") return true;
+    return false;
+}
+
+// Whole decimal number in [lo, hi], nothing else in the text.
+inline bool parseInt(const std::string& v, int lo, int hi, int& out) {
+    if (v.empty() || v.size() > 9) return false;
+    int n = 0;
+    for (const char c : v) {
+        if (c < '0' || c > '9') return false;
+        n = n * 10 + (c - '0');
+    }
+    if (n < lo || n > hi) return false;
+    out = n;
+    return true;
+}
+
 inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
     auto need = [&](size_t& i) -> const std::string* {
         return i + 1 < a.size() ? &a[++i] : nullptr;
     };
+    bool hasBenchSize = false;
     for (size_t i = 0; i < a.size(); ++i) {
         const std::string& k = a[i];
         const std::string* v = nullptr;
+        if (k == "--bench") { s.bench = true; continue; }
         if (k == "--list-gpus") { s.listGpus = true; continue; }
         if (k == "--list-windows") { s.listWindows = true; continue; }
         if (k == "--capture-cursor") { s.captureCursor = true; continue; }
@@ -101,8 +132,22 @@ inline std::string parseArgs(const std::vector<std::string>& a, Settings& s) {
             s.parentPid = uint32_t(pid);
         } else if (k == "--stats-ms") s.statsMs = std::max(100, std::atoi(v->c_str()));
         else if (k == "--shader-dir") s.shaderDir = *v;
-        else return "unknown option " + k;
+        else if (k == "--bench-load") {
+            if (!parseInt(*v, 1, 60, s.benchLoadSec)) return "--bench-load must be 1..60 seconds";
+        } else if (k == "--bench-width" || k == "--bench-height") {
+            int n = 0;
+            if (!parseInt(*v, 64, 8192, n)) return k + " must be 64..8192";
+            (k == "--bench-width" ? s.benchW : s.benchH) = unsigned(n);
+            hasBenchSize = true;
+        } else return "unknown option " + k;
     }
+    if (s.benchMode()) {
+        if (s.bench && s.benchLoadSec > 0) return "use --bench or --bench-load, not both";
+        if (s.listGpus || s.listWindows) return "--bench cannot be combined with --list-gpus or --list-windows";
+        if (s.benchW == 0 || s.benchH == 0) return "--bench-width and --bench-height are required";
+        return {};
+    }
+    if (hasBenchSize) return "--bench-width and --bench-height need --bench or --bench-load";
     if (!s.listGpus && !s.listWindows && s.hwnd == 0) return "--hwnd is required";
     return {};
 }

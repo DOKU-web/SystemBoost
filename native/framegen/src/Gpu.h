@@ -23,9 +23,13 @@ std::string GpusJson(const std::vector<GpuInfo>& gpus);
 
 // Adapter that drives the monitor the window is on.
 int AdapterForWindow(HWND hwnd, const std::vector<GpuInfo>& gpus);
+// Adapter that drives the monitor (the first one listed when none does, -1 when there is none).
+int AdapterForMonitor(HMONITOR mon, const std::vector<GpuInfo>& gpus);
 
 // Picks the frame generation adapter. Returns index into gpus.
 int PickGenGpu(const Settings& s, HWND game, const std::vector<GpuInfo>& gpus, std::string& why);
+// The same choice with the display adapter already known (the benchmark has no game window).
+int PickGenGpuFor(const Settings& s, int display, const std::vector<GpuInfo>& gpus, std::string& why);
 
 ComPtr<IDXGIAdapter1> AdapterByIndex(int index);
 ComPtr<IDXGIAdapter1> WarpAdapter();

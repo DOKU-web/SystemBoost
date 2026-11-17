@@ -9,9 +9,11 @@
 //           "alive" comes about every second from the main loop, also while the game is behind
 //           another window and no stats come: a silence means the loop is stuck (the app ends it).
 //   stdin : "mode auto|x2|x3|x4|x6|x8|off", "sharp 0..1", "enable", "disable", "quit"
+// --bench / --bench-load run the benchmark instead (Bench.h): no window, no capture, stdin not read.
 // The process ends when stdin closes or the app's process (--parent-pid) ends. If its main loop
 // cannot get there, a watchdog thread puts the cursor back and ends it (exit code 6, or 7 when the
 // loop itself was stuck).
+#include "Bench.h"
 #include "Capture.h"
 #include "Cursor.h"
 #include "FrameGenGpu.h"
@@ -720,6 +722,11 @@ static int Main(int argc, wchar_t** argv) {
     for (int i = 1; i < argc; ++i) args.push_back(Narrow(argv[i]));
     Settings s;
     std::string err = parseArgs(args, s);
+    // Benchmark (Bench.cpp): none of what follows (watchdog, priority, DPI, window, capture, cursor).
+    if (WantsBench(args)) {
+        if (!err.empty()) { bench::EmitError(err); return 1; }
+        return bench::Run(s);
+    }
     if (!err.empty()) { EmitMsg("error", err); return 1; }
     if (!s.listGpus && !s.listWindows) {
         // a parent that cannot be opened has gone already: stdin closing ends this run then

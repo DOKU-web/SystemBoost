@@ -26,6 +26,8 @@ g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/fit_test.cpp" -o "$WORK/
 echo "== 2b. frame meter"
 g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/meter_test.cpp" -o "$WORK/meter_test"
 "$WORK/meter_test" | tee "$OUT/meter.txt"
+g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/bench_test.cpp" -o "$WORK/bench_test"
+"$WORK/bench_test"
 
 echo "== 2c. admin helper rules"
 g++ -std=c++17 -O2 -Wall -Wextra "$FG/../helper/tests/validate_test.cpp" -o "$WORK/validate_test"
@@ -51,7 +53,7 @@ if command -v x86_64-w64-mingw32-g++ >/dev/null; then
   echo "== 6. Windows build check (mingw, DXGI capture path; WGC needs MSVC)"
   (cd "$FG/src" && x86_64-w64-mingw32-g++ -std=c++20 -O2 -Wall -Wextra -Werror -Wno-unknown-pragmas \
      -Wno-cast-function-type -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 \
-     main.cpp Gpu.cpp Capture.cpp FrameGenGpu.cpp Overlay.cpp Cursor.cpp -o "$WORK/sb_framegen.exe" -static \
+     main.cpp Gpu.cpp Capture.cpp FrameGenGpu.cpp Overlay.cpp Cursor.cpp Bench.cpp -o "$WORK/sb_framegen.exe" -static \
      -ld3d11 -ldxgi -ld3dcompiler_47 -ldcomp -ldwmapi -luser32 -lgdi32 -lshell32 -lole32 -ladvapi32)
   echo "  ok sb_framegen.exe ($(stat -c %s "$WORK/sb_framegen.exe") bytes)"
 fi

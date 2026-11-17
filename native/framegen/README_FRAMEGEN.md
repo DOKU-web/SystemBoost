@@ -32,6 +32,8 @@ native/framegen/
     Overlay.h/.cpp          클릭 통과 출력 창 (DirectComposition)
     Cursor.h/.cpp           업스케일 모드 커서 처리 (가두기, 다시 그리기, 복구)
     Gpu.h/.cpp              GPU 목록, 생성 GPU 선택
+    Bench.h/.cpp            벤치마크 모드 (--bench, --bench-load): 창·캡처 없이 GPU 시간 측정
+    BenchProtocol.h         벤치마크 출력 줄과 시간 계획 (Windows 의존성 없음, 테스트됨)
   shaders/                  HLSL cs_5_0 (8개 + common.hlsli)
   ref/                      CPU 참조 구현 (셰이더와 같은 알고리즘, 측정용)
   tests/                    측정 스크립트, 페이싱 시뮬레이션, GPU 일치 검사
@@ -94,6 +96,26 @@ stdin: `mode x3`, `sharp 0.4`, `enable`, `disable`, `quit`. stdin이 닫히거�
 - **추가 지연**: `addedLatencyMs`. 생성 없이 원본을 바로 보여 줄 때보다 늘어난 지연의 추정치예요. 측정값으로 표시하고 "지연 0" 같은 문구는 쓰지 마세요.
 - **GPU 시간**: `genMs`(출력 1장), `analyzeMs`(원본 1장 분석)
 - **늦은 프레임**: `late`가 계속 늘면 게임 FPS가 불안정한 상태예요. 게임 내 FPS 제한을 권장하세요.
+
+### 벤치마크 (`--bench`, `--bench-load`, PC 맞춤 추천용)
+
+```
+sb_framegen.exe --bench --bench-width W --bench-height H [--gen-gpu same|igpu|<번호>] [--parent-pid P] [--shader-dir D]
+sb_framegen.exe --bench-load S --bench-width W --bench-height H [같은 옵션]
+  --bench-width/--bench-height 64..8192, 둘 다 필요.  --bench-load 1..60초.  --bench와 --bench-load는 함께 못 씀
+```
+창, 캡처, 오버레이, 커서 변경 없음. 다른 프로세스를 열지 않음(`--parent-pid`는 끝나기를 기다리기만 함). stdin은 읽지 않음. 엔진의 감시 스레드, 우선순위 올리기(CPU·GPU), DPI 설정도 하지 않음(`main`에서 인자 해석 직후 갈라짐). 합성 그림(W×H보다 조금 큰 무늬 하나에서 매 프레임 가로 6px·세로 2px씩 왕복으로 옮긴 영역)에 FrameGenGpu의 실제 분석·보간 패스를 돌립니다. 코드: `src/Bench.cpp`, 줄 형식과 시간 계획: `src/BenchProtocol.h`.
+
+- `--gen-gpu`: 엔진과 같은 선택. `same`(기본) = 주 모니터를 구동하는 GPU(게임 창이 없으므로), `igpu` = 내장 그래픽, 번호 = `--list-gpus`의 `index`. 없는 번호면 엔진처럼 주 모니터 GPU로 측정하고, 줄의 `gpu`에 실제로 잰 어댑터 이름이 들어갑니다.
+- 셰이더: `--shader-dir`, 없으면 `<exe 폴더>\shaders` (`.cso`, 없으면 `.hlsl` 컴파일). 둘 다 없으면 오류.
+- `--bench`: 균형 품질로 0.5초 예열 → low, performance, balanced, quality 순으로 한 줄씩. 품질마다 분석 묶음과 생성 묶음을 GPU 완료까지 기다려 재고(gen_bench 방식), 묶음 9회의 중앙값. 빠른 GPU는 묶음 20회 분석 / 60장 생성(gen_bench와 같음), 느린 GPU는 품질마다 2.2초 안에 들도록 묶음을 줄입니다. 계획상 12.5초 안에 끝나고, 15초가 넘으면 오류로 끝납니다.
+  `{"type":"bench","quality":"balanced","width":2560,"height":1440,"analyzeMs":1.234,"genMs":0.456,"gpu":"..."}` × 4 → `{"type":"bench_done"}`, 종료 코드 0.
+  `analyzeMs` = 원본 1장 분석, `genMs` = 생성 1장 (엔진 `stats`와 같은 뜻, 업스케일 없음, 화면 표시 비용 제외).
+- `--bench-load S`: 균형 품질 패스로 S초 동안 GPU를 쉬지 않게 채웁니다(약 15ms 묶음 3개를 항상 대기열에). 묶음 단위 = 원본 1장 분석 + 생성 3장(4배와 같은 비율). 1초마다
+  `{"type":"bench_load","sec":1,"framesPerSec":812.5,"gpu":"..."}` (그 1초 동안 끝난 생성 프레임 수 / 묶음 완료 시각 사이 시간) → GPU가 다 끝낸 뒤 `{"type":"bench_done"}`. 첫 1초에는 GPU 클럭이 올라가는 시간이 섞여 있습니다.
+- 실패: `{"type":"error","message":"<영어>"}` (일반 모드의 `msg`가 아니라 `message`). 종료 코드: 1 인자 오류, 2 GPU·셰이더 없음, 3 Direct3D 오류(장치 분실 포함), 4 기타, 8 시간 초과(이미 나온 `bench` 줄은 유효), 9 `--parent-pid` 프로세스 종료.
+- 숫자는 로캘과 무관하게 `.` 소수점(`std::to_chars`), UTF-8, 한 줄에 JSON 하나, 줄마다 flush.
+- 테스트: `cmake -DSBFG_TESTS=ON` → `bench_test`(GPU 없이: 인자, 줄 형식, 소수점 쉼표 로캘, 15초 계획 시뮬레이션), `gen_bench`(같은 측정을 기본 어댑터에서 시간 제한 없이. GPU를 씀).
 
 ## v0.5에 합치기
 
