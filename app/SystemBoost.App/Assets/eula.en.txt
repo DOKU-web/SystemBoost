@@ -2,7 +2,7 @@ Reference translation. The Korean text is the agreement; if the two differ, the 
 Effective date: November 6, 2026
 Revision effective: December 8, 2026 (automatic payment for card subscriptions in Article 3, Paragraph 3. The Seller does not sell card subscriptions before then)
 Revision effective: December 9, 2026 (the Business plan, bundle keys and plan names: Article 2, Paragraph 1; Article 3, Paragraphs 2, 5, 8 and 9; Article 6, Paragraph 1; Article 11, Paragraph 2. The Premium plan is renamed Pro; its features and prices stay the same. The Seller does not sell bundle keys before then)
-Revision effective: January 1, 2027 (the sales page and the Windows program in Article 1; cancellation and refunds in Article 3, Paragraph 3, and Article 3, Paragraphs 2, 10 and 11; personal information in Article 8; Article 9, Paragraphs 2 and 5; Article 10, Paragraph 3; the AMD components in Article 12-2)
+Revision effective: January 1, 2027 (the sales page and the Windows program in Article 1; cancellation and refunds in Article 3, Paragraph 3, and Article 3, Paragraphs 2, 10 and 11; overclocking and hardware tuning in Article 6-2; personal information in Article 8; Article 9, Paragraphs 2 and 5; Article 10, Paragraph 3; the AMD components in Article 12-2)
 Seller: DOKKU (the Seller's name or business name, address and contact details are shown on the app's ★ Plans screen, under Seller in the app's Support, and on the help page (/help) of the Seller's server)
 
 ## Article 1 (Subject of this agreement)
@@ -45,6 +45,14 @@ The User may not:
 ! 2. Overclocking can cause game crashes, system freezes and driver errors. It may also affect the graphics card manufacturer's warranty.
 Use small values first, after understanding the risks.
 ! 3. The Seller does not guarantee that automatic recovery always works when a driver or hardware error has occurred.
+
+## Article 6-2 (Overclocking and hardware tuning)
+! 1. Overclocking and changing the power limit run your graphics card beyond the manufacturer's default settings. This may cause system instability, game crashes, higher temperatures, shorter component lifespan, or hardware damage, and may void your GPU or PC manufacturer's warranty.
+2. SystemBoost provides temperature monitoring and automatic recovery, but cannot prevent every problem.
+! 3. You are solely responsible for choosing to enable these features and for any results of using them. This does not apply to damage caused by SystemBoost's intentional misconduct or gross negligence.
+4. Paragraphs 1 to 3 are the wording of the app's "Overclocking & Power Limit Notice". The notice and the consent also cover automatic tuning (automatic undervolting and overclocking) and changes that lower values. The Program shows the notice the first time overclocking or the power limit is turned on, and turns them on only after the User agrees. The User is asked again when the graphics card changes, when the notice's wording changes, and when a preset containing overclocking values is imported.
+5. The User can withdraw consent in the app at any time. The Program then turns overclocking and the power limit off, puts back the values it changed and returns the graphics card's power limit and clocks to factory values. Settings changed by other programs (such as voltage or fans) may remain, and the app says so if it cannot put the values back.
+6. A record of each consent and withdrawal (the notice's version, time, graphics card model and app version) stays on the User's PC.
 
 ## Article 7 (Performance)
 1. Frame generation does not increase the frames the game actually draws. It inserts images between frames.

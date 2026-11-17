@@ -57,23 +57,23 @@ for (const bad of ["### 소제목", " 들여쓴 줄", "# 제목"]) assert.throws
 assert.throws(() => textToHtml("## 제1조\n본문"), /fewer than 10/);
 
 // 4. /help announces the change and links the full text, in both languages
-for (const [path, link, n] of [["/help", "/terms", 10], ["/help?lang=en", "/terms?lang=en", 10]]) {
+for (const [path, link, n] of [["/help", "/terms", 11], ["/help?lang=en", "/terms?lang=en", 11]]) {
   const html = await (await get(path)).text();
   assert.ok(html.includes('<div id="terms" class="box terms" hidden>') && html.includes('id="termsNav" href="/terms"'), path + ": the notice box and the link");
   assert.ok(html.includes('$("termsNav").href = $("termsLink").href = L === "en" ? "/terms?lang=en" : "/terms"'), path + ": " + link);
   assert.ok(html.includes("Date.now() < Date.UTC(2027, 0, 31, 15)"), "shown until the end of January 2027 (KST)");
   const lists = [...html.matchAll(/termsItems: \[([\s\S]*?)\]/g)].map(m => (m[1].match(/^\s*"/gm) || []).length);
-  assert.deepEqual(lists, [n, n], path + ": ten changed articles in Korean and in English");
+  assert.deepEqual(lists, [n, n], path + ": eleven changed articles in Korean and in English");
 }
 // every article the agreement names for 2027-01-01 is in the Korean notice
 const help = await (await get("/help")).text();
 const ko = /termsItems: \[([\s\S]*?)\]/.exec(help)[1];
 const line2027 = eula("eula.txt").split("\n").find(l => l.startsWith("개정 시행일: 2027년 1월 1일"));
 assert.ok(line2027, "the agreement names what changes on 2027-01-01");
-for (const art of ["제1조", "제3조 제2항", "제3조 제3항", "제3조 제10항", "제3조 제11항", "제8조", "제9조 제2항", "제9조 제5항", "제10조 제3항", "제12조의2"]) {
+for (const art of ["제1조", "제3조 제2항", "제3조 제3항", "제3조 제10항", "제3조 제11항", "제6조의2", "제8조", "제9조 제2항", "제9조 제5항", "제10조 제3항", "제12조의2"]) {
   assert.ok(ko.includes(art + ":") || ko.includes(art + "("), "the notice names " + art);
 }
-for (const [a, ps] of [["제1조", []], ["제3조", ["제2항", "제3항", "제10항", "제11항"]], ["제8조", []], ["제9조", ["제2항", "제5항"]], ["제10조", ["제3항"]], ["제12조의2", []]]) {
+for (const [a, ps] of [["제1조", []], ["제3조", ["제2항", "제3항", "제10항", "제11항"]], ["제6조의2", []], ["제8조", []], ["제9조", ["제2항", "제5항"]], ["제10조", ["제3항"]], ["제12조의2", []]]) {
   assert.ok(line2027.includes(a), "the agreement's 2027-01-01 line names " + a);
   for (const p of ps) assert.ok(line2027.includes(p.replace("제", "")) || line2027.includes(p), a + " " + p);
 }
