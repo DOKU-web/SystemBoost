@@ -83,6 +83,14 @@ inline double QualityBudgetSec(double elapsedSec, int qualitiesLeft) {
     return std::clamp((kPlanSec - elapsedSec) / qualitiesLeft, 0.0, kMaxQualitySec);
 }
 
+// GPU timestamps (ticks) of a batch's start and end in ms; -1 when they cannot be trusted: the GPU
+// clock changed in between (disjoint), no frequency, or the end before the start.
+inline double TicksToMs(unsigned long long begin, unsigned long long end, unsigned long long frequency,
+                        bool disjoint) {
+    if (disjoint || frequency == 0 || end < begin) return -1;
+    return double(end - begin) * 1000.0 / double(frequency);
+}
+
 // One more round of batches? The first always runs; then while one more like the last still fits.
 inline bool NextRound(int round, double elapsedSec, double lastRoundSec, double budgetSec) {
     if (round >= kRounds) return false;

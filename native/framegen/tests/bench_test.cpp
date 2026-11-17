@@ -128,6 +128,13 @@ static void numbers() {
     check(p.analyses == 4 && p.generates == 12, "slow GPU: smaller batches (4 and 12)");
     p = PlanBatches(500, 200, 2.2);
     check(p.analyses == 1 && p.generates == 1, "very slow GPU: one of each");
+
+    check(std::abs(TicksToMs(1000, 1000 + 3800, 1000000000ull, false) - 0.0038) < 1e-12, "GPU ticks to ms (1 GHz)");
+    check(std::abs(TicksToMs(5, 5 + 27000, 27000000ull, false) - 1.0) < 1e-12, "GPU ticks to ms (27 MHz)");
+    check(TicksToMs(0, 0, 1000, false) == 0, "an empty batch takes 0 ms");
+    check(TicksToMs(0, 100, 1000, true) == -1, "disjoint: the GPU clock changed, not used");
+    check(TicksToMs(0, 100, 0, false) == -1, "no frequency: not used");
+    check(TicksToMs(200, 100, 1000, false) == -1, "end before start: not used");
     p = PlanBatches(0, std::nan(""), 2.2);
     check(p.analyses == 20 && p.generates == 60, "unmeasurable estimate: full batches");
     p = PlanBatches(1, 1, -1);

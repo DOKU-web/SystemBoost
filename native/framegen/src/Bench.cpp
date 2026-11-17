@@ -224,6 +224,11 @@ int RunOn(const Settings& s, double start) {
 GpuWait::GpuWait(ID3D11Device* dev, ID3D11DeviceContext* ctx) : dev_(dev), ctx_(ctx) {
     D3D11_QUERY_DESC d{D3D11_QUERY_EVENT, 0};
     Check(dev_->CreateQuery(&d, &done_), "event query");
+    d.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+    Check(dev_->CreateQuery(&d, &disjoint_), "timestamp disjoint query");
+    d.Query = D3D11_QUERY_TIMESTAMP;
+    Check(dev_->CreateQuery(&d, &tsBegin_), "timestamp query");
+    Check(dev_->CreateQuery(&d, &tsEnd_), "timestamp query");
     timer_ = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     if (!timer_) timer_ = CreateWaitableTimerW(nullptr, FALSE, nullptr);
 }
@@ -258,6 +263,31 @@ void GpuWait::Wait(double t0, double expectedSec) {
         if (left > 0.002) Nap(std::min(left - 0.001, 0.01));
         else YieldProcessor();
     }
+}
+
+void GpuWait::StartTiming() {
+    ctx_->Begin(disjoint_.Get());
+    ctx_->End(tsBegin_.Get());
+}
+
+double GpuWait::WaitTimed(double t0, double expectedSec) {
+    ctx_->End(tsEnd_.Get());
+    ctx_->End(disjoint_.Get());
+    Wait(t0, expectedSec);
+    // everything before the event is done, so the answers are there or follow at once
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj{};
+    UINT64 b = 0, e = 0;
+    const double giveUp = QpcNow() + 0.1;
+    for (;;) {
+        const HRESULT h1 = ctx_->GetData(disjoint_.Get(), &dj, sizeof dj, D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        const HRESULT h2 = ctx_->GetData(tsBegin_.Get(), &b, sizeof b, D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        const HRESULT h3 = ctx_->GetData(tsEnd_.Get(), &e, sizeof e, D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        if (FAILED(h1) || FAILED(h2) || FAILED(h3)) Lost(FAILED(h1) ? h1 : FAILED(h2) ? h2 : h3);
+        if (h1 == S_OK && h2 == S_OK && h3 == S_OK) break;
+        if (QpcNow() > giveUp) return -1;
+        YieldProcessor();
+    }
+    return TicksToMs(b, e, dj.Frequency, dj.Disjoint != FALSE);
 }
 
 // --- Scene ---------------------------------------------------------------------
@@ -323,29 +353,36 @@ Timing MeasureQuality(FrameGenGpu& fg, Scene& scene, GpuWait& wait, Quality q, d
     const double calG = (QpcNow() - t0) * 1000.0 / 4;
 
     const BatchPlan plan = PlanBatches(calA, calG, budgetSec - (QpcNow() - start));
-    std::vector<double> analyse, gen;
-    // Asleep for part of a batch only, from the fastest batch measured so far: a thread woken after
-    // the GPU's end would add to its time. Round 0 is spun all the way (the estimate above can be slow:
-    // first use of new textures), so every later estimate comes from a measurement that was not slept.
-    double aBest = 0, gBest = 0;    // ms per piece, 0 = none yet
+    // Per piece: GPU time from the timestamps, and wall time for when the GPU timed nothing.
+    std::vector<double> analyse, gen, analyseWall, genWall;
+    // One batch, issued whole (no Flush in between: the GPU runs it back to back, and the time the CPU
+    // takes to issue it stays out of the timestamps). The wait naps through part of the GPU time of the
+    // fastest batch so far (round 0 spins); a late wake-up costs wall time only, not accuracy.
+    const auto batch = [&](int n, bool analysis, double bestMs, std::vector<double>& gpu, std::vector<double>& wall) {
+        const double b0 = QpcNow();
+        wait.StartTiming();
+        for (int i = 0; i < n; ++i) {
+            if (analysis) scene.Push(fg, pic++);
+            else fg.Generate(GenT(i));
+        }
+        const double ms = wait.WaitTimed(b0, 0.7 * bestMs * n / 1000.0);
+        wall.push_back((QpcNow() - b0) * 1000.0 / n);
+        if (ms >= 0) gpu.push_back(ms / n);
+    };
+    const auto best = [](const std::vector<double>& v) { return v.empty() ? 0.0 : *std::min_element(v.begin(), v.end()); };
     double lastRound = 0;
     for (int round = 0; NextRound(round, QpcNow() - start, lastRound, budgetSec); ++round) {
         if (stop && *stop) break;
         const double r0 = QpcNow();
-        t0 = r0;
-        for (int i = 0; i < plan.analyses; ++i) { scene.Push(fg, pic++); wait.Flush(); }
-        wait.Wait(t0, 0.7 * aBest * plan.analyses / 1000.0);
-        analyse.push_back((QpcNow() - t0) * 1000.0 / plan.analyses);
-        aBest = aBest == 0 ? analyse.back() : std::min(aBest, analyse.back());
-        t0 = QpcNow();
-        for (int i = 0; i < plan.generates; ++i) { fg.Generate(GenT(i)); wait.Flush(); }
-        wait.Wait(t0, 0.7 * gBest * plan.generates / 1000.0);
-        gen.push_back((QpcNow() - t0) * 1000.0 / plan.generates);
-        gBest = gBest == 0 ? gen.back() : std::min(gBest, gen.back());
+        batch(plan.analyses, true, best(analyse), analyse, analyseWall);
+        batch(plan.generates, false, best(gen), gen, genWall);
         lastRound = QpcNow() - r0;
     }
-    if (analyse.empty()) { analyse.push_back(calA); gen.push_back(calG); }
-    return {Median(analyse), Median(gen), int(analyse.size())};
+    if (analyse.empty()) analyse = analyseWall;
+    if (gen.empty()) gen = genWall;
+    if (analyse.empty()) analyse.push_back(calA);
+    if (gen.empty()) gen.push_back(calG);
+    return {Median(analyse), Median(gen), int(analyseWall.size())};
 }
 
 void EmitError(const std::string& message) { Emit(ErrorLine(message)); }

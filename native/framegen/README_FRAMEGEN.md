@@ -108,7 +108,7 @@ sb_framegen.exe --bench-load S --bench-width W --bench-height H [같은 옵션]
 
 - `--gen-gpu`: 엔진과 같은 선택. `same`(기본) = 주 모니터를 구동하는 GPU(게임 창이 없으므로), `igpu` = 내장 그래픽, 번호 = `--list-gpus`의 `index`. 없는 번호면 엔진처럼 주 모니터 GPU로 측정하고, 줄의 `gpu`에 실제로 잰 어댑터 이름이 들어갑니다.
 - 셰이더: `--shader-dir`, 없으면 `<exe 폴더>\shaders` (`.cso`, 없으면 `.hlsl` 컴파일). 둘 다 없으면 오류.
-- `--bench`: 균형 품질로 0.5초 예열 → low, performance, balanced, quality 순으로 한 줄씩. 품질마다 분석 묶음과 생성 묶음을 GPU 완료까지 기다려 재고(gen_bench 방식), 묶음 9회의 중앙값. 빠른 GPU는 묶음 20회 분석 / 60장 생성(gen_bench와 같음), 느린 GPU는 품질마다 2.2초 안에 들도록 묶음을 줄입니다. 계획상 12.5초 안에 끝나고, 15초가 넘으면 오류로 끝납니다.
+- `--bench`: 균형 품질로 0.5초 예열 → low, performance, balanced, quality 순으로 한 줄씩. 품질마다 분석 묶음과 생성 묶음을 GPU 완료까지 기다려 재고(gen_bench 방식), 묶음 9회의 중앙값. 묶음은 중간에 Flush 없이 한 번에 보내고, 묶음 앞뒤의 GPU 타임스탬프(TIMESTAMP_DISJOINT)로 GPU 시간만 잽니다. CPU가 명령을 보내는 시간은 빠집니다(2026-11-18 RTX 3060, 1920×1080 균형, 다른 빌드로 바쁜 CPU: 생성 1장이 벽시계로 0.43 ms, 타임스탬프로 0.16 ms. 분석 3.21 → 3.03 ms). GPU 클럭이 묶음 중간에 바뀌어 타임스탬프를 못 쓰면 그 묶음은 빼고, 하나도 못 쓰면 벽시계 시간입니다. 빠른 GPU는 묶음 20회 분석 / 60장 생성(gen_bench와 같음), 느린 GPU는 품질마다 2.2초 안에 들도록 묶음을 줄입니다. 계획상 12.5초 안에 끝나고, 15초가 넘으면 오류로 끝납니다.
   `{"type":"bench","quality":"balanced","width":2560,"height":1440,"analyzeMs":1.234,"genMs":0.456,"gpu":"..."}` × 4 → `{"type":"bench_done"}`, 종료 코드 0.
   `analyzeMs` = 원본 1장 분석, `genMs` = 생성 1장 (엔진 `stats`와 같은 뜻, 업스케일 없음, 화면 표시 비용 제외).
 - `--bench-load S`: 균형 품질 패스로 S초 동안 GPU를 쉬지 않게 채웁니다(약 15ms 묶음 3개를 항상 대기열에). 묶음 단위 = 원본 1장 분석 + 생성 3장(4배와 같은 비율). 1초마다
