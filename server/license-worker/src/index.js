@@ -1,5 +1,7 @@
 import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
+import { accountWeb, keysResend } from "./account_web.js";
+import { mailOn } from "./mail.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
 import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
@@ -342,12 +344,13 @@ export default {
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
-      if (url.pathname.startsWith("/account/")) return await account(req, url, env);
+      if (url.pathname.startsWith("/account/")) return await accountWeb(req, url, env, ctx, ACCOUNT_DEPS);
+      if (req.method === "POST" && url.pathname === "/keys/resend") return await keysResend(req, env, ctx, ACCOUNT_DEPS);
       if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
       if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
       if (req.method === "GET" && url.pathname === "/privacy") return await privacyPage(url, env);
       if (req.method === "GET" && url.pathname === "/terms") return termsPage(url);
-      if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
+      if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env, ctx);
       return json({ error: "not found" }, 404);
     } catch (e) {
       return json({ error: "server error" }, 500);
