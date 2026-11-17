@@ -2,6 +2,7 @@
 // arguments and touches one fixed place: there is no generic "write this
 // registry path" or "run this program", and a new ability has to be added here.
 #include "commands.h"
+#include "amd.h"
 #include "validate.h"
 #include <windows.h>
 #include <cstdio>
@@ -147,6 +148,14 @@ std::string ramPurge() {
     return ok(std::to_string(f0) + ";" + std::to_string(s0) + ";" + std::to_string(f1) + ";" + std::to_string(s1));
 }
 
+// ---------------------------------------------------------------- AMD arguments (checked by validate.h)
+int gpuIndex(const std::string& s) { return s[0] - '0'; }
+int tri(const std::string& s) { return s == "-" ? amd::kLeave : s == "1" ? 1 : 0; }
+std::optional<int> value(const std::string& s) { return s == "-" ? std::nullopt : std::optional<int>(std::stoi(s)); }
+amd::AutoMode autoMode(const std::string& s) {
+    return s == "undervolt" ? amd::AutoMode::Undervolt : s == "ocgpu" ? amd::AutoMode::OcGpu : amd::AutoMode::OcVram;
+}
+
 }  // namespace
 
 std::string dispatch(const std::vector<std::string>& f) {
@@ -207,6 +216,26 @@ std::string dispatch(const std::vector<std::string>& f) {
     // the value saved before tuning, which may be another tool's: only the driver's own limits apply
     if (c == "oc.restore" && n == 4 && sb::isInt(f[1], 1000, 2000000) && sb::isInt(f[2], -5000, 8000) && sb::isInt(f[3], -5000, 8000))
         return ocRestore((unsigned)std::stoul(f[1]), std::stoi(f[2]), std::stoi(f[3]));
+
+    // AMD Radeon through ADLX (amd.cpp): read-outs, global 3D settings, tuning that goes back by itself
+    if (c == "amd.info" && n == 1) return amd::info();
+    if (c == "amd.metrics" && n == 2 && sb::isGpuIndex(f[1])) return amd::metrics(gpuIndex(f[1]));
+    if (c == "amd.profile.get" && n == 2 && sb::isGpuIndex(f[1])) return amd::profileGet(gpuIndex(f[1]));
+    if (c == "amd.profile.apply" && n == 4 && sb::isGpuIndex(f[1]) && sb::isTriState(f[2]) && sb::isTriState(f[3]))
+        return amd::profileApply(gpuIndex(f[1]), tri(f[2]), tri(f[3]));
+    if (c == "amd.profile.revert" && n == 6 && sb::isGpuIndex(f[1]) && sb::isTriState(f[2]) && sb::isTriState(f[3]) &&
+        sb::isTriState(f[4]) && sb::isTriState(f[5]))
+        return amd::profileRevert(gpuIndex(f[1]), tri(f[2]), tri(f[3]), tri(f[4]), tri(f[5]));
+    if (c == "amd.tuning.apply" && n == 6 && sb::isGpuIndex(f[1]) && sb::isAmdPowerPct(f[2]) && sb::isAmdMHz(f[3]) &&
+        sb::isAmdMHz(f[4]) && sb::isAmdTempLimit(f[5]))
+        return amd::tuningApply(gpuIndex(f[1]), value(f[2]), value(f[3]), value(f[4]), std::stoi(f[5]));
+    if (c == "amd.auto.apply" && n == 3 && sb::isGpuIndex(f[1]) && sb::isAmdAutoMode(f[2]))
+        return amd::autoApply(gpuIndex(f[1]), autoMode(f[2]));
+    if (c == "amd.tuning.keep" && n == 1) return amd::tuningKeep();
+    if (c == "amd.tuning.status" && n == 1) return amd::tuningStatus();
+    if (c == "amd.tuning.revert" && n == 5 && sb::isGpuIndex(f[1]) && sb::isAmdPowerPct(f[2]) && sb::isAmdMHz(f[3]) && sb::isAmdMHz(f[4]))
+        return amd::tuningRevert(gpuIndex(f[1]), value(f[2]), value(f[3]), value(f[4]));
+    if (c == "amd.tuning.reset" && n == 2 && sb::isGpuIndex(f[1])) return amd::tuningReset(gpuIndex(f[1]));
 
     // frame timing of a running game
     if (c == "fps.start" && n == 1) return fpsStart();

@@ -25,8 +25,24 @@ nvapi_file(nvapi_lite_salend.h 92017f8e26f585601f4eaac475fa9e542eaa2f99a80e376dd
 nvapi_file(NvApiDriverSettings.h 95ffda903832840343a81189e052a0756774bd92e4b37f2dc49598d493f951d4)
 nvapi_file(amd64/nvapi64.lib 901e479e548d41c30688c7481f0c6353c0be7fdee978796d27d87c32e19ce172)
 
-add_executable(sb_helper src/main.cpp src/commands.cpp src/netpower.cpp src/nettop.cpp src/nvidia.cpp src/gpuoc.cpp src/driverlog.cpp src/fpsmeter.cpp src/fpslive.cpp)
+# AMD Radeon features through AMD's ADLX SDK. ADLX is under AMD's own SDK licence (not open source,
+# see third_party/adlx/README.md): off until the owner has accepted it. Off, every amd.* command
+# answers as if amdadlx64.dll were absent (src/amd_none.cpp).
+option(SB_ADLX "Build the AMD features with AMD's ADLX SDK headers (read third_party/adlx/README.md first)" OFF)
+set(SB_HELPER_SOURCES src/main.cpp src/commands.cpp src/netpower.cpp src/nettop.cpp src/nvidia.cpp src/gpuoc.cpp
+    src/driverlog.cpp src/fpsmeter.cpp src/fpslive.cpp src/amd.cpp src/amd_win.cpp)
+if(SB_ADLX)
+  include(third_party/adlx/adlx.cmake)
+  list(APPEND SB_HELPER_SOURCES src/amd_adlx.cpp)
+else()
+  list(APPEND SB_HELPER_SOURCES src/amd_none.cpp)
+endif()
+
+add_executable(sb_helper ${SB_HELPER_SOURCES})
 target_include_directories(sb_helper PRIVATE ${NVAPI_DIR})
+if(SB_ADLX)
+  target_include_directories(sb_helper PRIVATE ${ADLX_DIR})
+endif()
 target_compile_definitions(sb_helper PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(sb_helper PRIVATE /W3 /utf-8)
 target_link_libraries(sb_helper PRIVATE ${NVAPI_DIR}/amd64/nvapi64.lib advapi32 ole32 oleaut32 wbemuuid iphlpapi ws2_32 wevtapi)

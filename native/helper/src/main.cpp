@@ -9,9 +9,9 @@
 //    must be SystemBoost.exe in this helper's own folder. Anything else is dropped.
 //  - Requests are matched against the fixed list in commands.cpp with checked
 //    arguments. Nothing here runs a program or writes a path chosen by the caller.
-//  - Backups live in the app. What is kept here is the GPU tuning and the game's frame
-//    limit, to undo if the app goes away. It never touches a game process, game memory
-//    or game files.
+//  - Backups live in the app. What is kept here is the GPU tuning (NVIDIA and AMD), the
+//    game's frame limit and the AMD 3D settings a game session turned on, to undo if the app
+//    goes away. It never touches a game process, game memory or game files.
 #include "commands.h"
 #include "validate.h"
 #include <windows.h>
@@ -62,6 +62,7 @@ bool callerAllowed(HANDLE pipe, DWORD parent) {
 
 [[noreturn]] void leave(UINT code) {
     ocShutdown();
+    amdShutdown();
     nvLimitShutdown();
     fpsShutdown();
     fpsLiveShutdown();
@@ -98,6 +99,7 @@ int wmain(int argc, wchar_t** argv) {
     std::string name = narrow(argv[2]);
     DWORD parentPid = (DWORD)wcstoul(argv[4], nullptr, 10);
     if (!sb::isHex(name, 32) || parentPid == 0) return 2;
+    amdSetup();   // nothing is loaded yet: ADLX starts with the first amd.* request
 
     HANDLE parent = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, parentPid);
     if (!parent) return 3;

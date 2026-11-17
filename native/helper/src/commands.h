@@ -32,9 +32,17 @@ std::string ocStatus();
 std::string ocRestore(unsigned powerMw, int coreMHz, int memMHz);
 void ocShutdown();
 
-// driverlog.cpp: display driver faults in the System log
+// AMD Radeon through ADLX: the commands and the watch are in amd.cpp (amd.h), the driver calls in
+// amd_adlx.cpp, or amd_none.cpp in a build without ADLX (CMake option SB_ADLX).
+namespace amd { class Driver; }
+amd::Driver& amdDriver();
+void amdSetup();      // amd_win.cpp: before the first request
+void amdShutdown();   // amd_win.cpp: when the helper exits
+
+// driverlog.cpp: display driver faults in the System log, for the NVIDIA and the AMD watch
 std::string utcNow();
 bool driverFaultSince(const std::string& utc);
+bool amdDriverFaultSince(const std::string& utc);
 
 // fpsmeter.cpp: frame timing from Windows event tracing
 std::string fpsStart();
