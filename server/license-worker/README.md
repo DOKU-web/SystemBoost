@@ -74,14 +74,36 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 회원 정보는 Supabase(무료 플랜)의 Postgres에 있습니다. 앱은 이 Worker만 부르고, Worker만 비밀 키로 Supabase에 갑니다. 키, 추천 코드, 통계는 Cloudflare에 그대로 있습니다.
 - 처음 한 번: Supabase SQL Editor에서 `supabase/accounts.sql` 전체를 실행하고, `wrangler secret put SUPABASE_URL`, `wrangler secret put SUPABASE_SECRET_KEY`를 넣습니다.
 - 공개 키(publishable)로는 표도 함수도 닿지 않습니다. SQL 끝에서 이것을 확인하고, 다르면 오류로 멈춥니다.
-- 아이디와 비밀번호로 가입합니다. 메일은 받지 않습니다. 가입할 때 복구 코드를 한 번 보여 주고, 비밀번호를 잊으면 그 코드로 바꿉니다.
+- 아이디와 비밀번호로 가입합니다. 가입할 때 복구 코드를 한 번 보여 주고, 비밀번호를 잊으면 그 코드로 바꿉니다. 메일 주소로도 가입할 수 있습니다(아래 '계정 v2').
 - 비밀번호는 Worker에서 섞는 값(pepper)과 합친 뒤 DB에서 bcrypt로 저장합니다. 섞는 값은 서명 키에서 만들기 때문에 서명 키를 바꾸면 모든 비밀번호와 복구 코드가 끝납니다.
 - 가입에는 개인정보 수집·이용 동의와 만 14세 이상 확인이 필요합니다. 동의한 시각을 저장합니다.
 - 초대 코드: 회원이 앱에서 만듭니다. 그 코드로 가입한 사람은 프리미엄 3일을 받고, 초대한 회원은 한 명당 3일을 쌓아 앱에서 키로 받습니다(모두 30일까지, 코드당 50명). 숫자는 `src/accounts.js`의 `LIMITS`에 있습니다.
 - 할인 티켓: 가입할 때 초대 코드를 쓴 회원은 10% 티켓을 받습니다(30일, 1회). 직접 결제 링크는 금액이 고정이라, 대시보드의 '할인 티켓' 링크(정가의 90%)로 보냅니다. 주문을 승인하면 쓴 것으로 처리하고, 거절하거나 지우면 돌려줍니다. 카드 결제에는 쓸 수 없습니다.
-- 대시보드 '회원'에서 찾기, 차단, 복구 코드 재발급, 삭제를 합니다.
+- 대시보드 '회원'에서 찾기, 차단, 복구 코드 재발급, 삭제를 합니다. '복구 요청'에서 계정 복구 요청을 승인하거나 거절합니다.
 - 무료 플랜은 활동이 없으면 프로젝트가 일시 중지되고 백업이 없습니다. 매시간 작업이 Supabase를 한 번 부르지만, 어떤 활동을 인정하는지는 공개되어 있지 않습니다. 중지되면 Supabase 화면에서 복구합니다. 그동안 회원 기능만 멈추고 키 확인은 그대로 됩니다.
-- 테스트: `npm i --no-save @electric-sql/pglite` 후 `node test_accounts.mjs`
+- 테스트: `npm i --no-save @electric-sql/pglite` 후 `node test_accounts.mjs`, `node test_accounts_security.mjs`, `node test_accounts_email.mjs`.
+  손으로 하는 공격 시험은 `node docs/account_attacks.mjs 40`이고 결과는 `docs/ACCOUNT_SECURITY_TEST.md`에 있습니다.
+
+### 계정 v2: 메일, 2단계 인증, 기기, 키, 계정 복구 (`src/account_web.js`, `src/mail.js`, `src/totp.js`)
+- 메일 가입: `signup_email` → 확인 메일 → `/account/verify` 페이지에서 버튼을 눌러 가입을 마칩니다(GET은 보여 주기만, POST가 처리). 메일로 가입한 회원의 아이디는 서버가 만든 `m`+11자입니다.
+  아이디 회원은 `add_email`로 메일을 더합니다. 이미 있는 메일로 가입하면 같은 답을 주고, 그 메일로 '이미 가입됨' 메일만 보냅니다.
+- 새 비밀번호: 10~72자, 아이디 · 메일 · 메일의 @ 앞부분과 같으면 안 되고 `src/common_passwords.js`(SecLists, MIT, 출처는 파일 머리)에 없어야 합니다. 예전에 만든 8자 이상 비밀번호는 그대로 로그인됩니다.
+- 로그인은 아이디나 메일로 합니다. 2단계 인증(TOTP, 백업 코드 10개)을 켠 회원은 `{twofa, pending}`을 받고 `login2`로 마칩니다(5분, 5번까지). 옛 앱은 2단계 인증을 켠 회원으로 로그인을 마칠 수 없습니다.
+- 잠금: 같은 아이디나 메일로(없는 것도) 5번 틀리면 15분, 같은 IP에서 한 시간에 20번 틀리면 그 시간 동안 `busy`. 2단계 코드와 백업 코드도 같이 셉니다.
+- 비밀번호 찾기: 확인한 메일이 있으면 `forgot` → 재설정 링크(30분) → `/account/reset` 페이지. 복구 코드(`recover`)도 그대로 됩니다. 재설정하면 모든 세션이 끝납니다.
+- 기기: 로그인할 때 앱이 보내는 `device {name, key}`(키는 해시만 저장). `devices`, `logout_device`, `logout_all`. 메일이 있는 회원에게 새 기기 로그인을 메일로 알립니다.
+- 키: `keys`는 계정에 연결한 키와 확인한 메일로 산 키를 보여 줍니다. `link_key`는 키의 구매 메일로 확인 링크(24시간)를 보내고, `/account/link` 페이지에서 연결합니다.
+  회원이 아니어도 `POST /keys/resend {email, lang}`로 그 메일의 키를 메일로 다시 받습니다(답은 늘 `{sent: true}`, IP마다 한 시간 10번, 주소마다 3번).
+- 계정 복구 요청: `recovery_request`(답은 늘 `{sent: true}`). 메일이 있는 회원에게는 취소 링크를 보냅니다. 72시간 뒤 대시보드 '복구 요청'에서 승인하거나 거절합니다.
+  승인하면 2단계 인증을 끄고 모든 세션을 끝냅니다. 메일이 있으면 재설정 링크(24시간)를 메일로 보내고, 아이디만 있으면 새 복구 코드를 대시보드에 한 번 보여 줍니다. 요청은 90일 뒤 지웁니다.
+- 동의: 가입 동의의 판은 `consent` 필드입니다. 보내지 않는 옛 앱은 `2026-11-12`, 새 판은 `2026-11-18`. 오버클럭 책임 안내는 `consent {kind: "oc", version, gpu, app, withdraw?}`로 `account_consents`에 남깁니다(회원마다 최근 50개).
+- 보안 기록 `account_security_log`: 로그인, 틀린 로그인, 비밀번호 변경, 2단계 인증, 백업 코드, 메일 추가, 키 연결, 복구 요청마다 IP 그대로, 국가, 기기 이름. 30일 뒤 매시간 정리에서 지웁니다. IP를 그대로 두는 곳은 여기뿐입니다.
+- 메일(`src/mail.js`, Resend API): `wrangler secret put RESEND_API_KEY`, `wrangler secret put MAIL_FROM`(예: `SystemBoost <no-reply@보내는 도메인>`), 선택으로 `MAIL_DAY`(하루 상한, 기본 90. Resend 무료 플랜은 하루 100통).
+  둘 중 하나라도 없으면 메일이 필요한 동작은 503 `mail_off`이고 `features`는 `email: false`입니다. 메일은 답을 보낸 뒤(`ctx.waitUntil`) 보내고, 주소마다 한 시간 5통까지입니다. 메일의 링크는 `PUBLIC_URL`(없으면 요청 주소)의 `/account/...`입니다.
+  Resend에서 보내는 도메인을 확인(DNS)해야 하고, 열람 · 클릭 추적은 켜지 마세요(개인정보 처리방침에 쓰지 않는다고 적었습니다).
+- 배포 순서: 소유자가 승인하면 `supabase/migrations/20261118_email_accounts.sql`을 Supabase SQL Editor에서 먼저 실행하고(두 번 실행해도 같습니다), 그다음 Worker를 배포합니다.
+  SQL 없이 새 Worker만 올리면 새 동작은 503 `unavailable`이고 옛 동작은 그대로입니다. 새 판을 처음 설치할 때는 `supabase/accounts.sql` 하나로 됩니다.
+- KV 쓰기는 늘지 않습니다(`test_kv_writes.mjs`). 한도는 Supabase(`account_hits`, `account_guard`)와 Stats Durable Object 카운터에 있습니다.
 
 ## 추천 코드
 대시보드 '추천 코드'에서 만듭니다. 코드, 메모, 플랜, 기간(1~30일), 사용 횟수 한도를 정하고 켜고 끌 수 있습니다.
@@ -279,6 +301,7 @@ Lemon Squeezy는 2027년 3월 31일에 결제를 멈추므로 작게 만들었�
 3. 비밀 값 등록 (화면에 붙여 넣는 값은 아무에게도 보여 주지 마세요)
    - `wrangler secret put LICENSE_PRIVATE_KEY` ← systemboost-license-private.pem 내용 전체
    - `wrangler secret put ADMIN_TOKEN` ← 대시보드 비밀번호(6자 이상). 코드나 파일에는 적지 마세요
+   - 회원 메일을 쓰려면 `wrangler secret put RESEND_API_KEY`, `wrangler secret put MAIL_FROM` (위 '계정 v2')
 4. `wrangler deploy` → 나온 주소를 `wrangler.toml`의 `PUBLIC_URL`과 앱 `License.cs`의 `ServerUrl`에 넣고 앱을 빌드
 5. `https://<주소>/admin`에 들어가 결제 링크를 넣으면 앱의 '결제하기'가 열립니다.
 
@@ -310,6 +333,7 @@ Lemon Squeezy는 2027년 3월 31일에 결제를 멈추므로 작게 만들었�
 - `node test_card.mjs`: 가짜 Lemon Squeezy와 서명한 웹훅으로 카드 결제 전부(플랜별 결제창, 울트라 키, 중복 없음, 갱신 기간,
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
+- `node test_accounts_security.mjs` (실제 Postgres에서 회원 보안 점검, 마이그레이션), `node test_accounts_email.mjs` (메일 가입, 2단계 인증, 기기, 키, 계정 복구, 메일 상한; 메일은 기록만 하고 보내지 않음)
 - `node test_kv_public.mjs` (공개 저장 몫이 차도 키 확인 · 갱신 · 웹훅 · 승인은 됨, `PUBLIC_KV_DAY`), `node test_kv_writes.mjs` (동작마다 KV 쓰기 수, `docs/KV_BUDGET.md`)
 - `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내), `node test_price.mjs` (가격 변경 동의)
 
