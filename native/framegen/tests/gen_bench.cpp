@@ -1,6 +1,7 @@
 // How much GPU time frame generation costs: no window, no capture, nothing on the screen.
 // Runs batches and waits for the GPU at the end of each: a median over batches, per game frame and
-// per generated frame. A wait after every single step would measure the driver's wake-up instead.
+// per generated frame, from GPU timestamps around each batch (the time the CPU takes to issue the
+// work stays out; it doubled the time of a generated frame on a busy CPU).
 // The measurement is the one of sb_framegen --bench (src/Bench.cpp), here on the default adapter and
 // with no time limit: full batches (20 analyses, 60 generated frames), 9 rounds per quality.
 //   gen_bench.exe <shader folder> [width height]

@@ -22,6 +22,11 @@ public:
     // end is spun, so the measured time is the GPU's and not a wake-up. 0 = spin all the way.
     void Wait(double t0 = 0, double expectedSec = 0);
     void Flush() { ctx_->Flush(); }
+    // GPU time of a batch: StartTiming() before its first command, then WaitTimed() instead of
+    // Wait(): GPU timestamps around the batch (TIMESTAMP_DISJOINT), read once it is done. Returns
+    // ms, or -1 when the GPU could not time it (its clock changed in between, or no answer).
+    void StartTiming();
+    double WaitTimed(double t0, double expectedSec);
     // Sleeps about this long without asking for a finer system timer (a timer of its own).
     void Nap(double sec);
     // Throws HrError with the device's removed reason.
@@ -30,7 +35,7 @@ public:
 private:
     ID3D11Device* dev_;
     ID3D11DeviceContext* ctx_;
-    ComPtr<ID3D11Query> done_;
+    ComPtr<ID3D11Query> done_, disjoint_, tsBegin_, tsEnd_;
     HANDLE timer_ = nullptr;
 };
 
@@ -52,7 +57,10 @@ private:
 struct Timing { double analyzeMs = 0, genMs = 0; int rounds = 0; };
 
 // One quality at the scene's size: GPU-waited batches of analyses and of generated frames, the
-// median ms per analysed game frame and per generated frame. Ends early when *stop turns true.
+// median ms per analysed game frame and per generated frame. Each batch is issued whole (no Flush
+// in between, so the GPU runs it back to back) and timed with GPU timestamps: GPU time, not the
+// time the CPU takes to issue it. Wall time only when the GPU timed no batch. Ends early when
+// *stop turns true.
 Timing MeasureQuality(FrameGenGpu& fg, Scene& scene, GpuWait& wait, Quality q, double budgetSec,
                       const std::atomic<bool>* stop);
 
