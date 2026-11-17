@@ -58,7 +58,10 @@ std::string GpusJson(const std::vector<GpuInfo>& gpus) {
 }
 
 int AdapterForWindow(HWND hwnd, const std::vector<GpuInfo>& gpus) {
-    HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    return AdapterForMonitor(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), gpus);
+}
+
+int AdapterForMonitor(HMONITOR mon, const std::vector<GpuInfo>& gpus) {
     auto f = Factory();
     ComPtr<IDXGIAdapter1> a;
     for (UINT i = 0; f->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i, a.Reset()) {
@@ -75,7 +78,10 @@ int AdapterForWindow(HWND hwnd, const std::vector<GpuInfo>& gpus) {
 }
 
 int PickGenGpu(const Settings& s, HWND game, const std::vector<GpuInfo>& gpus, std::string& why) {
-    const int display = AdapterForWindow(game, gpus);
+    return PickGenGpuFor(s, AdapterForWindow(game, gpus), gpus, why);
+}
+
+int PickGenGpuFor(const Settings& s, int display, const std::vector<GpuInfo>& gpus, std::string& why) {
     switch (s.genGpu) {
     case GenGpu::Index:
         for (const auto& g : gpus)

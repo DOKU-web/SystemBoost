@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(sb_framegen
     src/main.cpp src/Gpu.cpp src/Capture.cpp src/CaptureWgc.cpp
-    src/FrameGenGpu.cpp src/Overlay.cpp src/Cursor.cpp)
+    src/FrameGenGpu.cpp src/Overlay.cpp src/Cursor.cpp src/Bench.cpp)
 target_compile_definitions(sb_framegen PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_link_libraries(sb_framegen PRIVATE d3d11 dxgi d3dcompiler dcomp dwmapi user32 gdi32 shell32 ole32 advapi32)
@@ -55,4 +55,24 @@ else()
     message(WARNING "fxc not found: shipping .hlsl, compiled at startup")
     add_custom_command(TARGET sb_framegen POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:sb_framegen>/shaders)
+endif()
+
+# Native tests, off by default (build.ps1 does not build them): cmake -DSBFG_TESTS=ON
+#   bench_test  benchmark command line, stdout lines and time plan; needs no GPU
+#   gen_bench   GPU time per quality on the default adapter (loads the GPU: not while a game runs)
+option(SBFG_TESTS "Build the native tests" OFF)
+if(SBFG_TESTS)
+    add_executable(bench_test tests/bench_test.cpp)
+    target_include_directories(bench_test PRIVATE src)
+    add_executable(gen_bench tests/gen_bench.cpp src/Bench.cpp src/FrameGenGpu.cpp src/Gpu.cpp)
+    target_include_directories(gen_bench PRIVATE src)
+    target_compile_definitions(gen_bench PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
+        WINVER=0x0A00 _WIN32_WINNT=0x0A00)
+    target_link_libraries(gen_bench PRIVATE d3d11 dxgi d3dcompiler user32)
+    if(MSVC)
+        foreach(T bench_test gen_bench)
+            target_compile_options(${T} PRIVATE /W4 /permissive- /EHsc /utf-8)
+            set_property(TARGET ${T} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        endforeach()
+    endif()
 endif()
