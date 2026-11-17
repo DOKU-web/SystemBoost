@@ -300,7 +300,7 @@ public sealed class SettingsPage : UserControl
     {
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("저작권과 오픈소스 고지", "h2"));
-        p.Children.Add(Ui.Text("만든 사람: DOKKU · 코드와 로고는 AI 도구로 만들었어요", "label", wrap: true));
+        p.Children.Add(Ui.Text("만든 사람: Riye (라예)", "label", wrap: true));
         p.Children.Add(Ui.Text("SystemBoost에는 오픈소스 구성 요소가 들어 있어요. 각 구성 요소의 저작권은 해당 권리자에게 있고, 각자의 라이선스를 따라요.", "muted", wrap: true));
         p.Children.Add(Ui.Text(
             "Avalonia (MIT) · ANGLE (BSD-3-Clause) · SkiaSharp, HarfBuzzSharp (MIT) · MicroCom.Runtime (MIT) · " +
