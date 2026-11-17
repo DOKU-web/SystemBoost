@@ -99,31 +99,44 @@ internal static class AdvisorTests
         T.Test("fg: 144 Hz, fast GPU -> 4x (6x would leave 24 fps), quality", () =>
         {
             var fg = Get(Rec(Specs(hz: 144)), "fg");
-            T.Equal(new FgChoice("auto", 4, "quality"), fg.FrameGen, "choice");
+            T.Equal(new FgChoice("auto", 4, "quality"), fg.FrameGen, "choice (fits at 2x too: 133 ms)");
             Contains(fg.Reason, "GPU 시간의 10%", "cost 99 ms a second");
+            T.Check(!fg.Reason.Contains("2배로 도는데"), "no 2x note when it changed nothing");
         });
 
-        T.Test("fg: 240 Hz, fast GPU -> 8x at 30 fps, quality", () =>
+        T.Test("fg: 240 Hz, fast GPU -> 8x; quality fits at 8x (137 ms) but not at 2x (222 ms) -> balanced, said", () =>
         {
             var fg = Get(Rec(Specs(hz: 240)), "fg");
-            T.Equal(new FgChoice("auto", 8, "quality"), fg.FrameGen, "choice");
+            T.Equal(new FgChoice("auto", 8, "balanced"), fg.FrameGen, "choice");
+            Contains(fg.Reason, "2배에서는 '품질' 품질이 GPU 시간의 22%를 써서 '균형' 품질을 골랐어요", "the 2x note");
+            Contains(fg.Reason, "240 Hz를 8배로 채우면 원본은 30 fps", "the chosen multiplier");
         });
 
-        T.Test("fg: 360 Hz, fast GPU -> 8x, quality over budget so balanced", () =>
+        T.Test("fg: 360 Hz, fast GPU -> 8x; quality over budget at 8x, balanced over at 2x (216 ms) -> performance", () =>
         {
             var fg = Get(Rec(Specs(hz: 360)), "fg");
-            T.Equal(new FgChoice("auto", 8, "balanced"), fg.FrameGen, "choice (quality costs 204.75 ms)");
-            Contains(fg.Reason, "'균형' 품질", "quality named");
+            T.Equal(new FgChoice("auto", 8, "performance"), fg.FrameGen, "choice");
+            Contains(fg.Reason, "'균형' 품질이 GPU 시간의 22%를 써서 '성능' 품질을 골랐어요", "the note names the best quality at 8x");
         });
 
         T.Test("fg: 239 Hz (a 239.76 Hz screen) still gets 8x", () =>
             T.Equal(8, Get(Rec(Specs(hz: 239)), "fg").FrameGen!.MaxMul, "max multiplier"));
 
-        T.Test("fg: 144 Hz, slow GPU -> 4x on low quality", () =>
+        T.Test("fg: 60 Hz, slow GPU -> 2x on balanced (quality would take 294 ms)", () =>
+        {
+            var fg = Get(Rec(Specs(hz: 60), Bench(Slow())), "fg");
+            T.Equal(new FgChoice("auto", 2, "balanced"), fg.FrameGen, "choice");
+            Contains(fg.Reason, "'균형' 품질", "quality named");
+            T.Check(!fg.Reason.Contains("2배로 도는데"), "2x is the multiplier itself: no note");
+        });
+
+        T.Test("fg: 144 Hz, slow GPU -> low fits at 4x (158 ms) but not at 2x (201.6 ms) -> off, the 2x cost named", () =>
         {
             var fg = Get(Rec(Specs(hz: 144), Bench(Slow())), "fg");
-            T.Equal(new FgChoice("auto", 4, "low"), fg.FrameGen, "choice");
-            Contains(fg.Reason, "'저사양' 품질", "quality named");
+            T.Equal("off", fg.FrameGen?.Mode, "off");
+            T.Check(!fg.Applicable, "already off");
+            Contains(fg.Reason, "가장 가벼운 '저사양' 품질도 144 Hz를 2배로 채울 때 GPU 시간의 20.2%를 써요", "the 2x cost");
+            Contains(fg.Reason, "분석 2.00 ms, 생성 0.80 ms", "measured ms");
         });
 
         T.Test("fg: 240 Hz, slow GPU -> nothing fits, off with the measured cost", () =>
