@@ -1,5 +1,7 @@
 import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
+import { accountWeb, keysResend } from "./account_web.js";
+import { mailOn } from "./mail.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
 import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
@@ -342,12 +344,13 @@ export default {
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
-      if (url.pathname.startsWith("/account/")) return await account(req, url, env);
+      if (url.pathname.startsWith("/account/")) return await accountWeb(req, url, env, ctx, ACCOUNT_DEPS);
+      if (req.method === "POST" && url.pathname === "/keys/resend") return await keysResend(req, env, ctx, ACCOUNT_DEPS);
       if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
       if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
       if (req.method === "GET" && url.pathname === "/privacy") return await privacyPage(url, env);
       if (req.method === "GET" && url.pathname === "/terms") return termsPage(url);
-      if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env);
+      if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env, ctx);
       return json({ error: "not found" }, 404);
     } catch (e) {
       return json({ error: "server error" }, 500);
@@ -1068,6 +1071,7 @@ const ADMIN_VIEWS = {
   "GET /keys": "키 목록", "POST /keys": "키 검색", "GET /key": "키 원문", "POST /lookup": "키 확인", "GET /orders": "주문 목록",
   "GET /members": "회원 목록", "POST /members": "회원 검색", "GET /support": "문의 목록", "POST /support": "문의 검색",
   "GET /support/ticket": "문의 열람", "GET /log": "작업 기록", "GET /price": "가격 변경 동의",
+  "GET /recovery": "복구 요청 목록", "POST /recovery": "복구 요청 목록",
 };
 function viewOf(route, url, body) {
   const action = ADMIN_VIEWS[route];
@@ -1104,7 +1108,7 @@ async function listAccess(env, before) {
   return { rows, more: !!r.more, keepDays: r.keepDays || 366, ...(down ? { down: true } : {}) };
 }
 
-async function admin(req, url, env) {
+async function admin(req, url, env, ctx) {
   if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 6) return json({ error: "not found" }, 404);   // off unless configured
   if (url.pathname === "/admin" && req.method === "GET") return adminPage();
   const tag = await adminTag(env, req.headers.get("CF-Connecting-IP") || "unknown");
@@ -1164,6 +1168,25 @@ async function admin(req, url, env) {
       if (r.error) return json({ error: r.error }, r.status, false);
       await audit(env, "admin", "회원 삭제", String(body.id));
       return json(r, 200, false);
+    }
+    // 복구 요청 (accounts v2): members who lost their 2-step device and backup codes. Approve only after the 72-hour wait.
+    case "GET /recovery":
+    case "POST /recovery": {
+      const r = await accounts(env, "admin/recovery_list", { all: route === "POST /recovery" && body.all === true });
+      if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
+      return json({ ...r, mail: mailOn(env) }, 200, false);
+    }
+    case "POST /recovery/approve": {
+      const r = await accounts(env, "admin/recovery_approve", { id: String(body.id || ""), origin: url.origin }, ctx);
+      if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
+      await audit(env, "admin", "계정 복구 승인", String(body.id) + " · " + r.account + (r.mailed ? " · 재설정 링크 메일" : " · 복구 코드 재발급"));
+      return json(r, 200, false);
+    }
+    case "POST /recovery/reject": {
+      const r = await accounts(env, "admin/recovery_reject", { id: String(body.id || ""), reason: body.reason });
+      if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
+      await audit(env, "admin", "계정 복구 거절", String(body.id) + " · " + r.account);
+      return json({ ok: true }, 200, false);
     }
     case "GET /referrals": return json(await listRefs(env), 200, false);
     case "POST /referrals": return json(await addRef(env, body), 200, false);
@@ -1441,20 +1464,40 @@ async function referral(req, env) {
   return stop ? json({ error: stop.error }, stop.status) : json(await useRef(env, r, device));
 }
 
-// ---------------------------------------------------------------- member accounts (src/accounts.js)
-const ACCOUNT_ACTIONS = ["signup", "login", "recover", "me", "invite", "reward", "logout", "password", "delete"];
-
-async function account(req, url, env) {
-  const action = url.pathname.slice("/account/".length);
-  if (!ACCOUNT_ACTIONS.includes(action)) return json({ error: "not found" }, 404);
-  const body = req.method === "POST" ? await readJson(req) : {};
-  body.ip = req.headers.get("CF-Connecting-IP") || "unknown";
-  body.token = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
-  const r = action === "signup" ? await signup(env, body)
-          : action === "reward" ? await reward(env, body)
-          : await accounts(env, action, body);
-  const { status = 200, ...rest } = r;
-  return json(rest, status);
+// ---------------------------------------------------------------- member accounts (src/accounts.js, src/account_web.js)
+// What the account routes use from here: the 아이디 sign-up with its referral gifts, the invite reward key, and reads of
+// the key registry (KV reads only) for the keys of a member and the link-a-key mail.
+const ACCOUNT_DEPS = {
+  signup: (env, b) => signup(env, b),
+  reward: (env, b) => reward(env, b),
+  isSellerCode: async (env, code) => REF_RE.test(code) && !!(await getRef(env, code)),
+  keyRecord: (env, text) => linkableKey(env, text),
+  readKey: (env, id) => memberKey(env, id),
+  emailKeyId: async (env, email) => { const k = await env.LICENSES.get("email:" + email); return k ? keyId(k) : null; },
+  keyId,
+};
+// A key a member may link to the account: issued here, registered in this spelling, not revoked under either signature.
+// Unlike heldKey() a key that has run out may be linked (the member still sees it in the list).
+async function linkableKey(env, text) {
+  const key = canonicalKey(text);
+  if (!key) return null;
+  const [p, s] = key.split(".");
+  if (!(await verifySig(env, p, s))) return null;
+  const id = await keyId(key);
+  const r = await env.LICENSES.getWithMetadata("lic:" + id);
+  if (r?.value !== key || !r.metadata || r.metadata.revoked) return null;
+  const twin = twinKey(key);
+  for (const x of [id, twin && (await keyId(twin))]) if (x && (await env.LICENSES.get("revoked:" + x)) !== null) return null;
+  let payload = {};
+  try { payload = JSON.parse(new TextDecoder().decode(unb64url(p))) || {}; } catch { /* the record's email is enough */ }
+  return { id, payload, meta: r.metadata };
+}
+async function memberKey(env, id) {
+  const r = await env.LICENSES.getWithMetadata("lic:" + id);
+  if (!r?.value) return null;
+  const m = r.metadata || {};
+  const revoked = !!m.revoked || (await env.LICENSES.get("revoked:" + id)) !== null;
+  return { id, plan: m.plan || "", key: r.value, issued: m.issued || "", expires: m.expires || "", revoked };
 }
 
 // A problem with the code stops the sign-up, so nothing is left half done and the user can fix it.

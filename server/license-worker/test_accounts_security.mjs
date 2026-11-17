@@ -1,4 +1,4 @@
-// Security checks for member accounts (owner's spec section 6), on real Postgres (PGlite) with Supabase's roles and
+// Security checks for member accounts (owner's spec section 6, and accounts v2 in section 11), on real Postgres (PGlite) with Supabase's roles and
 // default grants recreated, behind a stand-in for PostgREST that maps each key to the role Supabase gives it.
 // Made-up keys and passwords only; nothing leaves this process.
 //   node test_accounts_security.mjs        (PGlite: npm i --no-save @electric-sql/pglite)
@@ -11,6 +11,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 import worker from "./src/index.js";
+import { hotp, stepAt } from "./src/totp.js";
 
 const here = new URL(".", import.meta.url);
 // as the repository stores it (LF), whatever the checkout did to line ends
@@ -33,11 +34,18 @@ const fresh = async sql => {
   return db;
 };
 
+// every table of supabase/accounts.sql, with a column each that a PATCH through the stand-in may try to change
+const PATCH_SET = { accounts: "blocked = false", account_sessions: "expires = now()", account_hits: "n = 0", account_gone: "at = now()",
+                    account_tokens: "expires = now()", account_backup: "h = h", account_devices: "name = ''", account_keys: "linked = now()",
+                    account_consents: "at = now()", account_security_log: "at = now()", account_recovery: "status = 'open'", account_guard: "fails = 0" };
+const TABLES = Object.keys(PATCH_SET);
 const SECRET = "sb_secret_made_up_for_tests", PUBLISHABLE = "sb_publishable_made_up_for_tests", USER_JWT = "made.up.jwt";
 let pg = await fresh(ACCOUNTS_SQL);
 const sent = [];
 // PostgREST stand-in: the secret key is service_role, the publishable key is anon, plus a signed-in user's JWT authenticated.
+const mails = [];
 globalThis.fetch = async (url, init = {}) => {
+  if (String(url) === "https://api.resend.com/emails") { mails.push(JSON.parse(init.body)); return Response.json({ id: "made-up" }); }
   const u = new URL(String(url));
   assert.equal(u.origin, "https://project.supabase.example");
   let role = init.headers?.apikey === SECRET ? "service_role" : init.headers?.apikey === PUBLISHABLE ? "anon" : null;
@@ -52,9 +60,10 @@ globalThis.fetch = async (url, init = {}) => {
       const { action, b } = JSON.parse(init.body);
       return Response.json((await pg.query("SELECT public.account_call($1, $2::jsonb) AS r", [action, JSON.stringify(b)])).rows[0].r);
     }
-    const table = { accounts: "accounts", account_sessions: "account_sessions", account_hits: "account_hits" }[path];
-    if (!table) return Response.json({ message: "not found" }, { status: 404 });
-    const sql = { GET: `SELECT * FROM public.${table}`, DELETE: `DELETE FROM public.${table}`, PATCH: `UPDATE public.${table} SET ${table === "account_hits" ? "n = 0" : table === "accounts" ? "blocked = false" : "expires = now()"}` }[method];
+    const set = PATCH_SET[path];
+    if (!set) return Response.json({ message: "not found" }, { status: 404 });
+    const table = path;
+    const sql = { GET: `SELECT * FROM public.${table}`, DELETE: `DELETE FROM public.${table}`, PATCH: `UPDATE public.${table} SET ${set}` }[method];
     return Response.json((await pg.query(sql)).rows);
   } catch (e) {
     return Response.json({ code: e.code, message: e.message }, { status: e.code === "42501" ? (role === "anon" ? 401 : 403) : 400 });
@@ -77,6 +86,7 @@ const env = {
   ADMIN_TOKEN: "A".repeat(32),
   SUPABASE_URL: "https://project.supabase.example/",
   SUPABASE_SECRET_KEY: SECRET,
+  RESEND_API_KEY: "made-up-mail-key", MAIL_FROM: "SystemBoost <no-reply@mail.example.com>",
 };
 
 // everything the Worker logs or answers, to look for secrets in at the end
@@ -86,14 +96,18 @@ console.log = (...args) => { logged.push(args.map(String).join(" ")); log(...arg
 
 let ipN = 0;
 const newIp = () => { ipN++; return `10.${(ipN >> 16) & 255}.${(ipN >> 8) & 255}.${ipN & 255}`; };
+const waits = [];
+const ctx = { waitUntil: p => { waits.push(p); } };
 const send = async (path, body, token, ip, e = env) => {
   const headers = { "CF-Connecting-IP": ip || newIp() };
   if (token) headers.Authorization = "Bearer " + token;
-  const r = await worker.fetch(new Request("https://lic.example" + path, { method: body === undefined ? "GET" : "POST", headers, body: body === undefined ? undefined : JSON.stringify(body) }), e);
+  const r = await worker.fetch(new Request("https://lic.example" + path, { method: body === undefined ? "GET" : "POST", headers, body: body === undefined ? undefined : JSON.stringify(body) }), e, ctx);
   const text = await r.text();
+  while (waits.length) await waits.shift();   // mails go out after the reply
   replies.push(text);
   const out = { status: r.status, ...JSON.parse(text) };
-  for (const k of ["token", "recovery"]) if (typeof out[k] === "string") issued.add(out[k]);
+  for (const k of ["token", "recovery", "pending", "secret"]) if (typeof out[k] === "string") issued.add(out[k]);
+  if (Array.isArray(out.backup)) for (const c of out.backup) issued.add(c);
   return out;
 };
 const adm = async (path, body, token = env.ADMIN_TOKEN, ip = newIp()) => {
@@ -131,8 +145,10 @@ async function check(name, fn, owner) {
 }
 
 // ---------------------------------------------------------------------------------------------- 1. no session
+const MEMBER_ACTIONS = ["me", "invite", "reward", "logout", "password", "delete", "add_email", "devices", "logout_device", "logout_all", "totp_start",
+                        "totp_confirm", "totp_off", "backup_new", "backup_left", "keys", "link_key", "consent"];
 await check("no session: every member action refuses", async () => {
-  for (const action of ["me", "invite", "reward", "logout", "password", "delete"]) {
+  for (const action of MEMBER_ACTIONS) {
     const r = await send("/account/" + action, action === "me" ? undefined : { password: PW, next: "another-pass-1" });
     assert.deepEqual([r.status, r.error], [401, "session"], action);
   }
@@ -171,7 +187,7 @@ await check("tokens: 256 random bits, unique, never stored or sent in the clear"
 await check("expired session: refused everywhere, removed by the hourly job", async () => {
   const a = await signup("sec_expired");
   await run("UPDATE public.account_sessions SET expires = now() - interval '1 second' WHERE account = 'sec_expired'");
-  for (const action of ["me", "invite", "reward", "logout", "password", "delete"]) {
+  for (const action of MEMBER_ACTIONS) {
     const r = await send("/account/" + action, action === "me" ? undefined : { password: PW, next: "another-pass-1" }, a.token);
     assert.deepEqual([r.status, r.error], [401, "session"], action);
   }
@@ -243,12 +259,13 @@ await check("another member's id in the request changes nothing", async () => {
 await check("a member cannot reach admin or internal actions through the Worker", async () => {
   const m = await signup("sec_member");
   await signup("sec_target");
-  for (const action of ["admin/list", "admin/block", "admin/recovery", "admin/delete", "ticket/used", "ticket/release", "ticket", "ping", "code"]) {
+  for (const action of ["admin/list", "admin/block", "admin/recovery", "admin/delete", "ticket/used", "ticket/release", "ticket", "ping", "code",
+                        "admin/recovery_list", "admin/recovery_approve", "admin/recovery_reject", "login2_get", "reset_peek", "link_confirm", "totp_get", "totp_on", "peek"]) {
     const r = await send("/account/" + action, { id: "sec_target", on: true, order: "SB-AAAA-AAAA", code: "ABCD" }, m.token);
     assert.equal(r.status, 404, action);
     assert.ok(!("recovery" in r) && !("members" in r), action);
   }
-  for (const path of ["/members", "/members/block", "/members/recovery", "/members/delete"]) {
+  for (const path of ["/members", "/members/block", "/members/recovery", "/members/delete", "/recovery", "/recovery/approve", "/recovery/reject"]) {
     const r = await adm(path, path === "/members" ? undefined : { id: "sec_target", on: true }, m.token);
     assert.equal(r.status, 401, path);
   }
@@ -261,12 +278,13 @@ await check("a member cannot reach admin or internal actions through the Worker"
 await check("the publishable key (anon) and a Supabase user JWT (authenticated) reach no table and no function", async () => {
   for (const jwt of [undefined, USER_JWT]) {
     const denied = jwt ? 403 : 401;
-    for (const action of ["admin/list", "admin/delete", "admin/block", "admin/recovery", "ping", "login", "me", "ticket/used"]) {
+    for (const action of ["admin/list", "admin/delete", "admin/block", "admin/recovery", "ping", "login", "me", "ticket/used",
+                          "admin/recovery_approve", "login2_get", "totp_get", "reset_peek", "verify", "forgot"]) {
       const r = await direct("rpc/account_call", { method: "POST", body: { action, b: { id: "sec_target", on: true } }, jwt });
       assert.equal(r.status, denied, action);
       assert.equal(r.body.code, "42501", action);
     }
-    for (const table of ["accounts", "account_sessions", "account_hits"])
+    for (const table of TABLES)
       for (const method of ["GET", "DELETE", "PATCH"]) {
         const r = await direct(table, { method, jwt });
         assert.equal(r.status, denied, method + " " + table);
@@ -291,7 +309,8 @@ await check("the publishable key (anon) and a Supabase user JWT (authenticated) 
                                    has_function_privilege('public', $1, 'execute') AS p, has_function_privilege('service_role', $1, 'execute') AS s`, f.sig);
     assert.deepEqual(g, { a: false, u: false, p: false, s: true }, f.sig);
   }
-  for (const t of ["accounts", "account_sessions", "account_hits"]) {
+  assert.deepEqual((await rows("SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' ORDER BY 1")).map(r => r.relname), [...TABLES].sort());
+  for (const t of TABLES) {
     const [g] = await rows(`SELECT c.relrowsecurity AS rls, (SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = $1) AS policies,
                                    has_table_privilege('anon', c.oid, 'select,insert,update,delete,truncate,references,trigger') AS a,
                                    has_table_privilege('authenticated', c.oid, 'select,insert,update,delete,truncate,references,trigger') AS u
@@ -475,6 +494,250 @@ await check("without the signing key there is no pepper, so accounts stop instea
   assert.equal(await count("SELECT COUNT(*) AS n FROM public.accounts WHERE id = 'sec_nopepper'"), 0);
 });
 
+// ---------------------------------------------------------------------------------------------- 11. accounts v2
+// Email accounts, the 2-step login, devices, mailed links, recovery requests. Mails go to the Resend stand-in above.
+await run("DELETE FROM public.account_hits");   // the sign-ups so far count against "signup:all" (100 an hour)
+const MPW = "member-strong-pw1";
+const lastMail = to => mails.filter(m => m.to[0] === to).at(-1);
+const tokenIn = m => (/[?&]t=([0-9a-f]{64})/.exec(m?.text || "") || [])[1];
+const unb32 = s => { const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; let bits = 0, v = 0; const out = []; for (const c of s) { v = (v << 5) | A.indexOf(c); bits += 5; if (bits >= 8) { out.push((v >>> (bits - 8)) & 255); bits -= 8; } } return Uint8Array.from(out); };
+const codeAt = (secret, k = 0) => hotp(secret, stepAt() + k);
+const mailTokens = () => mails.map(tokenIn).filter(Boolean);
+async function emailMember(email, password = MPW, ip) {
+  assert.equal((await send("/account/signup_email", { email, password, agree: true, age14: true, consent: "2026-11-18" })).sent, true);
+  assert.equal((await send("/account/verify", { t: tokenIn(lastMail(email)) })).done, true);
+  const r = await send("/account/login", { email, password, device: { name: "PC", key: "ab".repeat(32) } }, null, ip);
+  assert.equal(r.status, 200, email);
+  return { ...r, email };
+}
+async function twoStep(m) {
+  const s = await send("/account/totp_start", { password: MPW }, m.token);
+  const secret = unb32(s.secret);
+  const c = await send("/account/totp_confirm", { code: await codeAt(secret) }, m.token);
+  assert.equal(c.backup.length, 10);
+  return { secret, b32: s.secret, backup: c.backup };
+}
+const unlockAll = () => run("UPDATE public.accounts SET fails = 0, fail_at = NULL, locked_until = NULL");
+// the time until the reply (the mail, if any, goes after it, as in the Worker)
+const timed = async (path, body) => {
+  const t = performance.now();
+  const r = await worker.fetch(new Request("https://lic.example" + path, { method: "POST", headers: { "CF-Connecting-IP": newIp() }, body: JSON.stringify(body) }), env, ctx);
+  await r.text();
+  const ms = performance.now() - t;
+  while (waits.length) await waits.shift();
+  return ms;
+};
+
+await check("five misses lock a login name or email, also one nobody has, with the same replies", async () => {
+  const known = await emailMember("sec_lock_mail@example.com");
+  const seen = { known: [], email: [], id: [] };
+  for (let i = 0; i < 5; i++) {
+    seen.known.push(await send("/account/login", { email: known.email, password: "wrong-pass-" + i }));
+    seen.email.push(await send("/account/login", { email: i % 2 ? " SEC_GHOST@example.com " : "sec_ghost@example.com", password: "wrong-pass-" + i }));
+    seen.id.push(await send("/account/login", { id: "sec_ghost_id", password: "wrong-pass-" + i }));
+  }
+  for (const k in seen) assert.deepEqual(seen[k].map(r => [r.status, r.error]), Array(5).fill([401, "wrong"]), k);
+  const after = [await send("/account/login", { email: known.email, password: MPW }), await send("/account/login", { email: "sec_ghost@example.com", password: MPW }),
+                 await send("/account/login", { id: "sec_ghost_id", password: MPW }), await send("/account/recover", { id: "sec_ghost_id", recovery: "AAAA", next: "brand-new-pass" })];
+  assert.deepEqual(after.map(r => [r.status, r.error]), Array(4).fill([429, "locked"]));
+  const guard = await rows("SELECT * FROM public.account_guard");
+  assert.ok(guard.length >= 2 && guard.every(g => /^[0-9a-f]{64}$/.test(g.k)));   // one-way values only
+  assert.ok(!JSON.stringify(guard).includes("ghost"));
+  await run("UPDATE public.account_guard SET locked_until = now() - interval '1 second'");
+  assert.equal((await send("/account/login", { email: "sec_ghost@example.com", password: MPW })).error, "wrong");
+  await run("DELETE FROM public.account_guard");
+});
+
+await check("one address: twenty misses stop its logins; sign-ups 5, forgot, key resend and recovery requests 10 an hour", async () => {
+  const known = await emailMember("sec_ip@example.com");
+  const ip = "198.18.9.9";
+  for (let i = 0; i < 20; i++) await send("/account/login", { email: "sec_nobody" + i + "@example.com", password: "x-wrong-pass" }, null, ip);
+  assert.equal((await send("/account/login", { email: known.email, password: MPW }, null, ip)).error, "busy");
+  assert.equal((await send("/account/login2", { pending: "ab".repeat(32), code: "123456" }, null, ip)).error, "busy");
+  assert.equal((await send("/account/login", { email: known.email, password: MPW })).status, 200);   // another address
+  const ip2 = "198.18.9.10";
+  for (let i = 0; i < 5; i++) assert.equal((await send("/account/signup_email", { email: "sec_many" + i + "@example.com", password: MPW, agree: true, age14: true }, null, ip2)).sent, true);
+  assert.equal((await send("/account/signup_email", { email: "sec_many9@example.com", password: MPW, agree: true, age14: true }, null, ip2)).error, "busy");
+  for (const [path, body] of [["/account/forgot", i => ({ email: "f" + i + "@example.com" })], ["/keys/resend", i => ({ email: "k" + i + "@example.com" })],
+                              ["/account/recovery_request", i => ({ login: "r" + i + "@example.com" })]]) {
+    const ip3 = newIp();
+    for (let i = 0; i < 10; i++) assert.equal((await send(path, body(i), null, ip3)).sent, true, path);
+    assert.deepEqual(await send(path, body(10), null, ip3), { status: 429, error: "busy" }, path);
+  }
+});
+
+await check("sign-up, forgot, key resend and recovery requests: the same reply and the same writes with or without an account", async () => {
+  const known = await emailMember("sec_same@example.com");
+  for (const [path, body] of [["/account/signup_email", e => ({ email: e, password: "other-strong-pw2", agree: true, age14: true })],
+                              ["/account/forgot", e => ({ email: e })], ["/keys/resend", e => ({ email: e })],
+                              ["/account/recovery_request", e => ({ login: e, contact: "010" })]]) {
+    const n0 = await count("SELECT COUNT(*) AS n FROM public.account_tokens");
+    const a = await send(path, body(known.email));
+    const n1 = await count("SELECT COUNT(*) AS n FROM public.account_tokens");
+    const b = await send(path, body("sec_nobody_" + path.length + "@example.com"));
+    const n2 = await count("SELECT COUNT(*) AS n FROM public.account_tokens");
+    assert.deepEqual(a, b, path);
+    assert.equal(n1 - n0, n2 - n1, path + ": rows written");
+  }
+  // the time taken: logins (bcrypt both ways), sign-ups (bcrypt both ways), forgot (no bcrypt either way)
+  for (const [path, body, n] of [["/account/login", e => ({ email: e, password: "wrong-pass-x" }), 7],
+                                 ["/account/signup_email", e => ({ email: e, password: "other-strong-pw2", agree: true, age14: true }), 7],
+                                 ["/account/forgot", e => ({ email: e }), 7]]) {
+    const real = [], missing = [];
+    for (let i = 0; i < n; i++) {
+      real.push(await timed(path, body(known.email)));
+      await unlockAll();
+      missing.push(await timed(path, body("sec_nobody_t" + i + "@example.com")));
+    }
+    const [r, m] = [median(real), median(missing)];
+    assert.ok(m > r * 0.6 && m < r * 1.6, `${path}: with an account ${r.toFixed(0)} ms, without ${m.toFixed(0)} ms`);
+  }
+  await run("DELETE FROM public.account_guard");
+});
+
+await check("mailed links: each works once, for its own kind only, the newest reset only, 30 minutes", async () => {
+  const m = await emailMember("sec_links@example.com");
+  await send("/account/signup_email", { email: "sec_kind@example.com", password: MPW, agree: true, age14: true });
+  const tv = tokenIn(lastMail("sec_kind@example.com"));
+  await send("/account/forgot", { email: m.email });
+  const t1 = tokenIn(lastMail(m.email));
+  const expired = { status: 400, error: "expired" };
+  assert.deepEqual(await send("/account/reset", { t: tv, password: "new-strong-pw-1" }), expired);   // a sign-up link does not reset
+  assert.deepEqual(await send("/account/link_key_confirm", { t: tv }), expired);
+  assert.deepEqual(await send("/account/recovery_cancel", { t: tv }), expired);
+  assert.deepEqual(await send("/account/verify", { t: t1 }), expired);                                // a reset link does not verify
+  assert.deepEqual(await send("/account/login2", { pending: t1, code: "123456" }), expired);           // nor finish a 2-step login
+  assert.deepEqual(await send("/account/reset", { t: t1.toUpperCase(), password: "new-strong-pw-1" }), expired);
+  assert.deepEqual(await send("/account/reset", { t: t1, password: "new-strong-pw-1" }), { status: 200, done: true });
+  assert.deepEqual(await send("/account/reset", { t: t1, password: "new-strong-pw-2" }), expired);
+  await send("/account/forgot", { email: m.email });
+  const t2 = tokenIn(lastMail(m.email));
+  await send("/account/forgot", { email: m.email });
+  const t3 = tokenIn(lastMail(m.email));
+  assert.deepEqual(await send("/account/reset", { t: t2, password: "new-strong-pw-2" }), expired);
+  const [rt] = await rows("SELECT extract(epoch from expires - created) AS s FROM public.account_tokens WHERE kind = 'reset' AND email = $1", m.email);
+  assert.ok(Math.abs(Number(rt.s) - 1800) < 5, "30 minutes");
+  await run("UPDATE public.account_tokens SET expires = now() - interval '1 second' WHERE kind = 'reset'");
+  assert.deepEqual(await send("/account/reset", { t: t3, password: "new-strong-pw-2" }), expired);
+  const dump = JSON.stringify(await rows("SELECT * FROM public.account_tokens"));
+  for (const t of mailTokens()) assert.ok(!dump.includes(t), "a link token stored in the clear");
+  assert.equal((await send("/account/login", { email: m.email, password: "new-strong-pw-1" })).status, 200);
+});
+
+await check("2-step: a code or backup code works once and only for its own account; pending logins cannot be swapped", async () => {
+  const a = await emailMember("sec_2fa_a@example.com"), b = await emailMember("sec_2fa_b@example.com");
+  const A = await twoStep(a), B = await twoStep(b);
+  const pending = async m => (await send("/account/login", { email: m.email, password: MPW })).pending;
+  const pa = await pending(a), pb = await pending(b);
+  assert.equal((await send("/account/login2", { pending: pa, backup: B.backup[0] })).error, "wrong");
+  assert.equal((await send("/account/login2", { pending: pa, code: await codeAt(B.secret, 1) })).error, "wrong");
+  const okb = await send("/account/login2", { pending: pb, backup: B.backup[0] });
+  assert.equal(okb.id, b.id);
+  assert.equal(okb.backupLeft, 9);
+  assert.equal((await send("/account/login2", { pending: await pending(b), backup: B.backup[0] })).error, "wrong");   // once
+  const oka = await send("/account/login2", { pending: pa, code: await codeAt(A.secret, 1) });
+  assert.equal(oka.id, a.id);
+  assert.equal((await send("/account/login2", { pending: await pending(a), code: await codeAt(A.secret, 1) })).error, "wrong");   // once
+  // a sealed secret copied to another account does not open there (the account id is part of the seal)
+  const [ra, rb] = await rows("SELECT id, totp FROM public.accounts WHERE email IN ($1, $2) ORDER BY email", a.email, b.email);
+  await run("UPDATE public.accounts SET totp = $1, totp_step = 0 WHERE id = $2", ra.totp, rb.id);
+  assert.equal((await send("/account/login2", { pending: await pending(b), code: await codeAt(A.secret, 0) })).error, "wrong");
+  await run("UPDATE public.accounts SET totp = $1 WHERE id = $2", rb.totp, rb.id);
+  await unlockAll();
+  // turning it off needs the account's own password and code
+  assert.equal((await send("/account/totp_off", { password: MPW, code: A.backup[0] }, okb.token)).error, "wrong");
+  await unlockAll();
+  assert.equal((await send("/account/me", undefined, okb.token)).twofa, true);
+  // the secret and the backup codes are never stored in the clear
+  const dump = JSON.stringify([await rows("SELECT * FROM public.accounts"), await rows("SELECT * FROM public.account_backup"), await rows("SELECT * FROM public.account_tokens")]);
+  for (const x of [A, B]) for (const v of [x.b32, Buffer.from(x.secret).toString("hex"), Buffer.from(x.secret).toString("base64"), ...x.backup, ...x.backup.map(c => c.replaceAll("-", ""))])
+    assert.ok(!dump.includes(v), "stored in the clear");
+  for (const body of sent) for (const v of [A.b32, ...A.backup]) assert.ok(!body.includes(v), "left the Worker in the clear");
+});
+
+await check("devices: another member's device id ends nothing; reset and 'log out everywhere' end sessions", async () => {
+  const a = await emailMember("sec_dev_a@example.com"), b = await emailMember("sec_dev_b@example.com");
+  const da = (await send("/account/devices", undefined, a.token)).devices.map(d => d.id);
+  for (const id of da) assert.deepEqual(await send("/account/logout_device", { device: id }, b.token), { status: 404, error: "device" });
+  assert.equal((await send("/account/me", undefined, a.token)).id, a.id);
+  const a2 = await send("/account/login", { email: a.email, password: MPW });
+  assert.deepEqual(await send("/account/logout_all", { keepThis: true }, a2.token), { status: 200, done: true });
+  assert.equal((await send("/account/me", undefined, a.token)).error, "session");
+  assert.equal((await send("/account/me", undefined, a2.token)).id, a.id);
+  await send("/account/forgot", { email: a.email });
+  await send("/account/reset", { t: tokenIn(lastMail(a.email)), password: "after-reset-pw-1" });
+  assert.equal((await send("/account/me", undefined, a2.token)).error, "session");
+  assert.equal((await send("/account/me", undefined, b.token)).id, b.id);
+  assert.ok(!JSON.stringify(await send("/account/devices", undefined, b.token)).includes(b.token));
+});
+
+await check("a key link goes only to the key's purchase address and joins only the account that asked", async () => {
+  const k = await adm("/issue", { plan: "yearly", email: "sec_buyer@example.com", note: "security test" });
+  const mallory = await signup("sec_linker");
+  const n = mails.length;
+  assert.deepEqual(await send("/account/link_key", { key: k.key }, mallory.token), { status: 200, sent: true });
+  assert.equal(mails.length, n + 1);
+  assert.deepEqual(mails.at(-1).to, ["sec_buyer@example.com"]);
+  assert.ok(!mails.at(-1).text.includes(k.key));
+  assert.deepEqual((await send("/account/keys", undefined, mallory.token)).keys, []);   // nothing until the buyer confirms
+  const other = await signup("sec_clicker");
+  assert.deepEqual((await send("/account/keys", undefined, other.token)).keys, []);
+  assert.deepEqual(await send("/account/link_key_confirm", { t: tokenIn(mails.at(-1)) }, other.token), { status: 200, done: true });
+  assert.deepEqual((await send("/account/keys", undefined, other.token)).keys, []);   // the session of whoever clicks does not matter
+  assert.equal((await send("/account/keys", undefined, mallory.token)).keys[0].id, k.id);
+});
+
+await check("raw IP addresses only in the security log; emails, codes and links nowhere else in the clear", async () => {
+  const ip = "198.51.100.77";
+  const m = await emailMember("sec_store_v2@example.com", MPW, ip);
+  await send("/account/login", { email: m.email, password: "wrong-pass-9" }, null, ip);
+  await send("/account/recovery_request", { login: m.email, contact: "sec contact" }, null, ip);
+  for (const t of TABLES) {
+    const dump = JSON.stringify(await rows(`SELECT * FROM public.${t}`));
+    if (t === "account_security_log") assert.ok(dump.includes(ip), "the security log keeps the address");
+    else assert.ok(!dump.includes(ip), t + " holds a raw address");
+    if (!["accounts", "account_tokens"].includes(t)) assert.ok(!dump.includes(m.email), t + " holds an email");
+  }
+  for (const body of sent) assert.ok(!body.includes(MPW), "a password left the Worker");
+  const mailsDump = JSON.stringify(mails);
+  assert.ok(!mailsDump.includes(MPW) && !mailsDump.includes(ip));
+});
+
+await check("a new Worker on a database from before accounts v2: today's actions work, the new ones say unavailable, never session", async () => {
+  let shipped;
+  try { shipped = execFileSync("git", ["show", SHIPPED + ":server/license-worker/supabase/accounts.sql"], { cwd: here, encoding: "utf8" }); }
+  catch { throw new Error("git show " + SHIPPED + " failed"); }
+  const main = pg;
+  try {
+    pg = await fresh(shipped.replace("notify pgrst, 'reload schema';", ""));
+    const a = await signup("old_db_member");
+    const l = await send("/account/login", { id: "old_db_member", password: PW, device: { name: "PC", key: "cd".repeat(32) } });
+    assert.equal(l.status, 200);
+    const t = "ab".repeat(32);
+    for (const [path, body] of [["/account/signup_email", { email: "old_db@example.com", password: MPW, agree: true, age14: true }], ["/account/forgot", { email: "old_db@example.com" }],
+                                ["/account/login2", { pending: t, code: "123456" }], ["/account/verify", { t }], ["/account/reset", { t, password: MPW }],
+                                ["/account/recovery_request", { login: "old_db_member" }], ["/account/recovery_cancel", { t }], ["/account/link_key_confirm", { t }]])
+      assert.deepEqual(await send(path, body), { status: 503, error: "unavailable" }, path);
+    for (const action of ["devices", "logout_device", "logout_all", "totp_start", "totp_confirm", "totp_off", "backup_new", "backup_left", "keys", "consent", "add_email"]) {
+      const r = await send("/account/" + action, { password: PW, device: "0".repeat(12), code: "123456", kind: "oc", version: "1", email: "old_db@example.com" }, l.token);
+      assert.notEqual(r.error, "session", action);
+    }
+    assert.equal((await send("/account/me", undefined, l.token)).id, "old_db_member");
+    assert.equal((await send("/account/recover", { id: "old_db_member", recovery: a.recovery, next: "old-db-new-pass" })).status, 200);
+    assert.equal((await send("/account/login", { id: "old_db_member", password: "old-db-new-pass" })).status, 200);
+  } finally {
+    pg = main;
+  }
+});
+
+await check("the Worker's logs and error replies hold no email, link, code or raw address", async () => {
+  const emails = [...new Set(mails.flatMap(m => m.to))];
+  assert.ok(emails.length > 10 && mailTokens().length > 10);
+  for (const t of mailTokens()) issued.add(t);
+  for (const line of logged) for (const v of [...emails, ...mailTokens(), "198.51.100.77", "198.18.9.9", MPW]) assert.ok(!line.includes(v), "log: " + line.slice(0, 40));
+  for (const text of replies.filter(r => r.startsWith('{"error"'))) for (const v of [...emails, ...mailTokens(), MPW]) assert.ok(!text.includes(v), "error reply: " + text.slice(0, 40));
+});
+
 // ---------------------------------------------------------------------------------------------- 10. migration
 await check("the migration keeps today's members, passwords, recovery codes and sessions, and ends where accounts.sql does", async () => {
   const dir = new URL("./supabase/migrations/", here);
@@ -497,6 +760,8 @@ await check("the migration keeps today's members, passwords, recovery codes and 
     assert.deepEqual(await rows("SELECT id, hash, recovery FROM public.accounts ORDER BY id"), hashes);   // nothing re-hashed
     assert.equal((await send("/account/me", undefined, old.token)).id, "legacy_one");
     assert.equal((await send("/account/me", undefined, locked.token)).id, "legacy_locked");
+    const legacyDevices = (await send("/account/devices", undefined, old.token)).devices;   // sessions from before get a device id
+    assert.ok(legacyDevices.length >= 1 && legacyDevices.every(d => /^[0-9a-f]{12}$/.test(d.id) && d.name === "SystemBoost app"));
     assert.equal((await send("/account/login", { id: "legacy_locked", password: PW })).error, "locked");   // a lock in force stays
     assert.equal((await send("/account/login", { id: "legacy_one", password: PW })).status, 200);
     assert.equal((await send("/account/recover", { id: "legacy_one", recovery: old.recovery, next: "legacy-new-pass" })).status, 200);
@@ -504,6 +769,9 @@ await check("the migration keeps today's members, passwords, recovery codes and 
       fns: await rows(`SELECT p.oid::regprocedure::text AS sig, pg_get_functiondef(p.oid) AS def, p.proacl::text AS acl FROM pg_proc p
                        JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname LIKE 'account\\_%' ORDER BY 1`),
       tables: await rows(`SELECT relname, relrowsecurity, relacl::text AS acl FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' ORDER BY 1`),
+      columns: await rows(`SELECT table_name, column_name, data_type, column_default, is_nullable FROM information_schema.columns
+                           WHERE table_schema = 'public' ORDER BY table_name, column_name`),
+      indexes: await rows(`SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' ORDER BY 1`),
     });
     const migrated = await shape();
     pg = await fresh(ACCOUNTS_SQL);
