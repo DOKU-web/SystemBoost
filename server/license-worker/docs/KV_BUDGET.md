@@ -7,7 +7,7 @@
   실패합니다(키 발급, 카드 결제 웹훅 포함).
 - 서버는 1,000번을 이렇게 나눕니다.
   - **공개 몫 `PUBLIC_KV_DAY` = 400** (기본값, `src/index.js` `PUBLIC_KV_DAY_DEFAULT`): 누구나 보낼 수 있는 요청.
-    주문, '결제했어요', 추천 · 초대 선물. 통계 저장소(Durable Object)에서 세고, 다 차면 `429 busy`로 거절합니다.
+    주문, '결제했어요', 추천 · 초대 선물, 가격 변경 안내에 대한 답. 통계 저장소(Durable Object)에서 세고, 다 차면 `429 busy`로 거절합니다.
     `wrangler.toml` `[vars]`의 `PUBLIC_KV_DAY`로 바꿀 수 있습니다(정수 50~100,000, 그 밖의 값은 무시하고 400).
   - **고객센터 몫 150 + 100 = 250** (`src/support.js` `LIMITS.writesPerDay`, `vWritesPerDay`): 문의와 구매자 답장.
   - **세지 않는 쓰기**: 판매자 작업(승인, 키 발급, 설정), Lemon Squeezy 웹훅, 구매자가 판매자 답장을 읽을 때 '안 읽음' 지우기.
@@ -32,6 +32,9 @@
 | 카드 첫 결제 (웹훅 `subscription_created`) | 10 | `hook:`×2, `lic:`, `sub:`, `subkeys:`, `order:`, `session:`, `ord:`, `email:`, `subplan:` | 세지 않음 |
 | 카드 갱신 (웹훅 `subscription_payment_success`) | 7 | `hook:`×2, `lic:`, `sub:`, `subkeys:`, `email:`, `subplan:` | 세지 않음 |
 | 추천 코드 선물 (`POST /referral`) | 3 | `ref:`, `refdev:`, `lic:` | 공개 |
+| 가격 변경 안내 보기 (`POST /sub/price`) | 0 | 없음 | — |
+| 가격 변경 안내에 답 (`POST /sub/price/choose`) | 1 | `pricechoice:` | 공개 |
+| 판매자가 가격 변경 안내를 만듦 · 동의한 구독을 새 가격으로 옮김 | 1 · 1 | `config:price_notices` · `pricechoice:` | 세지 않음 |
 | 판매자 디스코드 알림, 매시간 cron | 0 | 없음 (웹후크가 있으면 cron이 KV 목록을 1번 읽음) | — |
 
 한 건을 끝까지 처리하면:

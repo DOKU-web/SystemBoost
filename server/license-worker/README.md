@@ -91,8 +91,28 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 코드를 나눠 준 사람의 보상은 자동이 아닙니다. 사용 횟수를 보고 직접 키를 발급합니다.
 - 테스트: `node test_referral.mjs <임시 pem>`
 
+## 카드 구독 가격 변경 안내 (0.8.14)
+카드 구독의 가격을 올릴 때만 씁니다. 구독자가 동의해야 새 가격으로 결제되고, 답하지 않으면 동의로 보지 않습니다.
+Lemon Squeezy는 2027년 3월 31일에 결제를 멈추므로 작게 만들었습니다.
+1. Lemon Squeezy에서 새 가격의 구독 상품(variant)을 따로 만듭니다(지금 상품의 가격을 바꾸지 않습니다).
+2. 대시보드 '결제 설정' → '가격 변경 안내'에 플랜, 지금 가격, 새 가격(원), 새 상품 번호, 시행일을 넣습니다. 시행일은 오늘(한국 시간)부터
+   30일 뒤나 그 뒤여야 하고(`PRICE_NOTICE_DAYS`), 새 가격은 지금 가격보다 높아야 합니다. 시행 전인 안내는 플랜마다 하나, 모두 20개까지.
+3. 서버는 아무것도 보내지 않습니다. 앱 문구(한국어, 영어)와 메일 초안이 나오니 메일은 직접 보냅니다. 앱은 `POST /sub/price`로 안내를 받아
+   시행일 전날까지 보여 줍니다.
+4. 구독자가 앱에서 동의하거나 해지합니다(`POST /sub/price/choose`). 해지를 고르면 Lemon Squeezy에서 바로 해지하고(결제한 기간은 끝까지 씀),
+   해지하지 못하면 목록에 'Lemon Squeezy에서 직접 해지하세요'가 뜹니다. 동의는 시행일 전까지 해지로 바꿀 수 있고, 해지는 되돌릴 수 없습니다.
+5. 시행일부터 목록의 '새 가격으로 옮기기'로 동의한 구독만 하나씩 새 상품으로 옮깁니다(`disable_prorations: true`: 지금 결제하지 않고
+   다음 자동 결제부터 새 가격). 옮긴 뒤에도 키 갱신은 그대로 됩니다(갱신은 구독의 플랜 기록 `subplan:`을 씁니다).
+6. 새로 사는 사람도 새 가격으로 팔려면 '카드 결제 설정'의 그 플랜 상품 번호를 새 상품 번호로 바꿉니다.
+- API: `POST /sub/price {key, lang?}` → `{"notice": {id, plan, oldPrice, newPrice, effective, text} | null, "choice": "" | "agree" | "cancel"}`
+  (`403 {"error":"key"}`: 카드 구독 키가 아님). `POST /sub/price/choose {key, id, choice}` → `{"ok": true, "choice", "cancelled"?}`, 오류는
+  `400 bad request` · `403 key` · `404 notice` · `409 closed`(시행일이 됨) · `409 already`(이미 해지) · `409 inactive`(끝난 구독) · `429 busy`.
+- KV: 답 하나에 1번(`pricechoice:<안내>:<구독>`, 3년), 공개 몫에서 셉니다. 안내 목록은 `config:price_notices`.
+- 동의하지 않거나 답하지 않은 구독을 어떻게 할지(지금 가격으로 둘지, 알리고 끝낼지)는 소유자가 정합니다 [사용자 필요]. 앱 문구는 어느 쪽도 약속하지 않습니다.
+- 테스트: `node test_price.mjs`
+
 ## KV 쓰기 예산 (`docs/KV_BUDGET.md`)
-- 누구나 보낼 수 있는 요청(주문, '결제했어요', 선물)의 하루 KV 쓰기 몫은 기본 400번입니다. `wrangler.toml` `[vars]`에
+- 누구나 보낼 수 있는 요청(주문, '결제했어요', 선물, 가격 변경 안내에 대한 답)의 하루 KV 쓰기 몫은 기본 400번입니다. `wrangler.toml` `[vars]`에
   `PUBLIC_KV_DAY = "600"`처럼 넣으면 바뀝니다(정수 50~100,000, 그 밖의 값은 무시하고 400). 무료 플랜(하루 1,000번)에서는
   올리지 마세요. 판매자 작업과 카드 웹훅에 남는 몫이 줄어듭니다.
 - 출시일 계산(설치 300, 주문 30)과 결론은 `docs/KV_BUDGET.md`에 있습니다.
@@ -291,7 +311,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
 - `node test_kv_public.mjs` (공개 저장 몫이 차도 키 확인 · 갱신 · 웹훅 · 승인은 됨, `PUBLIC_KV_DAY`), `node test_kv_writes.mjs` (동작마다 KV 쓰기 수, `docs/KV_BUDGET.md`)
-- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내)
+- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내), `node test_price.mjs` (가격 변경 동의)
 
 ## 확인 필요
 - Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.

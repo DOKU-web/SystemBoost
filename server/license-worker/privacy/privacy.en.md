@@ -21,6 +21,7 @@ Effective date: {{EFFECTIVE_DATE}}
 - Card payment: from Lemon Squeezy, the payment email, subscription number, order number, payment (invoice) number, plan, next payment date and whether it is a test payment. Other details in Lemon Squeezy's notice (such as the name) are not stored.
 - Every key: the full key text and its record (plan, dates, how it was received (direct payment, card, referral or invite, issued by the seller), email address, note, subscription number, blocked or not). The note can hold the order code, the payer name and memo of a direct payment, a referral code, or a member ID. The key itself contains the email address, so showing the key to someone shows the email address too.
 - Referral and invite codes: the code and a random device number made by the app.
+- A price change notice of a card subscription: when you answer, the subscription number, your answer (agree or cancel), the time, the key ID, whether Lemon Squeezy took the cancel, and when the seller moved the subscription to the new price; the key you send is only checked, not stored. Purpose: a record that you agreed before the new price is charged, and cancelling the subscription if you choose to.
 - Members (optional): ID, password and recovery code as hashes only, sign-up and last login times, the consent text version and time, invite codes and relations, rewards, discount tickets (including the order code they were used on), failed logins and lockout, blocked or not, login sessions as hashes.
 - Support requests and refund requests: category, subject, messages and replies, times, status, consent time, language, the access code as a hash, the member ID when sent from a signed-in app, and what you choose to give (contact, order code, key ID, app details). A refund request also carries the order and key details the server holds. A full key sent for a check is never stored.
 - Usage statistics (optional: sent only if 'Send usage statistics' is turned on, on the agreement screen or in Settings; off at first from version 0.8.14, ticked at first in earlier versions; nothing is sent before the agreement is accepted): a random install number, app version, operating system, plan, frame generation multiplier, one-click boost use, the country (from Cloudflare), first and last connection. No IP address is stored with them.
@@ -37,7 +38,7 @@ Effective date: {{EFFECTIVE_DATE}}
 - Key records, the email index, links between Lemon Squeezy orders and keys, blocked keys, subscription plans and referral codes: no set retention period, kept until the seller deletes them.
 - Members: until they leave or the seller deletes the account; leaving deletes the account from the live database at once, and Supabase backups keep it up to 7 more days. The member ID stays in invite-reward key notes (no set period), the activity log (180 days) and support requests (their own period).
 - Login sessions: 90 days. Sign-up and login IP hashes: a little over an hour. Support, order and referral IP hashes: up to 1 hour after the last request.
-- Referral and invite device numbers: 90 days.
+- Referral and invite device numbers: 90 days. Answers to a price change notice: 3 years from the answer.
 - Support requests: 3 years for payment and refund requests, 1 year for the rest, from the last change.
 - Usage statistics: 90 days after the last connection. Activity log: 180 days. Dashboard access log: one year. Wrong dashboard password counts (by address hash): 15 minutes after the last miss. Daily portal-link counts: 2 days.
 - Hashes of deleted member IDs: no set retention period, kept until the seller deletes them.
@@ -66,7 +67,7 @@ This applies where the GDPR or the UK GDPR covers you, together with the rest of
 
 - Controller: the seller; contact details below.
 - Legal bases
-  - Contract: issuing, checking and renewing keys, orders and payment checks, member features, answering requests, withdrawal and refunds.
+  - Contract: issuing, checking and renewing keys, orders and payment checks, consent to or cancelling over a card subscription price change, member features, answering requests, withdrawal and refunds.
   - Consent: usage statistics, sent only if you turn them on. You can withdraw consent at any time by turning them off in Settings; this does not make earlier processing unlawful.
   - Legitimate interests: preventing abuse: IP address hashes to stop too many requests, stopping dashboard password guessing, and logging the seller's actions and dashboard access. You can object to this processing.
 - Your rights: access, rectification, erasure, restriction of processing, data portability, objection (to processing based on legitimate interests) and withdrawal of consent. Ask as described under 'Your rights'.

@@ -409,6 +409,23 @@ button.todoRow:hover{border-color:var(--or)}
         <div class="row"><button class="p" id="saveLinks">링크 저장</button><span id="pMsg" class="mut"></span></div>
       </div>
     </div>
+
+    <div class="card" id="priceCard">
+      <h2>가격 변경 안내 <small>카드 구독의 가격을 올릴 때만 써요. 구독자가 동의해야 새 가격으로 결제돼요</small></h2>
+      <div class="mut">안내를 만들면 앱이 그 플랜의 카드 구독자에게 시행일 전날까지 보여 주고, 구독자가 동의하거나 해지를 골라요. 답하지 않으면 동의로 보지 않아요.
+        메일은 보내지 않아요: 만든 뒤 나오는 초안을 복사해 직접 보내세요. Lemon Squeezy에서 새 가격의 상품을 먼저 만들고 그 번호를 넣으세요.
+        시행일은 오늘(한국 시간)부터 30일 뒤나 그 뒤여야 해요. 시행일이 되면 동의한 구독을 하나씩 새 가격으로 옮겨요(지금 결제하지 않고 다음 자동 결제부터).</div>
+      <div class="cIds">
+        <label class="mut">플랜<select id="prPlan"></select></label>
+        <label class="mut">지금 가격 (원)<input id="prOld" inputmode="numeric" placeholder="예: 2900"></label>
+        <label class="mut">새 가격 (원)<input id="prNew" inputmode="numeric" placeholder="예: 3900"></label>
+        <label class="mut">새 가격 상품(variant) 번호<input id="prVariant" inputmode="numeric"></label>
+        <label class="mut">시행일 (한국 시간)<input id="prDay" type="date"></label>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="p" id="prMake">안내 만들기</button><span id="prMsg" class="mut"></span></div>
+      <textarea id="prOut" class="hide" rows="12" readonly style="margin-top:10px"></textarea>
+      <div id="prList" style="margin-top:12px"></div>
+    </div>
 </section>
 <section class="tab hide" data-tab="ann" aria-label="디스코드 공지">
   <span id="annTop"></span>
@@ -536,7 +553,7 @@ async function api(path, body) {
 
 // ------------------------------------------------------------ views
 async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers(), loadAnnounce(), loadCard(),
-                                               loadSupport(), loadSupCfg(), loadAccess(), tkId ? openTicket(tkId, true) : null]); }
+                                               loadSupport(), loadSupCfg(), loadAccess(), loadPrice(), tkId ? openTicket(tkId, true) : null]); }
 const CARD_PLANS = ["monthly", "yearly", "ultra_monthly", "ultra_yearly", "biz_monthly", "biz_yearly"];
 function showCard(c) {
   const mark = (id, on) => { $(id).textContent = on ? "등록됨" : "없음"; $(id).className = on ? "yes" : "no"; };
@@ -550,6 +567,37 @@ function showCard(c) {
 }
 async function loadCard() {
   try { showCard(await api("/card")); } catch (e) { if (e.message !== "401") $("cReady").textContent = "— 불러오지 못했어요: " + e.message; }
+}
+// Price increase notices of card subscriptions (GET /admin/api/price): who agreed, who cancelled; no answer is no consent.
+let priceNow = null;
+const CHOICE_KO = { agree: "동의", cancel: "해지" };
+$("prPlan").innerHTML = CARD_PLANS.map(p => `<option value="${p}">${esc(PLAN[p])}</option>`).join("");
+function showPriceText(r) {
+  $("prOut").value = ["[앱 문구]", r.text.ko, "", "[App text, English]", r.text.en, "",
+                      "[메일 초안] 제목: " + r.email.ko.subject, r.email.ko.body, "", "[E-mail draft] Subject: " + r.email.en.subject, r.email.en.body].join("\n");
+  $("prOut").classList.remove("hide");
+}
+function priceRow(n, c) {
+  const act = c.choice !== "agree" ? ""
+    : c.moved ? `<span class="mut">새 가격으로 옮김 ${when(c.moved)}</span>`
+    : n.open ? '<span class="mut">시행일부터 옮길 수 있어요</span>'
+    : `<button data-pr-move="${esc(n.id)}" data-sub="${esc(c.sub)}">새 가격으로 옮기기</button>`;
+  const ls = c.choice === "cancel" && c.cancelled === false ? ' <span class="err">Lemon Squeezy에서 직접 해지하세요</span>' : "";
+  return `<tr><td class="m">${esc(c.sub)}</td><td>${esc(CHOICE_KO[c.choice] || c.choice)}${ls}</td><td class="m">${when(c.at)}</td><td>${act}</td></tr>`;
+}
+function showPrice(r) {
+  $("prDay").min = r.minEffective;
+  if (!$("prDay").value) $("prDay").value = r.minEffective;
+  $("prList").innerHTML = !r.notices.length ? '<div class="mut">만든 안내가 없어요.</div>' : r.notices.map(n => `<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+    <b>${esc(PLAN[n.plan] || n.plan)}</b> ₩${num(n.oldPrice)} → ₩${num(n.newPrice)} · ${esc(n.effective)} 시행 · 상품 ${esc(n.variant)} · ${n.open ? "시행 전" : "시행됨"}
+    <div class="mut">동의 ${num(n.agree)} · 해지 ${num(n.cancel)} · 답하지 않은 구독은 여기에 없고, 동의로 보지 않아요</div>
+    <div class="row" style="margin-top:6px"><button data-pr-text="${esc(n.id)}">앱 문구 · 메일 초안</button><button class="d" data-pr-del="${esc(n.id)}">지우기</button></div>
+    ${n.choices.length ? `<div class="tbl"><table><thead><tr><th>구독 번호</th><th>답</th><th>시각</th><th></th></tr></thead><tbody>${n.choices.map(c => priceRow(n, c)).join("")}</tbody></table></div>` : ""}
+  </div>`).join("");
+}
+async function loadPrice() {
+  try { priceNow = await api("/price"); showPrice(priceNow); }
+  catch (e) { if (e.message !== "401") $("prList").textContent = "불러오지 못했어요: " + e.message; }
 }
 async function loadMembers() {
   let list;
@@ -845,6 +893,21 @@ $("cSave").onclick = async () => {
   } catch (e) { if (e.message !== "401") msg(e.message, "err"); }
   finally { $("cSave").disabled = false; }
 };
+$("prMake").onclick = async () => {
+  const msg = (t, cls) => { $("prMsg").textContent = t; $("prMsg").className = cls; };
+  const b = { plan: $("prPlan").value, oldPrice: Number($("prOld").value), newPrice: Number($("prNew").value), variant: $("prVariant").value.trim(), effective: $("prDay").value };
+  if (!(await ask("가격 변경 안내를 만들까요?", `${esc(PLAN[b.plan])}: ₩${num(b.oldPrice)} → ₩${num(b.newPrice)}<br>시행일: ${esc(b.effective)} (한국 시간)<br>새 가격 상품 번호: ${esc(b.variant)}<br><br>앱이 이 플랜의 카드 구독자에게 바로 보여 줘요. 메일은 보내지 않아요.`, "만들기"))) return;
+  $("prMake").disabled = true;
+  try {
+    const r = await api("/price", b);
+    showPriceText(r);
+    msg("만들었어요. 아래 메일 초안을 복사해 직접 보내세요.", "okc");
+    ["prOld", "prNew", "prVariant"].forEach(i => $(i).value = "");
+    loadPrice(); loadLog();
+  } catch (e) { if (e.message !== "401") msg(e.message, "err"); }
+  finally { $("prMake").disabled = false; }
+};
+$("prOut").onclick = () => { $("prOut").select(); copy($("prOut").value); };
 $("mFind").onclick = () => loadMembers();
 $("mQ").onkeydown = e => { if (e.key === "Enter") loadMembers(); };
 $("rAdd").onclick = async () => {
@@ -862,6 +925,19 @@ $("rAdd").onclick = async () => {
 document.addEventListener("click", e => onClick(e).catch(err => { if (err.message !== "401") toast("실패했어요: " + err.message); }));
 async function onClick(e) {
   const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.prText) { const n = (priceNow?.notices || []).find(x => x.id === t.dataset.prText); if (n) showPriceText(n); return; }
+  if (t.dataset.prDel) {
+    if (await ask("가격 변경 안내를 지울까요?", "앱에 더는 보이지 않아요. 이미 받은 답(동의 · 해지)은 3년 동안 서버에 남지만 이 화면에서는 볼 수 없어요.", "지우기")) {
+      await api("/price/delete", { id: t.dataset.prDel }); toast("지웠어요"); loadPrice(); loadLog();
+    }
+    return;
+  }
+  if (t.dataset.prMove) {
+    if (await ask("새 가격으로 옮길까요?", `구독 <code>${esc(t.dataset.sub)}</code> — 새 가격에 동의한 구독이에요. Lemon Squeezy에서 새 가격의 상품으로 바꾸고, 지금은 결제하지 않아요. 다음 자동 결제부터 새 가격이에요.`, "옮기기")) {
+      await api("/price/move", { id: t.dataset.prMove, sub: t.dataset.sub }); toast("옮겼어요"); loadPrice(); loadLog();
+    }
+    return;
+  }
   if (t.dataset.memBlock) { await api("/members/block", { id: t.dataset.memBlock, on: !!t.dataset.on }); loadMembers(); loadLog(); return; }
   if (t.dataset.memRec) {
     if (await ask("복구 코드를 새로 만들까요?", `<code>${esc(t.dataset.memRec)}</code> — 본인인지 확인했을 때만 만드세요. 지금 코드는 쓸 수 없게 돼요.`, "새로 만들기")) {
@@ -1854,6 +1930,25 @@ function demoApi(path, b) {
     const mq = (b && b.q) || "";   // a search comes in a POST body
     const ms = demo.members.filter(m => !mq || m.id.includes(mq));
     return R({ members: ms, summary: { total: demo.members.length, week: 2, active: 2, invited: 1, blocked: demo.members.filter(m => m.blocked).length } });
+  }
+  if (p.startsWith("/price")) {   // like GET/POST /admin/api/price*, with short texts
+    const kd = n => new Date(Date.now() + 9 * 36e5 + n * 864e5).toISOString().slice(0, 10), today = kd(0), min = kd(30);
+    const txt = n => ({ text: { ko: `${PLAN[n.plan]} 구독 가격이 ${n.effective} 이후 자동 결제부터 ${num(n.oldPrice)}원에서 ${num(n.newPrice)}원으로 바뀌어요. (시연)`, en: "(demo) The price changes." },
+                        email: { ko: { subject: "[SystemBoost] 구독 가격 변경 안내 (시연)", body: "(시연)" }, en: { subject: "[SystemBoost] Subscription price change (demo)", body: "(demo)" } } });
+    demo.price = demo.price || [{ id: "a1b2c3d4", plan: "monthly", oldPrice: 2900, newPrice: 3900, variant: "111", effective: kd(-1), created: new Date().toISOString(),
+      choices: [{ sub: "1043", choice: "agree", at: new Date(Date.now() - 20 * 864e5).toISOString(), key: "c0ffee0123456789" },
+                { sub: "1051", choice: "cancel", at: new Date(Date.now() - 25 * 864e5).toISOString(), key: "0ddba11012345678", cancelled: true }] }];
+    if (p === "/price" && b) {
+      if (!(b.newPrice > b.oldPrice)) return Promise.reject(new Error("새 가격이 지금 가격보다 높을 때만 동의를 받아요"));
+      if (!(b.effective >= min)) return Promise.reject(new Error(`시행일은 오늘(한국 시간)부터 30일 뒤인 ${min}이나 그 뒤여야 해요`));
+      const n = { id: Math.random().toString(16).slice(2, 10), plan: b.plan, oldPrice: b.oldPrice, newPrice: b.newPrice, variant: b.variant, effective: b.effective, created: new Date().toISOString(), choices: [] };
+      demo.price.unshift(n); L("가격 변경 안내", PLAN[b.plan] + " · 시연");
+      return R({ notice: n, ...txt(n) });
+    }
+    if (p === "/price/delete") { demo.price = demo.price.filter(n => n.id !== b.id); return R({ ok: true }); }
+    if (p === "/price/move") { const c = demo.price.flatMap(n => n.id === b.id ? n.choices : []).find(c => c.sub === b.sub); if (c) c.moved = new Date().toISOString(); L("새 가격으로 옮김", "구독 " + b.sub); return R({ ok: true }); }
+    return R({ notices: demo.price.map(n => ({ ...n, ...txt(n), open: today < n.effective, agree: n.choices.filter(c => c.choice === "agree").length, cancel: n.choices.filter(c => c.choice === "cancel").length })),
+               today, minEffective: min, noticeDays: 30 });
   }
   if (p === "/card") {
     demo.card = demo.card || { store: "", variants: {}, apiKey: false, signing: false, ready: [], webhook: "https://systemboost-license.example/webhook/lemonsqueezy" };

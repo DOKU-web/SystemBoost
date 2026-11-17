@@ -18,6 +18,9 @@ export { Stats } from "./stats.js";
 //                                expired one); GET /renew?sub=<id> (apps up to 0.8.11) gets nothing
 //   POST /subscription/change {key, plan}
 //                                plan change of a card subscription (Lemon Squeezy), asked by the holder of its key
+//   POST /sub/price {key, lang?}  the price increase notice for the key's card subscription, and its holder's answer
+//   POST /sub/price/choose {key, id, choice}
+//                                agree to the new price, or cancel the subscription ("price increase" below)
 //   GET  /status                 {sales, pay:{monthly,yearly}} - the app enables "결제하기" only for plans
 //                                that have a payment link (links are set in the dashboard); in live mode nothing
 //                                while the seller's details are incomplete (sellerBlocked)
@@ -162,12 +165,12 @@ const isPlan = p => typeof p === "string" && Object.hasOwn(PLANS, p);
 
 // Calls per IP address an hour on the public routes that write KV or call Lemon Squeezy (src/iplimit.js: no KV writes
 // for the counting). Approximate; the day's share of KV writes (publicKvDay) and REF_DAILY stay the backstop.
-const IP_LIMIT = { order: 20, paid: 30, checkout: 20, change: 10, referral: 30 };
+const IP_LIMIT = { order: 20, paid: 30, checkout: 20, change: 10, referral: 30, price: 20 };
 
 // The Workers free plan allows 1,000 KV writes a day (UTC) for the whole worker; past that every put fails until
 // 09:00 KST, approvals and card webhooks included. Requests anyone can make share publicKvDay(env) of them (default
-// PUBLIC_KV_DAY_DEFAULT): new orders, "I paid" notes and referral / invite gifts (support has its own 150 + 100,
-// support.js LIMITS). The count lives in the Stats object, so counting writes no KV. The seller's actions,
+// PUBLIC_KV_DAY_DEFAULT): new orders, "I paid" notes, referral / invite gifts and answers to a price notice (support
+// has its own 150 + 100, support.js LIMITS). The count lives in the Stats object, so counting writes no KV. The seller's actions,
 // keys of approved orders and Lemon Squeezy webhooks are never counted or refused: with the default, at least 350
 // writes a day stay for them (docs/KV_BUDGET.md). While the object cannot be reached the old KV caps hold (300
 // orders, REF_DAILY gifts), as before the object counted.
@@ -331,6 +334,8 @@ export default {
       if (req.method === "POST" && url.pathname === "/renew") { const b = await readJson(req); return await renew(String(b.sub || ""), String(b.key || ""), env); }
       if (req.method === "GET" && url.pathname === "/renew") return await renew(url.searchParams.get("sub") || "", "", env);
       if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
+      if (req.method === "POST" && url.pathname === "/sub/price") return await subPrice(req, env);
+      if (req.method === "POST" && url.pathname === "/sub/price/choose") return await subPriceChoose(req, env);
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);
@@ -569,21 +574,197 @@ async function subscriptionChange(req, env) {
   if (!c.variants[plan]) return json({ error: "plan closed" }, 409);
   const from = await env.LICENSES.get("subplan:" + sub);
   if (from === plan) return json({ error: "same plan" }, 409);
-  let res;
-  try {
-    res = await fetch("https://api.lemonsqueezy.com/v1/subscriptions/" + sub, {
-      method: "PATCH",
-      headers: { Authorization: "Bearer " + env.LS_API_KEY, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" },
-      body: JSON.stringify({ data: { type: "subscriptions", id: sub, attributes: { variant_id: Number(c.variants[plan]) } } }),
-      signal: AbortSignal.timeout(15000),
-    });
-  } catch { return json({ error: "unavailable" }, 503); }
+  const res = await lsSetVariant(env, sub, c.variants[plan]);
+  if (res.status === 0) return json({ error: "unavailable" }, 503);
   if (!res.ok) {
     await audit(env, "카드 결제", "플랜 변경 실패", "구독 " + sub + " · " + (PLANS[from] || "?") + " → " + PLANS[plan] + " · Lemon Squeezy " + res.status);
     return json({ error: "refused" }, 502);
   }
   await audit(env, "카드 결제", "플랜 변경 요청", "구독 " + sub + " · " + (PLANS[from] || "?") + " → " + PLANS[plan] + " · " + h.id);
   return json({ ok: true, plan });
+}
+
+// Moves a card subscription to another product (variant): PATCH /v1/subscriptions/<id>. extra: more attributes, such
+// as disable_prorations (the new price starts at the next renewal, nothing is charged now). Needs env.LS_API_KEY.
+// -> { ok: true, status } | { ok: false, status } (status 0: no answer).
+async function lsSetVariant(env, sub, variant, extra = {}) {
+  try {
+    const res = await fetch("https://api.lemonsqueezy.com/v1/subscriptions/" + sub, {
+      method: "PATCH",
+      headers: { Authorization: "Bearer " + env.LS_API_KEY, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" },
+      body: JSON.stringify({ data: { type: "subscriptions", id: sub, attributes: { variant_id: Number(variant), ...extra } } }),
+      signal: AbortSignal.timeout(15000),
+    });
+    return { ok: res.ok, status: res.status };
+  } catch { return { ok: false, status: 0 }; }
+}
+
+// ---------------------------------------------------------------- price increase of a card subscription (0.8.14)
+// A card plan may cost more only for subscribers who agreed, told at least PRICE_NOTICE_DAYS ahead. The seller writes
+// a notice in the dashboard (POST /admin/api/price): the plan, its old and new price (원), the Lemon Squeezy product
+// (variant) at the new price and the day (KST) the price changes, at least PRICE_NOTICE_DAYS after today (KST).
+// Nothing is sent: the dashboard gets the app's text and an e-mail draft the seller sends by hand.
+//   POST /sub/price {key, lang?} -> {notice: {id, plan, oldPrice, newPrice, effective, text} | null, choice: "" | "agree" | "cancel"}
+//     the notice for the plan the key's subscription is on, until the day before it takes effect (a subscription
+//     that ended gets null unless it answered). 403 {"error":"key"} for anything but a held card subscription key.
+//     Reads only. text is Korean, or English with lang "en".
+//   POST /sub/price/choose {key, id, choice: "agree" | "cancel"} -> {ok: true, choice, cancelled?}
+//     one KV write (pricechoice:<id>:<sub>), counted in the day's public share. "cancel" also stops the subscription
+//     at Lemon Squeezy (cancelSubscription: it runs to the end of the paid period; cancelled false = the seller has
+//     to cancel it by hand, the log says so). Agreeing can be changed to cancelling until the day it takes effect; a
+//     cancel is final. The same answer again writes nothing.
+//     Errors: 400 "bad request", 403 "key", 404 "notice" (no such notice for this subscription's plan), 409 "closed"
+//     (the day has come), 409 "already" (cancelled before), 409 "inactive" (the subscription ended), 429 "busy".
+// No answer is no consent: only subscriptions that agreed can be moved to the new product (POST /admin/api/price/move,
+// on or after the day, without proration). Lemon Squeezy stops taking payments on 2027-03-31, so this stays small.
+const PRICE_NOTICE_DAYS = 30;
+const PRICE_MAX = 20;                              // notices kept in config:price_notices
+const PRICE_MAX_WON = 10000000;
+const PRICE_CHOICE_TTL = 60 * 60 * 24 * 365 * 3;  // the answers, kept three years
+const PRICE_ID = /^[0-9a-f]{8}$/;
+const PLAN_EN = p => ({ premium: "Pro", ultra: "Ultra", biz: "Business" }[tierOf(p)]) + " " + periodOf(p);
+async function priceNotices(env) {
+  try { const a = JSON.parse((await env.LICENSES.get("config:price_notices")) || "[]"); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+const won = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const dayBefore = d => new Date(Date.parse(d + "T00:00:00Z") - 864e5).toISOString().slice(0, 10);
+const koDate = d => { const [y, m, x] = d.split("-").map(Number); return `${y}년 ${m}월 ${x}일`; };
+const enDate = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+// The words the app shows: the change, both answers and what each does, and that silence is not consent.
+function priceText(n, lang) {
+  const last = dayBefore(n.effective);
+  return lang === "en"
+    ? `The ${PLAN_EN(n.plan)} subscription price changes from ₩${won(n.oldPrice)} to ₩${won(n.newPrice)} for automatic payments on or after ${enDate(n.effective)}. ` +
+      `If you agree, you keep using it at the new price. If you do not, you can cancel and keep using what you already paid for until it ends. ` +
+      `No answer is not taken as agreement, and nothing is charged at the new price without it. You can choose until ${enDate(last)}.`
+    : `${PLANS[n.plan]} 구독 가격이 ${koDate(n.effective)} 이후 자동 결제부터 ${won(n.oldPrice)}원에서 ${won(n.newPrice)}원으로 바뀌어요. ` +
+      `동의하면 새 가격으로 계속 쓸 수 있어요. 동의하지 않으면 해지할 수 있고, 이미 결제한 기간은 끝날 때까지 써요. ` +
+      `답하지 않으면 동의한 것으로 보지 않고, 새 가격으로 결제하지 않아요. ${koDate(last)}까지 고를 수 있어요.`;
+}
+function priceEmail(n) {
+  const last = dayBefore(n.effective);
+  return {
+    ko: { subject: `[SystemBoost] ${PLANS[n.plan]} 구독 가격 변경 안내 (${koDate(n.effective)}부터)`,
+          body: `안녕하세요, SystemBoost예요.\n\n${PLANS[n.plan]} 구독의 가격이 바뀌어요.\n- 지금 가격: ${won(n.oldPrice)}원\n` +
+                `- 새 가격: ${won(n.newPrice)}원 (${koDate(n.effective)} 이후 자동 결제부터)\n\n` +
+                `새 가격으로 결제하려면 먼저 동의를 받아야 해요. SystemBoost 앱에서 동의하거나 해지할 수 있어요. 동의하면 새 가격으로 계속 쓸 수 있고, ` +
+                `해지하면 이미 결제한 기간이 끝날 때까지 쓸 수 있어요. 답하지 않으면 동의한 것으로 보지 않고, 새 가격으로 결제하지 않아요.\n\n` +
+                `${koDate(last)}까지 골라 주세요. 궁금한 점은 앱의 '고객센터'나 도움말 페이지(/help)로 문의해 주세요.` },
+    en: { subject: `[SystemBoost] ${PLAN_EN(n.plan)} subscription price change (from ${enDate(n.effective)})`,
+          body: `Hello from SystemBoost.\n\nThe price of the ${PLAN_EN(n.plan)} subscription changes.\n- Current price: ₩${won(n.oldPrice)}\n` +
+                `- New price: ₩${won(n.newPrice)} (automatic payments on or after ${enDate(n.effective)})\n\n` +
+                `We need your agreement before charging the new price. You can agree or cancel in the SystemBoost app. If you agree, you keep using it at ` +
+                `the new price; if you cancel, you keep using what you already paid for until it ends. No answer is not taken as agreement, and nothing ` +
+                `is charged at the new price without it.\n\nPlease choose by ${enDate(last)}. For questions, use 'Support' in the app or the help page (/help).` },
+  };
+}
+// The card subscription a held key belongs to -> { h, sub } or null (the same check as a plan change).
+async function priceSub(env, key) {
+  const h = await heldKey(env, key);
+  const sub = String(h?.payload?.sub ?? "");
+  return h && /^\d{1,20}$/.test(sub) && String(h.meta.sub || "") === sub ? { h, sub } : null;
+}
+async function subPrice(req, env) {
+  const b = await readJson(req);
+  const s = await priceSub(env, b.key);
+  if (!s) return json({ error: "key" }, 403);
+  const none = { notice: null, choice: "" };
+  const plan = await env.LICENSES.get("subplan:" + s.sub), today = kstDay(Date.now());
+  const n = (await priceNotices(env)).find(x => x.plan === plan && today < x.effective);
+  if (!n) return json(none);
+  const was = await env.LICENSES.get("pricechoice:" + n.id + ":" + s.sub);
+  const choice = was === "agree" || was === "cancel" ? was : "";
+  if (!choice && (await env.LICENSES.get("sub:" + s.sub)) === null) return json(none);   // ended: nothing to agree to
+  return json({ notice: { id: n.id, plan: n.plan, oldPrice: n.oldPrice, newPrice: n.newPrice, effective: n.effective,
+                          text: priceText(n, b.lang === "en" ? "en" : "ko") }, choice });
+}
+async function subPriceChoose(req, env) {
+  if (await overIp(req, env, "price", IP_LIMIT.price)) return json({ error: "busy" }, 429);
+  const b = await readJson(req);
+  const id = String(b.id ?? ""), choice = String(b.choice ?? "");
+  if (!PRICE_ID.test(id) || !["agree", "cancel"].includes(choice)) return json({ error: "bad request" }, 400);
+  const s = await priceSub(env, b.key);
+  if (!s) return json({ error: "key" }, 403);
+  const plan = await env.LICENSES.get("subplan:" + s.sub);
+  const n = (await priceNotices(env)).find(x => x.id === id);
+  if (!n || n.plan !== plan) return json({ error: "notice" }, 404);
+  if (kstDay(Date.now()) >= n.effective) return json({ error: "closed" }, 409);
+  const name = "pricechoice:" + id + ":" + s.sub, was = await env.LICENSES.get(name);
+  if (was === choice) return json({ ok: true, choice });   // the same answer again: nothing to write
+  if (was === "cancel") return json({ error: "already" }, 409);
+  if ((await env.LICENSES.get("sub:" + s.sub)) === null) return json({ error: "inactive" }, 409);
+  if ((await takePublic(env, 1)) === "full") return json({ error: "busy" }, 429);   // "down": the address limit holds
+  const cancelled = choice === "cancel" ? (await cancelSubscription(env, s.sub, "가격 변경 안내 " + id)).ok : undefined;
+  const meta = { choice, at: now(), key: s.h.id, ...(choice === "cancel" ? { cancelled } : {}) };
+  await env.LICENSES.put(name, choice, { expirationTtl: PRICE_CHOICE_TTL, metadata: meta });
+  await audit(env, "app", choice === "agree" ? "가격 변경 동의" : "가격 변경 해지", "구독 " + s.sub + " · " + PLANS[plan] + " · " + id);
+  return json({ ok: true, choice, ...(choice === "cancel" ? { cancelled } : {}) });
+}
+// The dashboard: the notices with every answer (subscription number, answer, time, key id; who has not answered is not
+// listed: that would read every subscription), new notices, deleting one, and moving an agreed subscription.
+async function priceList(env) {
+  const today = kstDay(Date.now()), notices = [];
+  for (const n of await priceNotices(env)) {
+    const pre = "pricechoice:" + n.id + ":";
+    const l = await env.LICENSES.list({ prefix: pre, limit: 1000 });
+    const choices = l.keys.map(k => ({ sub: k.name.slice(pre.length), ...(k.metadata || {}) })).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    notices.push({ ...n, open: today < n.effective, agree: choices.filter(c => c.choice === "agree").length,
+                   cancel: choices.filter(c => c.choice === "cancel").length, choices,
+                   text: { ko: priceText(n, "ko"), en: priceText(n, "en") }, email: priceEmail(n) });
+  }
+  return { notices, today, minEffective: kstDay(Date.now() + PRICE_NOTICE_DAYS * 864e5), noticeDays: PRICE_NOTICE_DAYS };
+}
+const validDay = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d + "T00:00:00Z")) && new Date(d + "T00:00:00Z").toISOString().slice(0, 10) === d;
+async function priceCreate(env, b) {
+  const plan = String(b.plan ?? ""), variant = String(b.variant ?? "").trim(), effective = String(b.effective ?? "").trim();
+  const oldPrice = Number(b.oldPrice), newPrice = Number(b.newPrice);
+  if (!SINGLE_PLANS.includes(plan)) return { status: 400, error: "카드 구독 플랜을 고르세요" };
+  if (![oldPrice, newPrice].every(x => Number.isInteger(x) && x >= 1 && x <= PRICE_MAX_WON)) return { status: 400, error: "가격은 1~10,000,000원 사이의 정수예요" };
+  if (newPrice <= oldPrice) return { status: 400, error: "새 가격이 지금 가격보다 높을 때만 동의를 받아요" };
+  if (!ID_RE.test(variant)) return { status: 400, error: "새 상품 번호는 숫자예요" };
+  const c = await lsConfig(env);
+  if (variant === c.variants[plan]) return { status: 400, error: "새 상품 번호가 지금 상품 번호와 같아요. Lemon Squeezy에서 새 가격의 상품을 따로 만드세요" };
+  if (Object.values(c.variants).includes(variant)) return { status: 400, error: "다른 플랜의 상품 번호예요" };
+  const today = kstDay(Date.now()), min = kstDay(Date.now() + PRICE_NOTICE_DAYS * 864e5);
+  if (!validDay(effective)) return { status: 400, error: "시행일은 YYYY-MM-DD 날짜예요" };
+  if (effective < min) return { status: 400, error: `시행일은 오늘(한국 시간)부터 ${PRICE_NOTICE_DAYS}일 뒤인 ${min}이나 그 뒤여야 해요` };
+  if (effective > kstDay(Date.now() + 366 * 864e5)) return { status: 400, error: "시행일은 1년 안이어야 해요" };
+  const list = await priceNotices(env);
+  if (list.some(x => x.plan === plan && today < x.effective)) return { status: 409, error: "이 플랜에 아직 시행 전인 안내가 있어요. 그 안내를 지우고 다시 만드세요" };
+  if (list.length >= PRICE_MAX) return { status: 409, error: "안내는 " + PRICE_MAX + "개까지예요. 지난 안내를 지우세요" };
+  const id = [...crypto.getRandomValues(new Uint8Array(4))].map(x => x.toString(16).padStart(2, "0")).join("");
+  const n = { id, plan, oldPrice, newPrice, variant, effective, created: now() };
+  await env.LICENSES.put("config:price_notices", JSON.stringify([n, ...list]));
+  await audit(env, "admin", "가격 변경 안내", PLANS[plan] + " · " + oldPrice + "원 → " + newPrice + "원 · " + effective + " 시행 · " + id);
+  return { notice: n, text: { ko: priceText(n, "ko"), en: priceText(n, "en") }, email: priceEmail(n) };
+}
+async function priceDelete(env, b) {
+  const list = await priceNotices(env), n = list.find(x => x.id === String(b.id ?? ""));
+  if (!n) return { status: 404, error: "안내를 찾지 못했어요" };
+  await env.LICENSES.put("config:price_notices", JSON.stringify(list.filter(x => x !== n)));
+  await audit(env, "admin", "가격 변경 안내 삭제", PLANS[n.plan] + " · " + n.effective + " 시행 · " + n.id);
+  return { ok: true };
+}
+async function priceMove(env, b) {
+  const n = (await priceNotices(env)).find(x => x.id === String(b.id ?? "")), sub = String(b.sub ?? "");
+  if (!n || !/^\d{1,20}$/.test(sub)) return { status: 404, error: "안내를 찾지 못했어요" };
+  if (kstDay(Date.now()) < n.effective) return { status: 409, error: `시행일(${n.effective}, 한국 시간)부터 옮길 수 있어요` };
+  const name = "pricechoice:" + n.id + ":" + sub, r = await env.LICENSES.getWithMetadata(name);
+  if (r?.value !== "agree") return { status: 409, error: "새 가격에 동의한 구독만 옮길 수 있어요" };
+  if (r.metadata?.moved) return { status: 409, error: "이미 옮겼어요" };
+  if ((await env.LICENSES.get("sub:" + sub)) === null) return { status: 409, error: "끝난 구독이에요" };
+  if ((await env.LICENSES.get("subplan:" + sub)) !== n.plan) return { status: 409, error: "이 구독은 지금 다른 플랜이에요" };
+  if (!env.LS_API_KEY) return { status: 503, error: "Lemon Squeezy API 키가 없어요" };
+  const res = await lsSetVariant(env, sub, n.variant, { disable_prorations: true });
+  if (!res.ok) {
+    await audit(env, "카드 결제", "새 가격으로 옮기기 실패", "구독 " + sub + " · " + PLANS[n.plan] + " · Lemon Squeezy " + res.status);
+    return { status: 502, error: res.status ? "Lemon Squeezy가 받지 않았어요 (" + res.status + ")" : "Lemon Squeezy에 연결하지 못했어요" };
+  }
+  const moved = now();
+  await env.LICENSES.put(name, "agree", { expirationTtl: PRICE_CHOICE_TTL, metadata: { ...(r.metadata || {}), moved } });
+  await audit(env, "admin", "새 가격으로 옮김", "구독 " + sub + " · " + PLANS[n.plan] + " · " + won(n.newPrice) + "원 · " + n.id);
+  return { ok: true, moved };
 }
 
 async function store(env, session, key, email, plan) {
@@ -886,7 +1067,7 @@ async function lockPass(env, tag, hour, route, view) {
 const ADMIN_VIEWS = {
   "GET /keys": "키 목록", "POST /keys": "키 검색", "GET /key": "키 원문", "POST /lookup": "키 확인", "GET /orders": "주문 목록",
   "GET /members": "회원 목록", "POST /members": "회원 검색", "GET /support": "문의 목록", "POST /support": "문의 검색",
-  "GET /support/ticket": "문의 열람", "GET /log": "작업 기록",
+  "GET /support/ticket": "문의 열람", "GET /log": "작업 기록", "GET /price": "가격 변경 동의",
 };
 function viewOf(route, url, body) {
   const action = ADMIN_VIEWS[route];
@@ -1058,6 +1239,12 @@ async function admin(req, url, env) {
       return json({ pay: o }, 200, false);
     }
     case "GET /card": return json(await cardSetup(env), 200, false);
+    case "GET /price": return json(await priceList(env), 200, false);
+    case "POST /price": case "POST /price/delete": case "POST /price/move": {
+      const f = { "POST /price": priceCreate, "POST /price/delete": priceDelete, "POST /price/move": priceMove }[route];
+      const { status = 200, ...r } = await f(env, body);
+      return json(r, status, false);
+    }
     case "POST /card": {
       const ids = { store: String(body.store ?? "").trim(), variants: {} };
       if (ids.store && !ID_RE.test(ids.store)) return json({ error: "상점 번호는 숫자예요" }, 400, false);
@@ -1470,6 +1657,7 @@ function unb64url(s) {
 }
 async function readJson(req) { const b = await req.json().catch(() => null); return b && typeof b === "object" ? b : {}; }   // "null" is JSON too
 function now() { return new Date().toISOString().replace(/\.\d+Z$/, "Z"); }
+const kstDay = ms => new Date(ms + 9 * 36e5).toISOString().slice(0, 10);   // the day in Korea (UTC+9), "2026-12-09"
 function b64url(bytes) {
   let s = "";
   for (const b of bytes) s += String.fromCharCode(b);

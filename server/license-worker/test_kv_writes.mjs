@@ -78,6 +78,11 @@ await count("card: renewal (webhook subscription_payment_success)", async () => 
 // a referral gift
 await adm("/referrals", { code: "LAUNCH", days: 3, max: 1000 });
 await count("referral code gift (POST /referral)", async () => assert.ok((await postJ("/referral", { code: "LAUNCH", device: "1".repeat(32) })).key));
+// a price increase notice of the card plan, and the subscriber's answer
+const notice = await count("seller: price notice (POST /admin/api/price)", async () => adm("/price", { plan: "monthly", oldPrice: 2900, newPrice: 3900, variant: "111", effective: new Date(Date.now() + 9 * 36e5 + 31 * 864e5).toISOString().slice(0, 10) }));
+const subKey = kv.get("sub:77");
+await count("subscriber: sees the notice (POST /sub/price)", async () => assert.equal((await postJ("/sub/price", { key: subKey })).notice.id, notice.notice.id));
+await count("subscriber: agrees (POST /sub/price/choose)", async () => assert.equal((await postJ("/sub/price/choose", { key: subKey, id: notice.notice.id, choice: "agree" })).choice, "agree"));
 
 console.table(rows.map(r => ({ action: r.label, puts: r.puts, deletes: r.deletes })));
 const WANT = {
@@ -93,6 +98,9 @@ const WANT = {
   "card: first payment (webhook subscription_created)": [10, 0],
   "card: renewal (webhook subscription_payment_success)": [7, 0],
   "referral code gift (POST /referral)": [3, 0],
+  "seller: price notice (POST /admin/api/price)": [1, 0],
+  "subscriber: sees the notice (POST /sub/price)": [0, 0],
+  "subscriber: agrees (POST /sub/price/choose)": [1, 0],
 };
 for (const r of rows) {
   const [p, d] = WANT[r.label];
