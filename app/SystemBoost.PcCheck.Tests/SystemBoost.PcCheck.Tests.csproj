@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- PC 맞춤 추천 without a window, a helper or a game: the files of Services/PcCheck/Pure (rules, CPU benchmark,
+       the sb_framegen bench protocol, the report file). dotnet run -c Release; exit code 1 when a check fails.
+       No NuGet packages: the linked files must stay free of Avalonia and Windows calls. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>SystemBoost.PcCheck.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../SystemBoost.App/Services/PcCheck/Pure/**/*.cs" Link="App/PcCheck/%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Include="../SystemBoost.App/Assets/lang.en.json" Link="lang.en.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

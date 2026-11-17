@@ -30,6 +30,7 @@ public enum PremiumFeature
     StreamMode,              // Biz: streaming app first, notifications off while streaming
     WorkMode,                // Biz: video calls and chosen work apps first
     StartupApps,             // Biz: turn programs that start with Windows off and on
+    PcCheck,                 // Ultra: PC 맞춤 추천 (read the specs, measure, recommend, apply at once)
 }
 
 public sealed record LicenseInfo(string Plan, string Email, DateTime? Expires, string Source, string? Sub = null, DateTime? Issued = null);
@@ -79,7 +80,8 @@ public static class License
 
     // Which plan opens a feature is decided here and the messages follow. Change the table in PremiumPage with it.
     private static bool UltraOnly(PremiumFeature f) =>
-        f is PremiumFeature.UltraMultiplier or PremiumFeature.DualGpu or PremiumFeature.PerGameProfiles or PremiumFeature.Overclock;
+        f is PremiumFeature.UltraMultiplier or PremiumFeature.DualGpu or PremiumFeature.PerGameProfiles or PremiumFeature.Overclock
+          or PremiumFeature.PcCheck;
     private static bool BizOnly(PremiumFeature f) =>
         f is PremiumFeature.StreamMode or PremiumFeature.WorkMode or PremiumFeature.StartupApps;
     public static bool Allowed(PremiumFeature f) => BizOnly(f) ? IsBiz : UltraOnly(f) ? IsUltra : IsPremium;
