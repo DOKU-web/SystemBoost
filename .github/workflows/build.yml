@@ -112,7 +112,8 @@ jobs:
           VPK_TOKEN: ${{ github.token }}
         run: |
           $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.6.0' }
-          build\windows\build.ps1 -Version $v
+          # -Adlx: the Radeon driver features (AMD's ADLX licence, accepted 2026-11-17; EULA Article 12-2)
+          build\windows\build.ps1 -Version $v -Adlx
       - uses: actions/upload-artifact@v4
         with: { name: SystemBoost-Windows, path: 'dist/windows/Releases/**' }
       - uses: actions/upload-artifact@v4
