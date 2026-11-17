@@ -24,7 +24,8 @@ public sealed partial class AccountPage : UserControl
     private bool _pendingBackup;    // ... with a recovery code instead of the authenticator
     private string? _sentTo;        // email sign-up went out: "check your mail" until the member goes on
     private string? _carry;         // a message for the next form (e.g. the code step ran out of time)
-    private (int? left, bool redo)? _backupLogin;   // just logged in with a recovery code: say what is left
+    private bool _backupLogin;      // just logged in with a recovery code: say what is left and what to do
+    private int? _backupLeft;
     private int _shown;             // a slower reply for an older screen must not land on this one
     private readonly Action _openPlans;
     private readonly ContentControl _plan = new();
@@ -148,6 +149,7 @@ public sealed partial class AccountPage : UserControl
         if (!Account.SignedIn)
         {
             _setup = null;
+            _backupLogin = false;
             _features = await Features();
             if (mine != _shown) return;
             _root.Children.Remove(wait);
@@ -169,7 +171,7 @@ public sealed partial class AccountPage : UserControl
             _root.Children.Add(Ui.Card(LogOut()));
             return;
         }
-        if (_backupLogin is { } used) _root.Children.Add(Ui.Card(BackupLoginCard(used.left, used.redo), "note"));
+        if (_backupLogin) _root.Children.Add(Ui.Card(BackupLoginCard(_backupLeft), "note"));
         _root.Children.Add(Ui.Card(Member(profile)));
         if (_features.Totp)   // accounts v2 servers only
         {
@@ -178,8 +180,8 @@ public sealed partial class AccountPage : UserControl
             _root.Children.Add(Ui.Card(Devices()));
             _root.Children.Add(Ui.Card(TwoFactor(profile)));
         }
-        _root.Children.Add(Ui.Card(Invite(profile)));
         _root.Children.Add(Ui.Card(Password(profile)));
+        _root.Children.Add(Ui.Card(Invite(profile)));
         _root.Children.Add(Ui.Card(Leave()));
     }
 
@@ -279,7 +281,8 @@ public sealed partial class AccountPage : UserControl
             if (reply != null)
             {
                 _pending = null;
-                _backupLogin = backup ? (reply.BackupLeft, reply.Redo2fa) : null;
+                _backupLogin = backup;   // the server also says redo2fa then: the advice below is always given
+                _backupLeft = reply.BackupLeft;
                 Show();
             }
             else if (again)
@@ -305,7 +308,7 @@ public sealed partial class AccountPage : UserControl
         return p;
     }
 
-    private Control BackupLoginCard(int? left, bool redo)
+    private Control BackupLoginCard(int? left)
     {
         var p = new StackPanel { Spacing = 8 };
         p.Children.Add(Ui.Text("복구 코드로 로그인했어요", "h2 accent"));
@@ -313,9 +316,9 @@ public sealed partial class AccountPage : UserControl
             p.Children.Add(Ui.Text(n <= AccountRules.BackupFew ? $"남은 복구 코드는 {n}개예요. 아래 '2단계 인증'에서 새로 만들어 두세요."
                                                                 : $"남은 복구 코드는 {n}개예요.", "label", wrap: true));
         p.Children.Add(Ui.Text("휴대폰을 바꿨거나 인증 앱을 잃었다면 아래 '2단계 인증'에서 끄고 다시 켜서 새 휴대폰에 등록해 주세요. 끌 때 복구 코드를 하나 더 써요.", "label", wrap: true));
-        if (redo) p.Children.Add(Ui.Text("계정에 이메일이 있으면 복구 코드를 썼다는 알림 메일이 가요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text("계정에 이메일이 있으면 복구 코드를 썼다는 알림 메일이 가요.", "muted", wrap: true));
         var ok = Ui.Button("확인", "ghost");
-        ok.Click += (_, _) => { _backupLogin = null; Show(); };
+        ok.Click += (_, _) => { _backupLogin = false; Show(); };
         p.Children.Add(Left(ok));
         return p;
     }
