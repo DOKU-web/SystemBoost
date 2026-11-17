@@ -30,6 +30,8 @@ g++ -std=c++20 -O2 -Wall -Wextra -I"$FG/src" "$FG/tests/meter_test.cpp" -o "$WOR
 echo "== 2c. admin helper rules"
 g++ -std=c++17 -O2 -Wall -Wextra "$FG/../helper/tests/validate_test.cpp" -o "$WORK/validate_test"
 "$WORK/validate_test"
+g++ -std=c++17 -O2 -Wall -Wextra "$FG/../helper/tests/amd_test.cpp" "$FG/../helper/src/amd.cpp" -o "$WORK/amd_test"
+"$WORK/amd_test"
 
 echo "== 3. interpolation quality (reference)"
 python3 -I "$FG/tests/measure_quality.py" "$FG" | tail -16 | tee "$OUT/quality.txt"
