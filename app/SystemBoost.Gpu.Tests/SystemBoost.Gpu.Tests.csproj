@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The app's AMD (ADLX) logic without a window, a helper or a Radeon: sb_helper is faked (FakeRadeon.cs).
+       dotnet run -c Release (from this folder, or with project app/SystemBoost.Gpu.Tests); exit code 1 when a check fails.
+       No NuGet packages: the app's GPU files are linked, so they must stay free of Avalonia and Windows calls. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>SystemBoost.Gpu.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../SystemBoost.App/Services/BoostBackup.cs" Link="App/BoostBackup.cs" />
+    <Compile Include="../SystemBoost.App/Services/Gpu/IGpuVendorBackend.cs" Link="App/IGpuVendorBackend.cs" />
+    <Compile Include="../SystemBoost.App/Services/Gpu/IHelperChannel.cs" Link="App/IHelperChannel.cs" />
+    <Compile Include="../SystemBoost.App/Services/Gpu/AmdProtocol.cs" Link="App/AmdProtocol.cs" />
+    <Compile Include="../SystemBoost.App/Services/Gpu/AmdGpuBackend.cs" Link="App/AmdGpuBackend.cs" />
+    <Compile Include="../SystemBoost.App/Services/Gpu/GpuSelection.cs" Link="App/GpuSelection.cs" />
+  </ItemGroup>
+</Project>

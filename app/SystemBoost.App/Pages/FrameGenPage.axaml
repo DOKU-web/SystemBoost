@@ -19,6 +19,17 @@
       </Border>
     </Grid>
     <TextBlock DockPanel.Dock="Bottom" Classes="muted" TextWrapping="Wrap" Text="{Binding Status}" Margin="2,12,0,0" />
+    <!-- AMD Fluid Motion Frames is on as well: SystemBoost never turns it off, the user picks one -->
+    <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,20" BorderBrush="{StaticResource SbOrange}" BorderThickness="1" IsVisible="{Binding ShowAfmfWarning}">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="4" VerticalAlignment="Center">
+          <TextBlock Classes="label" TextWrapping="Wrap" Foreground="{StaticResource SbOrange}" Text="{Binding AfmfWarning}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="아직 실제 라데온 PC에서 시험하지 않음" />
+        </StackPanel>
+        <Button x:Name="AmdSoftwareButton" Grid.Column="1" Classes="ghost" Content="AMD Software 열기" Margin="12,0,0,0"
+                VerticalAlignment="Center" IsVisible="{Binding ShowAmdSoftware}" />
+      </Grid>
+    </Border>
 
     <Grid ColumnDefinitions="1.25*,20,*">
       <!-- left column -->

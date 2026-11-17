@@ -57,6 +57,7 @@ public sealed class DashboardPage : UserControl
             grid.Children.Add(c);
         }
         root.Children.Add(grid);
+        if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend win) root.Children.Add(Ui.Card(GpuCards.Tile(win, go)));
         if (OperatingSystem.IsWindows()) root.Children.Add(Ui.Card(FpsOverlay.Card()));
         Content = new ScrollViewer { Content = root };
     }
@@ -78,6 +79,7 @@ public sealed class BoostPage : UserControl
         var list = new StackPanel();
         bool first = true;
         var toggles = new List<(ToggleSwitch sw, string id)>();
+        var rows = new Dictionary<string, (Border row, ToggleSwitch sw)>();
         var features = BoostCatalog.For(category).ToList();
         if (extra is BoostCategory e) features.AddRange(BoostCatalog.For(e));
         foreach (var f in features)
@@ -115,6 +117,7 @@ public sealed class BoostPage : UserControl
             }
             if (!ready && row.Child is Grid pending) pending.Children[0].Opacity = 0.55;
             list.Children.Add(row);
+            rows[f.Id] = (row, sw);
             first = false;
             if (ready)
             {
@@ -135,6 +138,7 @@ public sealed class BoostPage : UserControl
         if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend win)
         {
             foreach (var c in BoostExtras.For(category, win, status)) root.Children.Add(c);
+            if (category == BoostCategory.Gpu && backend.Connected) GpuCards.GuardSwitches(win, rows);   // what this card cannot do: shown off
             win.Changed += () => Dispatcher.UIThread.Post(() =>
             {
                 foreach (var (sw, id) in toggles) if (sw.IsEnabled) _ = Init(sw, backend, id);

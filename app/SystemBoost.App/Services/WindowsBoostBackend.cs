@@ -4,11 +4,12 @@
 // The game process itself is never opened with a right that could change it, and never modified:
 // games are recognised by name in the process list (and by path, read the way Task Manager reads it),
 // and per-game settings go through Windows or the driver.
-//   Stays until turned off   gpu.highperf, gpu.hags, gpu.driver, cpu.priority,
+//   Stays until turned off   gpu.highperf, gpu.hags, gpu.driver (NVIDIA), cpu.priority,
 //                            net.adapterpower, sys.gamemode, sys.dvr
 //   Only while a game runs   ram.standby, ram.workingset, cpu.ecores, cpu.power,
-//                            net.monitor, sys.focus, boost.profiles
+//                            net.monitor, sys.focus, boost.profiles, gpu.driver (AMD: its 3D settings are global)
 //   Only while the app runs  gpu.oc, the frame limit for frame generation (fg.limit)
+//   GPU makers (WindowsBoostBackend.Gpu.cs, Services/Gpu)  NVIDIA and AMD behind IGpuVendorBackend
 //   Biz (WindowsBoostBackend.Biz.cs)  biz.stream and biz.work while their programs run; startup programs until turned back
 // Admin-only work goes through sb_helper (BoostHelper.cs).
 using Microsoft.Win32;
@@ -28,21 +29,6 @@ using System.Threading.Tasks;
 
 namespace SystemBoost.App.Services;
 
-/// One saved value. Kind says how to put it back.
-public sealed class BoostBackup
-{
-    public string Feature { get; set; } = "";
-    public string Kind { get; set; } = "";     // hkcu, hags, ifeo, netpm, nv, nvlimit, power, wu, ecores, oc, startup
-    public string Target { get; set; } = "";   // game path, exe name or adapter
-    public string Key { get; set; } = "";
-    public string Name { get; set; } = "";
-    public bool Existed { get; set; }
-    public bool Dword { get; set; }
-    public string Value { get; set; } = "";
-    public string ValueKind { get; set; } = "";   // hkcu: the registry type before (records from before this: Dword)
-    public string SetTo { get; set; } = "";       // what SystemBoost wrote; "" in records from before this
-}
-
 public sealed class BoostState
 {
     public List<string> Games { get; set; } = new();
@@ -55,6 +41,7 @@ public sealed class BoostState
     public List<string> TrimTargets { get; set; } = new();
     public List<string> WorkApps { get; set; } = new();        // Biz work mode: programs raised with the video calls
     public GpuChoice Gpu { get; set; } = new();
+    public AmdGpuChoice AmdGpu { get; set; } = new();
     public Dictionary<string, GameProfile> GameProfiles { get; set; } = new();
 }
 
@@ -77,7 +64,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
 
     private static readonly string[] GameTime = { "ram.standby", "ram.workingset", "cpu.ecores", "cpu.power", "net.monitor", "sys.focus", "boost.profiles" };
     private static readonly string[] PerGame = { "gpu.highperf", "cpu.priority", "gpu.driver" };
-    private static readonly string[] AdminKinds = { "hags", "ifeo", "netpm", "nv", "wu", "oc" };
+    private static readonly string[] AdminKinds = { "hags", "ifeo", "netpm", "nv", "wu", "oc", "amdoc", "amd3d" };
     private static readonly string[] BasicProfile = { "cpu.power", "cpu.ecores", "ram.workingset", "net.monitor", "sys.focus", "sys.gamemode", "sys.dvr" };
     private static readonly string[] FullProfile = BasicProfile.Append("ram.standby").ToArray();
     private static readonly (string start, string end)[] UpdatePauses =
@@ -207,7 +194,8 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
 
     internal const string ShareTitle = "앱별 분배";
     internal const string PagefileTitle = "가상 메모리 (페이징 파일)";
-    private static bool IsUninstallAdminKind(BoostBackup b) => b.Kind is "hags" or "ifeo" or "netpm" or "nv" or "wu";
+    // AMD tuning and 3D settings stay in the driver after the app is gone, unlike the NVIDIA tuning
+    private static bool IsUninstallAdminKind(BoostBackup b) => b.Kind is "hags" or "ifeo" or "netpm" or "nv" or "wu" or "amdoc" or "amd3d";
 
     /// Settings changed with administrator rights that are still changed. Uninstalling cannot put them back
     /// without asking, so the backup page names them.
@@ -227,7 +215,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     public async Task StartAsync()
     {
         Publish();
-        if (_s.Enabled.Except(_s.OneClickOwned).Any(id => id is "ram.standby" or "sys.focus" or "net.monitor"))
+        if (_s.Enabled.Except(_s.OneClickOwned).Any(id => id is "ram.standby" or "sys.focus" or "net.monitor" or GameProfileId))
             await _helper.EnsureAsync();
         await _gate.WaitAsync();
         try { await RecoverAsync(); await MovePriorityDownAsync(); Save(); }
@@ -256,6 +244,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         }
         catch (Exception e) { Log("자원 분배를 되돌리지 못했어요: " + e.Message); }
         await PutGpuBackAsync();
+        await Amd.RecoverTuningAsync();   // put back, never applied again; the user is told
         var stream = _s.Backups.Where(b => b.Feature == "biz.stream").ToList();
         if (stream.Count > 0) await RestoreAsync(stream);
         // the helper undoes it as it exits; a power cut leaves it
@@ -269,6 +258,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             if (await _helper.EnsureAsync() != null) Log("Windows 업데이트 일시정지는 하루 안에 저절로 끝나요");
         }
         if (_s.OneClick) await OneClickOffAsync();
+        await Amd.RecoverProfileAsync();
         await EndGameTimeAsync();
     }
 
@@ -319,7 +309,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
                 await EndGameTimeAsync();
                 if (_s.OneClick) await OneClickOffAsync();
                 // the helper does this too as it exits; here the backup is cleared as well
-                var gpu = _s.Backups.Where(b => b.Kind is "oc" or "nvlimit").ToList();
+                var gpu = _s.Backups.Where(b => b.Kind is "oc" or "nvlimit" or "amdoc").ToList();
                 if (gpu.Count > 0 && (_helper.Running || _plainHelper.Running)) await RestoreAsync(gpu);
                 Save();
             }).Wait(ExitWaitMs);
@@ -407,6 +397,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
         ["하드웨어 가속 GPU 스케줄링"] = "Hardware-accelerated GPU scheduling",
         ["게임 우선순위 '보통 이상'"] = "Game priority 'Above normal'",
         ["드라이버 게임 프로필"] = "Driver game profile",
+        ["오버클럭 / 전력 제한"] = "Overclock / power limit",
         ["네트워크 어댑터 절전 끄기"] = "Network adapter power saving off",
         ["게임 중 알림·업데이트 일시정지"] = "Pause notifications and updates during games",
         [PagefileTitle] = "Virtual memory (paging file)",
@@ -436,6 +427,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     {
         "boost.oneclick" => _s.OneClick,
         "gpu.hags" => Has(id) || ReadMachineDword(GraphicsDrivers, "HwSchMode") == 2,
+        GameProfileId => Has(id) || _s.Enabled.Contains(id),   // AMD keeps the switch in Enabled; NVIDIA never does
         _ when GameTime.Contains(id) || BizModes.Contains(id) => _s.Enabled.Contains(id),
         _ => Has(id),
     });
@@ -549,9 +541,9 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             case "gpu.highperf": return ApplyGpuPreference();
             case "gpu.hags": return await ApplyHagsAsync();
             case "cpu.priority": return await ApplyPriorityAsync();
-            case "gpu.driver": return await ApplyDriverAsync();
+            case "gpu.driver": return await GameProfileOnAsync();
             case "net.adapterpower": return await ApplyAdapterPowerAsync();
-            case "gpu.oc": return await ApplyGpuTuningAsync();
+            case "gpu.oc": return await GpuTuningOnAsync();
             case "boost.profiles" when !License.Allowed(PremiumFeature.PerGameProfiles): return $"{License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요 (바뀐 것 없음)";
             case "biz.stream" or "biz.work": return ApplyBizMode(id);
         }
@@ -590,6 +582,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             var r = await DeactivateAsync(id);
             return r ?? "껐어요";
         }
+        if (id == GameProfileId && await GameProfileOffAsync() is { } amdOff) return amdOff;
         var mine = _s.Backups.Where(b => b.Feature == id).ToList();
         if (mine.Count == 0) return "SystemBoost가 바꾼 적이 없어서 그대로 뒀어요";
         if (mine.Any(IsAdminKind))
@@ -604,6 +597,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
     private string DescribeRestore(string id) => id switch
     {
         "gpu.hags" => $"원래대로 돌렸어요 (HwSchMode {MachineText(GraphicsDrivers, "HwSchMode")}). 재부팅하면 적용돼요",
+        GameProfileId when Amd.TakeRevertNote() is { } note => "원래대로 돌렸어요 · " + note,
         _ => "원래대로 돌렸어요",
     };
 
@@ -645,9 +639,11 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
                 if (b.SetTo.Length > 0 && ReadMachineDword(Ifeo + b.Target + @"\PerfOptions", "CpuPriorityClass")?.ToString(CultureInfo.InvariantCulture) != b.SetTo) return null;
                 return await HelperError(b.Existed ? new[] { "ifeo.set", b.Target, b.Value } : new[] { "ifeo.del", b.Target });
             case "netpm": return await HelperError("net.pm.set", b.Target, "1");
-            case "nv": return await HelperError("nv.restore", b.Target, b.Name, b.Value);
+            case "nv": return await Nvidia.RevertGameProfileAsync(b);   // HelperError("nv.restore", ...), as before
             case "nvlimit": return await EndLimitCallAsync(b);
-            case "oc": return await RestoreGpuAsync(b);
+            case "oc": return await Nvidia.RevertTuningAsync(b);       // RestoreGpuAsync, as before
+            case "amdoc": return await Amd.RevertTuningAsync(b);
+            case "amd3d": return await Amd.RevertGameProfileAsync(b);
             case "wu":
                 if (!RestoreRules.StillOurs(b.SetTo, ReadMachineString(UpdateUx, b.Name))) return null;   // Windows or the user changed it since
                 return await HelperError(b.Existed ? new[] { "wu.set", b.Name, b.Value } : new[] { "wu.del", b.Name });
@@ -992,7 +988,8 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
 
     private async Task TickAsync()
     {
-        await WatchGpuAsync();
+        await Nvidia.WatchTuningAsync();   // WatchGpuAsync, as before
+        await Amd.WatchTuningAsync();
         if (_s.Enabled.Count == 0 && !_s.OneClick && !_gameRunning && !_streaming && _raised.Count == 0) return;
         var names = ProcessNames();
         var game = RunningGames(names);
@@ -1002,6 +999,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             _gameName = game;
             Log($"{game} 실행을 감지했어요");
             foreach (var id in _s.Enabled.Where(GameTime.Contains).ToList()) Log(await ActivateAsync(id));   // the Biz modes follow their own programs
+            await GameProfileStartAsync(game);
             Save();
             Publish();
         }
@@ -1093,6 +1091,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             var failed = await RestoreAsync(doable);
             Log(failed == null ? $"{BoostCatalog.All.First(f => f.Id == id).Title}: 원래대로 돌렸어요" : "되돌리지 못했어요: " + failed);
         }
+        await GameProfileEndAsync();
     }
 
     private async Task InGameAsync()

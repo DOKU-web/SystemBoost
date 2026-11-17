@@ -49,6 +49,10 @@ jobs:
           sudo apt-get $APT update
           sudo apt-get $APT install -y glslang-tools spirv-cross mesa-vulkan-drivers libvulkan-dev g++-mingw-w64-x86-64-posix python3-numpy python3-scipy python3-pil
       - run: native/framegen/tests/run_all.sh
+      # The app's AMD (ADLX) logic over a pretend helper: no Radeon, no window, no NuGet packages.
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - run: dotnet run --project app/SystemBoost.Gpu.Tests -c Release
       # The generated text differs between tool versions, so this uses the Vulkan SDK that
       # made the committed file. Update the version here when regenerating with a newer one.
       # Mac only: reported, but no longer blocks a Windows build or release.

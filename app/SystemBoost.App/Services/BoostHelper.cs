@@ -17,7 +17,7 @@ using System.Threading.Tasks;
 
 namespace SystemBoost.App.Services;
 
-internal sealed class BoostHelper : IDisposable
+internal sealed class BoostHelper : IHelperChannel, IDisposable
 {
     private const int ConnectTimeoutMs = 15000;
     private static string HelperPath => Path.Combine(AppContext.BaseDirectory, "sb_helper.exe");

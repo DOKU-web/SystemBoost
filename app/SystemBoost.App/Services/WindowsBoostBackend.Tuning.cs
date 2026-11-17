@@ -188,7 +188,7 @@ public sealed partial class WindowsBoostBackend
 
     private async Task WatchGpuAsync()
     {
-        if (!Has("gpu.oc")) return;
+        if (!_s.Backups.Any(b => b.Kind == "oc")) return;   // gpu.oc of an AMD card is "amdoc" (AmdGpuBackend)
         var (ok, data) = await _helper.CallAsync("oc.status");
         if (!ok)
         {
