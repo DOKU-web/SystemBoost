@@ -57,6 +57,7 @@ public sealed class DashboardPage : UserControl
             grid.Children.Add(c);
         }
         root.Children.Add(grid);
+        if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend) root.Children.Add(Ui.Card(PcCheckPage.Tile(go)));
         if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend win) root.Children.Add(Ui.Card(GpuCards.Tile(win, go)));
         if (OperatingSystem.IsWindows()) root.Children.Add(Ui.Card(FpsOverlay.Card()));
         Content = new ScrollViewer { Content = root };
