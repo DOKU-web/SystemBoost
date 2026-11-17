@@ -64,6 +64,20 @@ int main() {
     CHECK(isTempLimit("85") && !isTempLimit("88") && !isTempLimit("39"));
     CHECK(isPowerWatts("170") && !isPowerWatts("0") && !isPowerWatts("1001"));
 
+    // AMD (ADLX) requests
+    CHECK(isGpuIndex("0") && isGpuIndex("7"));
+    CHECK(!isGpuIndex("8") && !isGpuIndex("-1") && !isGpuIndex("") && !isGpuIndex("00") && !isGpuIndex("1 ") && !isGpuIndex("a"));
+    CHECK(isTriState("0") && isTriState("1") && isTriState("-"));
+    CHECK(!isTriState("2") && !isTriState("") && !isTriState("--") && !isTriState("on") && !isTriState("01"));
+    CHECK(isAmdPowerPct("-") && isAmdPowerPct("0") && isAmdPowerPct("-10") && isAmdPowerPct("15") && isAmdPowerPct("100") && isAmdPowerPct("-100"));
+    CHECK(!isAmdPowerPct("101") && !isAmdPowerPct("-101") && !isAmdPowerPct("") && !isAmdPowerPct("+5") && !isAmdPowerPct("5%") && !isAmdPowerPct("1.5"));
+    CHECK(isAmdMHz("-") && isAmdMHz("2430") && isAmdMHz("100") && isAmdMHz("30000"));
+    CHECK(!isAmdMHz("99") && !isAmdMHz("30001") && !isAmdMHz("-100") && !isAmdMHz("") && !isAmdMHz("2430MHz") && !isAmdMHz("--"));
+    CHECK(isAmdTempLimit("60") && isAmdTempLimit("83") && isAmdTempLimit("90"));
+    CHECK(!isAmdTempLimit("59") && !isAmdTempLimit("91") && !isAmdTempLimit("-") && !isAmdTempLimit(""));
+    CHECK(isAmdAutoMode("undervolt") && isAmdAutoMode("ocgpu") && isAmdAutoMode("ocvram"));
+    CHECK(!isAmdAutoMode("Undervolt") && !isAmdAutoMode("oc") && !isAmdAutoMode("") && !isAmdAutoMode("ocgpu "));
+
     CHECK(isPagefileLine("?:\\pagefile.sys"));
     CHECK(isPagefileLine("C:\\pagefile.sys"));
     CHECK(isPagefileLine("c:\\PAGEFILE.SYS 0 0"));

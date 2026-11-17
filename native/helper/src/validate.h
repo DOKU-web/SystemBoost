@@ -98,6 +98,20 @@ inline bool isTempLimit(const std::string& s) { return isInt(s, 40, 87); }
 inline bool isPowerWatts(const std::string& s) { return isInt(s, 10, 1000); }
 inline bool isFrameLimit(const std::string& s) { return isInt(s, 10, 300); }
 
+// AMD (ADLX) requests, amd.* in commands.cpp. These are only the syntax and generous bounds: ADLX's
+// own range and step for the card, and the size of one raise, are checked by amd.cpp.
+/// Index in ADLX's GPU list, as amd.info reports it: one digit 0..7.
+inline bool isGpuIndex(const std::string& s) { return s.size() == 1 && s[0] >= '0' && s[0] <= '7'; }
+/// A 3D setting: 1 on, 0 off, - leave it.
+inline bool isTriState(const std::string& s) { return s == "0" || s == "1" || s == "-"; }
+/// Power limit in percent (ADLX ManualPowerTuning), or - to leave it.
+inline bool isAmdPowerPct(const std::string& s) { return s == "-" || isInt(s, -100, 100); }
+/// GPU or VRAM max clock in MHz, or - to leave it.
+inline bool isAmdMHz(const std::string& s) { return s == "-" || isInt(s, 100, 30000); }
+/// Edge temperature at which the tuning goes back (the app's default is 83).
+inline bool isAmdTempLimit(const std::string& s) { return isInt(s, 60, 90); }
+inline bool isAmdAutoMode(const std::string& s) { return s == "undervolt" || s == "ocgpu" || s == "ocvram"; }
+
 /// A page file size in MB: 1 to 8 digits, at most 16 TB. No sign.
 inline bool isPagefileSize(const std::string& s, long long& v) {
     if (s.empty() || s.size() > 8) return false;
