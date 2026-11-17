@@ -21,7 +21,9 @@ internal sealed class Rig
     public readonly FakeJournal Journal;
     public readonly FakeHelper Plain, Admin;
     public readonly List<string> Notices = new(), Logs = new();
-    public AmdGpuChoice Choice = new() { RiskAccepted = true, RiskTerms = 2 };
+    public AmdGpuChoice Choice = new();
+    /// Which card names have a consent to the overclocking notice (OcConsent.Valid in the app).
+    public Func<string, bool> Consent = _ => true;
     public bool Dll = true, Laptop, Allowed = true;
     public int Changed;
     public DateTime Now = new(2026, 11, 17, 3, 0, 0, DateTimeKind.Utc);
@@ -39,7 +41,7 @@ internal sealed class Rig
             IsLaptop = () => Laptop,
             TuningAllowed = () => Allowed,
             Choice = () => Choice,
-            RiskTerms = 2,
+            Consented = name => Consent(name),
             Log = Logs.Add,
             Notice = Notices.Add,
             Changed = () => Changed++,
@@ -588,17 +590,19 @@ internal static class Program
             Eq(0, r.Journal.Backups.Count, "record gone with it");
         });
 
-        Test("risk: every AMD tuning needs the tick on the current wording", async () =>
+        Test("consent: every AMD tuning needs the overclocking notice agreed to for this card; the old tick counts for nothing", async () =>
         {
             var r = new Rig();
             r.Choice.GpuMaxMHz = 2400;   // even a lowering
-            r.Choice.RiskAccepted = false;
-            Eq("아래 안내를 읽고 체크해 주세요" + U, await r.Amd.ApplyTuningAsync(), "no tick");
-            Eq("아래 안내를 읽고 체크해 주세요" + U, await r.Amd.ApplyAutoTuningAsync(GpuAutoTuning.Undervolt), "no tick, auto");
-            r.Choice.RiskAccepted = true;
-            r.Choice.RiskTerms = 1;
-            Eq("아래 안내를 읽고 체크해 주세요" + U, await r.Amd.ApplyTuningAsync(), "older wording");
+            r.Choice.RiskAccepted = true;   // a tick from 0.8.13 to 0.8.15 in an older boost-state.json
+            r.Choice.RiskTerms = 2;
+            string? asked = null;
+            r.Consent = name => { asked = name; return false; };
+            Eq(OverclockNotice.NotAgreed + U, await r.Amd.ApplyTuningAsync(), "no consent");
+            Eq(OverclockNotice.NotAgreed + U, await r.Amd.ApplyAutoTuningAsync(GpuAutoTuning.Undervolt), "no consent, auto");
+            Eq(r.Gpu.Name, asked, "asked for the card being tuned");
             Eq(0, r.Admin.Prompts, "no prompt");
+            Eq(0, r.Journal.Backups.Count + r.Gpu.Writes.Count, "nothing written");
         });
 
         Test("laptop and APU: tuning and reset off with 데스크톱 그래픽카드 전용, game profile stays", async () =>

@@ -226,23 +226,16 @@ internal static class BoostExtras
         var core = Picker(cores, choice.CoreMHz, Offset);
         var mems = Steps(MemOffsetMin, MemOffsetMax, MemOffsetStep, 0);
         var mem = Picker(mems, choice.MemMHz, Offset);
-        var risk = new CheckBox { Content = "값을 높이면 게임이 멈추거나 화면이 꺼질 수 있고, 적용한 결과는 제 책임이라는 것을 이해했어요", IsChecked = b.GpuRiskAccepted };
         p.Children.Add(Ui.Row("전력 제한", "낮추면 전력과 열이 줄고 성능도 줄 수 있어요", power, true));
         p.Children.Add(Ui.Row("코어 클럭 오프셋", "기본 클럭에 더하거나 빼는 값이에요", core));
         p.Children.Add(Ui.Row("메모리 클럭 오프셋", "기본 클럭에 더하거나 빼는 값이에요", mem));
-        // Who answers for what: the user for the values they choose; the seller still for its own program errors
-        // (EULA Article 10: a clause that drops the seller's liability for intent or gross negligence is void).
-        p.Children.Add(Ui.Text("주의: 오버클럭과 전력 제한은 사용자가 값을 골라 직접 적용하는 기능이에요. 적용한 뒤 생기는 게임 멈춤, 시스템 오류, "
-                               + "그래픽카드 손상, 제조사 보증 문제는 사용자 책임이에요. 프로그램 자체의 오류로 생긴 손해는 사용권 계약 제10조를 따라요.",
-                               "muted", wrap: true));
-        p.Children.Add(risk);
+        // who answers for what: the overclocking notice, agreed to when the switch is first turned on (OcConsent)
         p.Children.Add(Ui.Text($"위 스위치를 켜면 적용돼요. '유지'를 누르지 않거나, GPU가 {choice.TempLimitC} °C 이상이 되거나, 드라이버 오류가 나거나, "
                                + "앱을 끄면 원래 값으로 돌아가요. 제조사 보증 조건은 직접 확인해 주세요.", "muted", wrap: true));
-        void Store() => b.SetGpuChoice(powers[power.SelectedIndex], cores[core.SelectedIndex], mems[mem.SelectedIndex], risk.IsChecked == true);
+        void Store() => b.SetGpuChoice(powers[power.SelectedIndex], cores[core.SelectedIndex], mems[mem.SelectedIndex]);
         power.SelectionChanged += (_, _) => Store();
         core.SelectionChanged += (_, _) => Store();
         mem.SelectionChanged += (_, _) => Store();
-        risk.IsCheckedChanged += (_, _) => Store();
 
         var keepText = Ui.Text("", "label", wrap: true);
         var keep = Ui.Button("유지", "primary");

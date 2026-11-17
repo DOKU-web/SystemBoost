@@ -95,6 +95,18 @@ public sealed class BoostPage : UserControl
                     status.Text = $"{f.Title}은(는) {License.PlanOf(need)} 기능이에요. 왼쪽 '★ 플랜'에서 열 수 있어요.";
                     return;
                 }
+                // overclocking and the power limit (NVIDIA and AMD): the notice first, when this card has no valid consent
+                if (f.Id == "gpu.oc" && sw.IsChecked == true && OperatingSystem.IsWindows() && backend is WindowsBoostBackend oc)
+                {
+                    sw.IsEnabled = false;
+                    bool agreed = await GpuCards.AskConsentAsync(oc, sw, status, f.Title);
+                    sw.IsEnabled = true;
+                    if (!agreed)
+                    {
+                        sw.Tag = "loading"; sw.IsChecked = false; sw.Tag = null;
+                        return;
+                    }
+                }
                 sw.IsEnabled = false;
                 status.Text = $"{f.Title}: 처리하는 중…";
                 string r = sw.IsChecked == true ? await backend.ApplyAsync(f.Id) : await backend.RevertAsync(f.Id);

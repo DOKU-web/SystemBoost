@@ -72,8 +72,9 @@ public sealed class AmdGpuChoice
     public int? GpuMaxMHz { get; set; }
     public int? VramMaxMHz { get; set; }
     public int TempLimitC { get; set; } = DefaultTempLimitC;
+    /// The risk checkbox and its wording, as GpuChoice.RiskAccepted: no longer read (OcConsent took its place),
+    /// kept so older boost-state.json files load as they are.
     public bool RiskAccepted { get; set; }
-    /// Same meaning as GpuChoice.RiskTerms: the wording the tick answers (2 = from 0.8.13).
     public int RiskTerms { get; set; }
 }
 

@@ -18,5 +18,6 @@
     <Compile Include="../SystemBoost.App/Services/Gpu/AmdProtocol.cs" Link="App/AmdProtocol.cs" />
     <Compile Include="../SystemBoost.App/Services/Gpu/AmdGpuBackend.cs" Link="App/AmdGpuBackend.cs" />
     <Compile Include="../SystemBoost.App/Services/Gpu/GpuSelection.cs" Link="App/GpuSelection.cs" />
+    <Compile Include="../SystemBoost.App/Services/OverclockNotice.cs" Link="App/OverclockNotice.cs" />
   </ItemGroup>
 </Project>

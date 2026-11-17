@@ -32,7 +32,9 @@ internal sealed class AmdHost
     public Func<bool> TuningAllowed { get; init; } = () => true;
     public string TuningPlan { get; init; } = "울트라";
     public Func<AmdGpuChoice> Choice { get; init; } = () => new AmdGpuChoice();
-    public int RiskTerms { get; init; } = 2;
+    /// A consent to the current overclocking notice is on record for the card of this name (OcConsent.Valid).
+    /// No consent unless the app or a test says so.
+    public Func<string, bool> Consented { get; init; } = _ => false;
     public Action<string> Log { get; init; } = _ => { };
     public Action<string> Notice { get; init; } = _ => { };
     /// Toggles or the list below them changed.
@@ -88,8 +90,6 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
         _revertNote = null;
         return n;
     }
-
-    private bool RiskAccepted(AmdGpuChoice c) => c.RiskAccepted && c.RiskTerms >= _host.RiskTerms;
 
     private static bool Index(string text, out int gpu) =>
         int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out gpu) && gpu is >= 0 and <= 7;
@@ -301,8 +301,9 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
             if (target.Empty) return (none, "아래에서 값을 바꾼 뒤 켜 주세요" + AmdProtocol.Unchanged);
             if (AmdProtocol.Check(g, target) is { } bad) return (none, AmdProtocol.ErrorText(bad) + AmdProtocol.Unchanged);
         }
-        // lowering can make a card unstable too (an undervolt is a lowering), so every AMD tuning asks for the tick
-        if (!RiskAccepted(c)) return (none, "아래 안내를 읽고 체크해 주세요" + AmdProtocol.Unchanged);
+        // lowering can make a card unstable too (an undervolt is a lowering), so every AMD tuning needs the notice agreed
+        // to for this card; checked before the administrator prompt
+        if (!_host.Consented(g.Name)) return (none, OverclockNotice.NotAgreed + AmdProtocol.Unchanged);
         return (target, null);
     }
 

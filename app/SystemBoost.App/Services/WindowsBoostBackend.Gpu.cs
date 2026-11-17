@@ -29,7 +29,7 @@ public sealed partial class WindowsBoostBackend
         TuningAllowed = () => License.Allowed(PremiumFeature.Overclock),
         TuningPlan = License.PlanOf(PremiumFeature.Overclock),
         Choice = () => _s.AmdGpu,
-        RiskTerms = GpuRiskTerms,
+        Consented = OcConsent.Valid,
         Log = Log,
         Notice = line => Notice?.Invoke(line),
         Changed = Publish,
@@ -99,6 +99,20 @@ public sealed partial class WindowsBoostBackend
         return (vendor, _otherGpuName, null);
     }
 
+    /// The card a tuning would write to, named as consents.json keeps it (OcConsent). Null when this PC has no card
+    /// that SystemBoost can tune (Intel, a laptop or APU, no driver): then nothing is asked and the tuning says why itself.
+    public async Task<string?> TuningGpuNameAsync()
+    {
+        var vendor = await GpuVendorAsync();
+        if (vendor == GpuVendor.Amd)
+        {
+            if (Amd.Gpu == null) await Amd.ReadInfoAsync();
+            return Amd.Gpu is { } g && g.Name.Length > 0 && Amd.GetCapabilities().AnyTuning ? g.Name : null;
+        }
+        if (vendor == GpuVendor.Intel) return null;
+        return await Task.Run(Nvml.Read) is { } r && r.Name.Length > 0 ? r.Name : null;   // NVIDIA, as the tuning reads it
+    }
+
     // ------------------------------------------------------------ switches (ApplyCoreAsync)
     private async Task<string> GpuTuningOnAsync()
     {
@@ -166,15 +180,11 @@ public sealed partial class WindowsBoostBackend
     public bool AmdTuned => Amd.Tuned;
     public int AmdTempC => Amd.TempC;
     public int? AmdConfirmLeft => Amd.ConfirmBy is DateTime t ? Math.Max(0, (int)Math.Ceiling((t - DateTime.UtcNow).TotalSeconds)) : null;
-    /// The risk checkbox was ticked for its current wording (an older tick does not count).
-    public bool AmdRiskAccepted => _s.AmdGpu.RiskAccepted && _s.AmdGpu.RiskTerms >= GpuRiskTerms;
-
-    public void SetAmdChoice(int? powerPct, int? gpuMaxMHz, int? vramMaxMHz, int tempLimitC, bool riskAccepted)
+    public void SetAmdChoice(int? powerPct, int? gpuMaxMHz, int? vramMaxMHz, int tempLimitC)
     {
         var c = _s.AmdGpu;
-        (c.PowerPct, c.GpuMaxMHz, c.VramMaxMHz, c.RiskAccepted) = (powerPct, gpuMaxMHz, vramMaxMHz, riskAccepted);
+        (c.PowerPct, c.GpuMaxMHz, c.VramMaxMHz) = (powerPct, gpuMaxMHz, vramMaxMHz);
         c.TempLimitC = Math.Clamp(tempLimitC, AmdGpuChoice.MinTempLimitC, AmdGpuChoice.MaxTempLimitC);
-        c.RiskTerms = riskAccepted ? GpuRiskTerms : 0;
         Save();
     }
 

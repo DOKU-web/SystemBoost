@@ -47,6 +47,20 @@ internal static class GpuCards
         return Ui.Card(holder);
     }
 
+    /// Before an overclocking or power limit write (the '오버클럭 / 전력 제한' switch, the AMD auto tuning buttons): the notice
+    /// when there is no valid consent for this card (OcConsent.EnsureAsync). True to go on: agreed now or before, or no card
+    /// SystemBoost can tune here (the tuning then says why itself). False: the line in status says why nothing changed.
+    public static async Task<bool> AskConsentAsync(WindowsBoostBackend b, Control from, TextBlock status, string what)
+    {
+        string? gpu;
+        try { gpu = await b.TuningGpuNameAsync(); }
+        catch (Exception) { gpu = null; }   // the tuning checks the consent again and refuses without one
+        if (gpu == null) return true;
+        if (TopLevel.GetTopLevel(from) is Window owner && await OcConsent.EnsureAsync(owner, gpu, fromPreset: false)) return true;
+        status.Text = $"{what}: {OcConsent.Problem ?? "안내에 동의하지 않아서 켜지 않았어요 (바뀐 것 없음)"}";
+        return false;
+    }
+
     private static Control Intel()
     {
         var p = new StackPanel { Spacing = 10 };
@@ -123,13 +137,7 @@ internal static class GpuCards
         p.Children.Add(PickerRow("VRAM 최대 클럭", vramDesc, vramMax));
         p.Children.Add(Ui.Row("제한 온도", $"GPU 온도가 이 값 이상으로 3초 이어지면 공장 초기값으로 돌려요 · 기본 {AmdGpuChoice.DefaultTempLimitC} °C", temp));
 
-        // Who answers for what: the user for the values they choose; the seller still for its own program errors
-        // (EULA Article 10: a clause that drops the seller's liability for intent or gross negligence is void).
-        p.Children.Add(Ui.Text("주의: 오버클럭과 전력 제한은 사용자가 값을 골라 직접 적용하는 기능이에요. 적용한 뒤 생기는 게임 멈춤, 시스템 오류, "
-                               + "그래픽카드 손상, 제조사 보증 문제는 사용자 책임이에요. 프로그램 자체의 오류로 생긴 손해는 사용권 계약 제10조를 따라요.",
-                               "muted", wrap: true));
-        var risk = new CheckBox { Content = "값을 높이면 게임이 멈추거나 화면이 꺼질 수 있고, 적용한 결과는 제 책임이라는 것을 이해했어요", IsChecked = b.AmdRiskAccepted };
-        p.Children.Add(risk);
+        // who answers for what: the overclocking notice, agreed to before the first tuning on this card (OcConsent)
         var rule = Ui.Text("", "muted", wrap: true);
         p.Children.Add(rule);
 
@@ -165,13 +173,12 @@ internal static class GpuCards
         {
             if (filling || b.AmdGpu is not { } g) return;
             b.SetAmdChoice(Picked(power, powers, g.Power), Picked(gpuMax, gpus, g.GpuMax), Picked(vramMax, vrams, g.VramMax),
-                           temps[Math.Max(0, temp.SelectedIndex)], risk.IsChecked == true);
+                           temps[Math.Max(0, temp.SelectedIndex)]);
         }
         power.SelectionChanged += (_, _) => Store();
         gpuMax.SelectionChanged += (_, _) => Store();
         vramMax.SelectionChanged += (_, _) => Store();
         temp.SelectionChanged += (_, _) => Store();
-        risk.IsCheckedChanged += (_, _) => Store();
 
         var autoNote = Ui.Text("", "muted", wrap: true);
         var keepText = Ui.Text("", "label", wrap: true);
@@ -185,7 +192,7 @@ internal static class GpuCards
         autoHead.Children.Add(Ui.Text("자동 튜닝", "label"));
         autoHead.Children.Add(Ui.Badge(License.PlanOf(PremiumFeature.Overclock)));
         auto.Children.Add(autoHead);
-        auto.Children.Add(Ui.Text($"AMD 드라이버의 자동 튜닝을 써요. 끝날 때까지 1분쯤 걸릴 수 있고, 끝난 뒤에도 '유지'를 눌러야 남아요. 제한 온도는 {AmdGpuChoice.DefaultTempLimitC} °C로 정해져 있어요. 위 체크가 필요해요.", "muted", wrap: true));
+        auto.Children.Add(Ui.Text($"AMD 드라이버의 자동 튜닝을 써요. 끝날 때까지 1분쯤 걸릴 수 있고, 끝난 뒤에도 '유지'를 눌러야 남아요. 제한 온도는 {AmdGpuChoice.DefaultTempLimitC} °C로 정해져 있어요. 처음 쓸 때 오버클럭 · 전력 제한 안내에 동의해야 해요.", "muted", wrap: true));
         // amd.tuning.revert sets power and max clocks only: an undervolt's voltage goes back with a factory reset
         auto.Children.Add(Ui.Text("공장 초기값이 아닌 상태에서 자동 튜닝을 쓰면, 되돌릴 때 전압 값은 그대로 남을 수 있어요. 그럴 때는 '공장 초기값으로 복구'를 눌러 주세요.", "muted", wrap: true));
         var autoRow = new WrapPanel { Orientation = Orientation.Horizontal };
@@ -201,6 +208,7 @@ internal static class GpuCards
                     status.Text = $"{AmdGpuBackend.AutoTitle(kind)}은(는) {License.PlanOf(PremiumFeature.Overclock)} 기능이에요. 왼쪽 '★ 플랜'에서 열 수 있어요.";
                     return;
                 }
+                if (!await AskConsentAsync(b, button, status, AmdGpuBackend.AutoTitle(kind))) return;
                 foreach (var (other, _) in autoButtons) other.IsEnabled = false;
                 status.Text = $"{AmdGpuBackend.AutoTitle(kind)}: 처리하는 중…";
                 status.Text = $"{AmdGpuBackend.AutoTitle(kind)}: {await b.AmdAutoTuneAsync(kind)}";
@@ -243,7 +251,6 @@ internal static class GpuCards
             gpuMax.IsEnabled = c.CoreClock && !tuned;
             vramMax.IsEnabled = c.MemClock && !tuned;
             temp.IsEnabled = c.AnyTuning && !tuned;
-            risk.IsEnabled = c.AnyTuning;
             foreach (var (button, kind) in autoButtons) button.IsEnabled = c.Auto(kind) && !tuned;
             var missing = autoButtons.Where(x => !c.Auto(x.kind)).Select(x => AmdGpuBackend.AutoTitle(x.kind)).ToList();
             autoNote.Text = c.TuningNote == null && missing.Count > 0 ? $"{string.Join(" · ", missing)}: {GpuCapabilities.NotOnThisCard}" : "";
