@@ -6,7 +6,7 @@
 
 namespace amd {
 
-enum class Status { Ok, NoDll, OldDriver, NoGpu, Failed };
+enum class Status { Ok, NoDll, OldDriver, NoGpu, Failed, Off };   // Off: helper built without ADLX
 
 // Unsupported: ADLX's IsSupported* (or the interface query) says no. ResetNeeded: auto tuning answered
 // ADLX_RESET_NEEDED (a one-click tuning of the user's is on).

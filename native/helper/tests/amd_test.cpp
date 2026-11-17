@@ -174,6 +174,21 @@ static void testNoAmd() {
     amd::shutdown();
     CHECK(f.sets == 0 && f.resets == 0 && f.toggleSets == 0);
 
+    // a helper built without ADLX (SB_ADLX=OFF) says "off", never "update your driver"
+    Fake o;
+    o.status = amd::Status::Off;
+    setup(o);
+    EQ(amd::info(), "ok\t{\"status\":\"off\",\"adlx\":\"2.0\",\"driver\":\"\",\"gpus\":[]}");
+    EQ(amd::metrics(0), "err\toff");
+    EQ(amd::profileGet(0), "err\toff");
+    EQ(amd::profileApply(0, 1, amd::kLeave), "err\toff");
+    EQ(amd::tuningApply(0, 5, none, none, 83), "err\toff");
+    EQ(amd::autoApply(0, amd::AutoMode::Undervolt), "err\toff");
+    EQ(amd::tuningReset(0), "err\toff");
+    EQ(amd::tuningStatus(), "ok\t0;0;-1;0");
+    amd::shutdown();
+    CHECK(o.sets == 0 && o.resets == 0 && o.toggleSets == 0);
+
     Fake g;
     g.status = amd::Status::NoGpu;
     setup(g);

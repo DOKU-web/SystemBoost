@@ -33,6 +33,7 @@ std::string ready(int gpu) {
     case Status::Ok: break;
     case Status::OldDriver: return err("old_driver");
     case Status::Failed: return err("failed");
+    case Status::Off: return err("off");
     default: return err("no_amd");
     }
     return gpu >= 0 && gpu < gDriver->gpuCount() ? "" : err("no_amd");
@@ -219,6 +220,7 @@ const char* statusWord(Status s) {
     case Status::NoDll: return "no_dll";
     case Status::OldDriver: return "old_driver";
     case Status::NoGpu: return "no_gpu";
+    case Status::Off: return "off";
     default: return "failed";
     }
 }

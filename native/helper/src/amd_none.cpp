@@ -1,5 +1,6 @@
 // A helper built without AMD's ADLX SDK (CMake option SB_ADLX=OFF, see third_party/adlx/README.md):
-// every AMD command answers as if amdadlx64.dll were not there.
+// amd.info says status "off" and every other AMD command answers err "off", so the app can tell users the
+// feature is not in this build instead of asking them to update a driver that may be fine.
 #include "amd.h"
 #include "commands.h"
 
@@ -7,7 +8,7 @@ namespace {
 
 class NoAdlx final : public amd::Driver {
 public:
-    amd::Status open() override { return amd::Status::NoDll; }
+    amd::Status open() override { return amd::Status::Off; }
     std::string adlxVersion() override { return ""; }
     std::string driverVersion() override { return ""; }
     int gpuCount() override { return 0; }
