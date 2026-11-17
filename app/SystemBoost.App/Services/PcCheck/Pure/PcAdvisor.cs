@@ -3,8 +3,10 @@
 //   Frame generation  from sb_framegen --bench at the display's resolution: output R = refresh rate, multiplier m in
 //                     2, 3, 4, 6, 8; the game must keep R/m >= 30 fps (a 59.94 Hz screen reads 59 Hz, so 0.5 fps of
 //                     slack) and the GPU cost analyzeMs*R/m + genMs*R*(1-1/m) <= 200 ms a second (20 %). Auto, the
-//                     largest multiplier that fits with any quality, the best quality that fits at it. Nothing fits:
-//                     off, with the measured cost. Integrated graphics only: said in the reason.
+//                     largest multiplier that fits with any quality, the best quality that fits both at it and at 2x
+//                     (auto runs 2x whenever the game is fast: the most analysis a second; the reason says so when
+//                     that chose a lighter quality). Nothing fits: off, with the measured cost. Integrated graphics
+//                     only: said in the reason.
 //   Boost items       Windows-state and spec rules; already on (PcNow.BoostsOn): listed, not applicable. cpu.power only
 //                     on a measured gain of 3 % and twice the noise. boost.profiles points to 게임별 측정, not selected.
 //   GPU power         a power-limit test without a fault, 3 % and twice the noise, under 80 °C; never selected by default.
@@ -107,24 +109,37 @@ public static class PcAdvisor
         var fits = FgMultipliers.Where(m => hz / m >= FgMinSourceFps - FgSourceSlackFps).OrderByDescending(m => m).ToList();
         if (fits.Count == 0) { list.Add(Off(Fill(K.FgRefreshLow, N0(hz), Fps(hz / 2)))); return; }
 
-        foreach (var m in fits)
-            foreach (var (q, b) in measured)   // best quality first
-            {
-                double cost = FgCostMs(b.AnalyzeMs, b.GenMs, hz, m);
-                if (cost > FgBudgetMsPerSecond) continue;
-                var choice = new FgChoice("auto", m, q);
-                bool change = !Same(now, choice);
-                list.Add(new("fg", RecKind.FrameGen, K.TitleFg, current, FgText(choice),
-                             WithGpu(Fill(K.FgFits, Res(b, s.Display), QualityName(q), N2(b.AnalyzeMs), N2(b.GenMs), N0(hz), m,
-                                          Fps(hz / m), N0(cost / 10))),
-                             change, change, FrameGen: choice));
-                return;
-            }
+        double Cost(FgBench b, int m) => FgCostMs(b.AnalyzeMs, b.GenMs, hz, m);
+        bool Fits(FgBench b, int m) => Cost(b, m) <= FgBudgetMsPerSecond;
 
-        var cheapest = fits.SelectMany(m => measured.Select(x => (m, x.Quality, x.Bench, Cost: FgCostMs(x.Bench.AnalyzeMs, x.Bench.GenMs, hz, m))))
-                           .OrderBy(x => x.Cost).First();
-        list.Add(Off(WithGpu(Fill(K.FgTooCostly, Res(cheapest.Bench, s.Display), QualityName(cheapest.Quality), cheapest.m, N0(hz),
-                                  N0(cheapest.Cost / 10), N2(cheapest.Bench.AnalyzeMs), N2(cheapest.Bench.GenMs)))));
+        // the multiplier: the largest the 30 fps rule allows at which some quality fits
+        int top = fits.FirstOrDefault(m => measured.Any(x => Fits(x.Bench, m)));
+        if (top == 0)
+        {
+            var cheapest = fits.SelectMany(m => measured.Select(x => (m, x.Quality, x.Bench, Cost: Cost(x.Bench, m)))).OrderBy(x => x.Cost).First();
+            list.Add(Off(WithGpu(Fill(K.FgTooCostly, Res(cheapest.Bench, s.Display), QualityName(cheapest.Quality), cheapest.m, N0(hz),
+                                      N0(cheapest.Cost / 10), N2(cheapest.Bench.AnalyzeMs), N2(cheapest.Bench.GenMs)))));
+            return;
+        }
+
+        // the quality: auto runs at 2x whenever the game is fast, the most analysis a second, so it must fit there too
+        var atTop = measured.First(x => Fits(x.Bench, top));   // best quality first
+        var chosen = measured.FirstOrDefault(x => Fits(x.Bench, top) && Fits(x.Bench, 2));
+        if (chosen.Bench == null)
+        {
+            var lightest = measured.OrderBy(x => Cost(x.Bench, 2)).First();
+            list.Add(Off(WithGpu(Fill(K.FgTwoXTooCostly, Res(lightest.Bench, s.Display), QualityName(lightest.Quality), N0(hz),
+                                      N1(Cost(lightest.Bench, 2) / 10), N2(lightest.Bench.AnalyzeMs), N2(lightest.Bench.GenMs)))));
+            return;
+        }
+        var (quality, run) = chosen;
+        var choice = new FgChoice("auto", top, quality);
+        bool change = !Same(now, choice);
+        var reason = Fill(K.FgFits, Res(run, s.Display), QualityName(quality), N2(run.AnalyzeMs), N2(run.GenMs), N0(hz), top,
+                          Fps(hz / top), N0(Cost(run, top) / 10));
+        if (atTop.Quality != quality)   // the 2x check chose a lighter quality: say why
+            reason = Fill(K.FgTwoXNote, reason, QualityName(atTop.Quality), N0(Cost(atTop.Bench, 2) / 10), QualityName(quality));
+        list.Add(new("fg", RecKind.FrameGen, K.TitleFg, current, FgText(choice), WithGpu(reason), change, change, FrameGen: choice));
     }
 
     private static bool Valid(FgBench b) =>
@@ -311,6 +326,8 @@ public static class PcAdvisor
         public const string QualityLow = "저사양", QualityPerformance = "성능", QualityBalanced = "균형", QualityQuality = "품질";
         public const string FgFits = "측정: {0}에서 '{1}' 품질은 원본 프레임마다 분석 {2} ms, 만든 프레임마다 생성 {3} ms가 걸려요. {4} Hz를 {5}배로 채우면 원본은 {6} fps, 프레임 생성은 GPU 시간의 {7}%를 써요 (기준: 원본 30 fps 이상, GPU 20% 이하). 게임 없이 잰 값이라 효과는 게임마다 달라요.";
         public const string FgTooCostly = "측정: {0}에서 가장 가벼운 설정('{1}' 품질, {2}배)도 {3} Hz에서 GPU 시간의 {4}%를 써요 (분석 {5} ms, 생성 {6} ms). 기준인 20%를 넘어서 게임이 느려질 수 있어요. 프레임 생성은 꺼 두는 게 좋아요.";
+        public const string FgTwoXNote = "{0} 자동 모드는 게임이 빠르면 2배로 도는데, 2배에서는 '{1}' 품질이 GPU 시간의 {2}%를 써서 '{3}' 품질을 골랐어요.";
+        public const string FgTwoXTooCostly = "측정: {0}에서 가장 가벼운 '{1}' 품질도 {2} Hz를 2배로 채울 때 GPU 시간의 {3}%를 써요 (분석 {4} ms, 생성 {5} ms). 자동 모드는 게임이 빠르면 2배로 돌아서 기준인 20%를 넘어요. 프레임 생성은 꺼 두는 게 좋아요.";
         public const string FgRefreshLow = "사양 기준: 모니터가 {0} Hz라서 2배로 채워도 원본이 {1} fps예요. 원본이 30 fps보다 낮으면 늘어나는 지연이 커져서 프레임 생성을 추천하지 않아요.";
         public const string FgIntegratedOnly = "{0} 내장 GPU만 있어서 프레임 생성이 게임과 같은 GPU를 나눠 써요.";
         public const string FgNotMeasured = "프레임 생성을 측정하지 못해서 추천하지 않아요.";
