@@ -2,7 +2,7 @@ Reference translation. The Korean text is the agreement; if the two differ, the 
 Effective date: November 6, 2026
 Revision effective: December 8, 2026 (automatic payment for card subscriptions in Article 3, Paragraph 3. The Seller does not sell card subscriptions before then)
 Revision effective: December 9, 2026 (the Business plan, bundle keys and plan names: Article 2, Paragraph 1; Article 3, Paragraphs 2, 5, 8 and 9; Article 6, Paragraph 1; Article 11, Paragraph 2. The Premium plan is renamed Pro; its features and prices stay the same. The Seller does not sell bundle keys before then)
-Revision effective: January 1, 2027 (the sales page and the Windows program in Article 1; cancellation and refunds in Article 3, Paragraph 3, and Article 3, Paragraphs 2, 10 and 11; personal information in Article 8; Article 9, Paragraphs 2 and 5; Article 10, Paragraph 3)
+Revision effective: January 1, 2027 (the sales page and the Windows program in Article 1; cancellation and refunds in Article 3, Paragraph 3, and Article 3, Paragraphs 2, 10 and 11; personal information in Article 8; Article 9, Paragraphs 2 and 5; Article 10, Paragraph 3; the AMD components in Article 12-2)
 Seller: DOKKU (the Seller's name or business name, address and contact details are shown on the app's ★ Plans screen, under Seller in the app's Support, and on the help page (/help) of the Seller's server)
 
 ## Article 1 (Subject of this agreement)
@@ -87,6 +87,17 @@ The Seller offers a free plan that can be used before purchase. Features found o
 
 ## Article 12 (Third-party components)
 The Program contains third-party components. These components follow their own licenses. This agreement does not limit the rights those licenses give the User.
+
+## Article 12-2 (AMD components)
+1. The Program's Radeon driver features (the AMD features of the administrator helper sb_helper.exe) use parts made with the ADLX SDK of Advanced Micro Devices, Inc. ("AMD") (the "AMD Components"). This article applies to the AMD Components in the Program as originally distributed and in all updates the User later installs, uses or accesses.
+! 2. The AMD Components are provided under a restricted license and may be used only with AMD hardware products (such as Radeon graphics cards).
+3. The User may not transfer or duplicate the AMD Components, except for a reasonable backup copy. The User also may not modify them or make derivative works of them; distribute, publish, display, sublicense, assign or otherwise transfer them; decompile, reverse engineer or disassemble them or otherwise reduce them to a human-perceivable form (except as expressly allowed by applicable law); alter or remove any copyright, trademark or patent notice in them; or use them to develop inventions directly derived from their confidential information to seek patent protection, to assist in the analysis of the User's patents and patent applications, or to modify existing patents. If the User breaks this paragraph, the right to use the AMD Components ends.
+4. The AMD Components, including all intellectual property rights in them, are and remain the sole and exclusive property of AMD or its licensors.
+! 5. The AMD Components are provided "AS IS" without warranty of any kind. AMD disclaims all warranties, express, implied or statutory, including the implied warranties of merchantability, fitness for a particular purpose, title and non-infringement, warranties that they will run uninterrupted or error-free, and warranties arising from custom of trade or course of usage. Some jurisdictions do not allow the exclusion of implied warranties, so this exclusion may not apply to the User.
+! 6. AMD and its licensors will not, under any circumstances, be liable to the User for any punitive, direct, incidental, indirect, special or consequential damages arising from use of the AMD Components or this agreement, even if they have been advised of the possibility of such damages. AMD's total liability to the User for all damages, losses and causes of action (whether in contract, tort (including negligence) or otherwise) shall not exceed 100 US dollars.
+7. The User must comply fully with the export and import laws and regulations of the Republic of Korea, the United States and other applicable countries, and may not export, re-export or transfer the AMD Components to any country, person or end use for which a license or approval is required, without obtaining it.
+8. AMD is a third-party beneficiary of this agreement and may enforce this article directly against the User.
+! 9. Paragraphs 5 and 6 concern AMD's warranty and liability. The Seller's warranty and liability follow Article 10 and are not reduced by this article.
 
 ## Article 13 (Changes to this agreement)
 To change this agreement, the Seller announces it on the sales page and in the app 30 days before it takes effect, and asks for agreement again in the app.
