@@ -127,7 +127,7 @@ env.LS_API_KEY = "lsk_fake_api_key"; env.LS_SIGNING_SECRET = SECRET;
 assert.deepEqual((await j("/status")).methods.card, ["biz_monthly", "biz_yearly"]);
 const co = await j("/order?plan=biz_yearly&method=card", { method: "POST" });
 assert.equal(co.method, "card");
-const subData = { type: "subscriptions", id: "55", attributes: { status: "active", variant_id: 302, order_id: 9055, user_email: "pro@example.com", renews_at: "2027-11-09T10:00:00.000000Z" } };
+const subData = { type: "subscriptions", id: "55", attributes: { status: "active", variant_id: 302, order_id: 9055, user_email: "pro@example.com", renews_at: new Date(Date.now() + 365 * 864e5).toISOString() } };
 assert.equal((await hook("subscription_created", subData, { session: co.code })).http, 200);
 c = await j("/claim?session=" + co.code);
 assert.equal(payload(c.key).plan, "biz", "a Pro card product gives a Pro key");
