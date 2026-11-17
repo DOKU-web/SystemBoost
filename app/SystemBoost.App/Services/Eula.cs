@@ -15,7 +15,7 @@ public static class Eula
 {
     // First shipped in 0.8.12 (0.8.11 asks for "2026-11-09"): Articles 1, 3.2/3.3/3.10/3.11, 8, 9.2/9.5 and 10.3, in force 2027-01-01.
     // server/license-worker/src/purchase_note.js quotes this version on the /thanks page; test_purchase_note.mjs compares them.
-    // 2026-11-19 (0.8.17): adds Article 6-2 (the overclocking notice, word for word, and its consent) and Article 12-2,
+    // 2026-11-19 (made for 0.8.17, never released; first shipped inside 2026-11-20): adds Article 6-2 (the overclocking notice, word for word, and its consent) and Article 12-2,
     // the terms AMD's ADLX licence asks for (section 3, Schedule B), in force
     // 2027-01-01 with the other revisions (Article 13: 30 days' notice).
     // 2026-11-20 (0.8.18): Article 8 adds email accounts, 2-step login, devices, the security log, account recovery,
