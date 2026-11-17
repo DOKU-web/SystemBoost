@@ -43,6 +43,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      # The app's account logic (accounts v2): input rules, recovery codes, reply parsing, the QR encoder.
+      # No NuGet and no network; prints "N passed, M failed" and fails the job on a failure.
+      - run: dotnet run --project app/SystemBoost.Account.Tests -c Release
       # A stalled mirror held this step for over 30 minutes and a release waits on it, so give up on a connection quickly.
       - run: |
           APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Console tests for the app's account logic: no NuGet, no Avalonia, no network. Run with
+       "dotnet run (project app/SystemBoost.Account.Tests, configuration Release)": prints "N passed, M failed", exit 1 on a failure. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- the app's own files, compiled here as they are -->
+    <Compile Include="..\SystemBoost.App\Services\AccountRules.cs" Link="App\AccountRules.cs" />
+    <Compile Include="..\SystemBoost.App\Services\AccountReplies.cs" Link="App\AccountReplies.cs" />
+    <Compile Include="..\SystemBoost.App\Services\QrCode.cs" Link="App\QrCode.cs" />
+  </ItemGroup>
+</Project>
