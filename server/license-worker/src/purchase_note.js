@@ -8,7 +8,7 @@ import { supportConfig } from "./support.js";
 
 // The licence agreement the app asks for (app/SystemBoost.App/Services/Eula.cs Version; test_purchase_note.mjs
 // compares the two). Its text is in the app only: '설정' → '사용권 계약 보기'.
-export const EULA_VERSION = "2026-11-17";
+export const EULA_VERSION = "2026-11-18";
 // 사용권 계약 제9조 제1항: the dashboard's 청약철회 기간 may be longer, never shorter (PurchaseInfo.LegalDays)
 export const LEGAL_DAYS = 7;
 

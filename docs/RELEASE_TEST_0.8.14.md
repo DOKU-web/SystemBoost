@@ -12,7 +12,7 @@
 | 앱 Release 빌드 오류 0 | ⬜ (마지막 커밋에서 다시 확인) |
 | 서버 시험 `server/license-worker/test_*.mjs` 전부 통과 | ⬜ |
 | Windows 설치판·포터블 만들기 (`build\windows\build.ps1 -Version 0.8.14`) | ⬜ |
-| 사용권 계약: eula.txt, eula.en.txt, /terms(terms_page.js), 사이트 license.html이 같은 판(2026-11-17) | ⬜ |
+| 사용권 계약: eula.txt, eula.en.txt, /terms(terms_page.js), 사이트 license.html이 같은 판(2026-11-18) | ⬜ |
 | 사용자에게 보이는 곳에 mac/맥/apple/gptk/wine/steam/스팀 없음 | ⬜ |
 | 비밀키 파일이 저장소에 없음 (`git ls-files`) | ⬜ |
 
