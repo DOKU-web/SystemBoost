@@ -103,7 +103,7 @@ public sealed class PremiumPage : UserControl
         new("자원 분배 · CPU 최대 사용량 제한", "—", "●", "●", "●", true),
         new("듀얼 GPU (내장 + 외장 그래픽이 모두 있는 PC만)", "—", "—", "●", "●", false),
         new("게임별 자동 최적화 (측정해서 효과 있는 것만)", "—", "—", "●", "●", true),
-        new("GPU 오버클럭 / 전력 제한 (Windows, NVIDIA · AMD)", "—", "—", "●", "●", true),
+        new(AmdBuild.DriverFeatures ? "GPU 오버클럭 / 전력 제한 (Windows, NVIDIA · AMD)" : "GPU 오버클럭 / 전력 제한 (Windows, NVIDIA만)", "—", "—", "●", "●", true),
         new("방송 모드 (방송 프로그램 우선 · 방송 중 알림 끄기)", "—", "—", "—", "●", true),
         new("업무 모드 (화상 회의 · 업무 프로그램 우선)", "—", "—", "—", "●", true),
         new("시작 프로그램 정리", "—", "—", "—", "●", true),

@@ -1,10 +1,15 @@
 # SystemBoost Windows build: native engine + app -> Velopack installer, portable zip, update packages.
 # Requirements: VS 2022 (C++), CMake, .NET 8 SDK, vpk (dotnet tool install -g vpk --version 0.0.1298).
-# Usage: powershell -ExecutionPolicy Bypass -File build\windows\build.ps1 [-Version 0.6.0]
-param([string]$Version = "0.6.0")
+# Usage: powershell -ExecutionPolicy Bypass -File build\windows\build.ps1 [-Version 0.6.0] [-Adlx]
+#   -Adlx  AMD Radeon driver features: sb_helper with AMD's ADLX SDK (SB_ADLX=ON) and the app texts that say so.
+#          Off by default: ADLX is under AMD's own licence (native\helper\third_party\adlx\README.md), which the
+#          owner has to accept first, together with the EULA terms it asks for.
+param([string]$Version = "0.6.0", [switch]$Adlx)
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $out = "$root\dist\windows"
+$adlxCmake = if ($Adlx) { "ON" } else { "OFF" }    # sb_helper (native\helper\CMakeLists.txt SB_ADLX)
+$adlxApp = if ($Adlx) { "true" } else { "false" }  # the app (Services\Gpu\AmdBuild.cs)
 Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $out | Out-Null
 
@@ -15,11 +20,11 @@ cmake --build "$root\native\framegen\build" --config Release
 # 2) app: self-contained single exe (no .NET install needed)
 $pub = "$out\SystemBoost"
 dotnet publish "$root\app\SystemBoost.App\SystemBoost.App.csproj" -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$Version -o $pub
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$Version "-p:SbAdlx=$adlxApp" -o $pub
 New-Item -ItemType Directory -Force "$pub\native\framegen\shaders" | Out-Null
 Copy-Item "$root\native\framegen\build\Release\sb_framegen.exe" "$pub\native\framegen\"
 Copy-Item "$root\native\framegen\build\Release\shaders\*" "$pub\native\framegen\shaders\"
-cmake -S "$root\native\helper" -B "$root\native\helper\build" -A x64
+cmake -S "$root\native\helper" -B "$root\native\helper\build" -A x64 "-DSB_ADLX=$adlxCmake"   # explicit: the CMake cache keeps an earlier choice
 cmake --build "$root\native\helper\build" --config Release
 Copy-Item "$root\native\helper\build\Release\sb_helper.exe" $pub
 
