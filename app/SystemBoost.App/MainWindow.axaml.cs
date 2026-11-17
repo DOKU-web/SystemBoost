@@ -32,6 +32,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         AddNav("◎   대시보드", "dash", () => new DashboardPage(_frameGen, _backend, Go));
+        if (OperatingSystem.IsWindows() && _backend is WindowsBoostBackend pcCheck)   // checked again inside: CA1416 does not see into the lambda
+            AddNav("✦   맞춤 추천", "pccheck", () => OperatingSystem.IsWindows() ? new PcCheckPage(pcCheck, _frameGen, this) : new Control());
         if (BoostCatalog.CategoryAvailable(BoostCategory.GameBoost))
             AddNav("🚀   게임 부스트", "boost", () => new BoostPage(BoostCategory.GameBoost, "게임 부스트", _backend));
         AddNav("▣   프레임 생성", "fg", () => new FrameGenPage(_frameGen));
