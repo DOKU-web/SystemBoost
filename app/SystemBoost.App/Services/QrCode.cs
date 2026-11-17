@@ -1,7 +1,8 @@
 // QR code (ISO/IEC 18004, model 2) for the 2단계 인증 set-up: the otpauth:// address an authenticator app scans.
-// Byte mode only, versions 1 to 40, all four error correction levels. No package: this file is the whole encoder,
-// written after Project Nayuki's public description of the algorithm, and checked in SystemBoost.Account.Tests
-// against matrices from an independent implementation (python-qrcode) for every version and level.
+// Byte mode only, versions 1 to 40, all four error correction levels. No package: this file is the whole encoder.
+// It follows the structure of Project Nayuki's QR Code generator library (MIT; notice in THIRD_PARTY_NOTICES.txt,
+// entry 15) and is checked in SystemBoost.Account.Tests against matrices from an independent implementation
+// (python-qrcode) for every version and level.
 // Pure: no Avalonia, no app classes (the test project links this file).
 using System;
 using System.Collections.Generic;

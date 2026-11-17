@@ -21,6 +21,7 @@ NVIDIA and DLSS are trademarks of NVIDIA Corporation; AMD and Radeon of Advanced
  12. Rust crates inside the Velopack installer and updater (Setup.exe, Update.exe, stub)
  13. Microsoft C/C++ runtime (MSVC STL, VCRuntime, Universal CRT), statically linked
  14. C++/WinRT headers (Windows SDK), MIT
+ 15. QR Code generator library (Project Nayuki), MIT: the structure of the QR encoder in the app
 
 
 ============================================================
@@ -6164,6 +6165,38 @@ Source: https://github.com/microsoft/cppwinrt
 MIT License
 
 Copyright (c) Microsoft Corporation.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+============================================================
+15. QR Code generator library (Project Nayuki), MIT
+Source: https://www.nayuki.io/page/qr-code-generator-library
+============================================================
+
+SystemBoost's QR encoder (app/SystemBoost.App/Services/QrCode.cs, the QR code
+shown when 2-step verification is turned on) is SystemBoost's own C# code. It
+follows the structure and step order of this library (block interleaving,
+Reed-Solomon divisor and remainder, function patterns, mask penalty), so its
+notice is kept here. The tables are those of ISO/IEC 18004.
+
+Copyright (c) Project Nayuki. (MIT License)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
