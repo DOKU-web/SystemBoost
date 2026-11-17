@@ -157,69 +157,6 @@ public static class License
         }
     }
 
-    // ------------------------------------------------------------ 3-day trial (0.8.14)
-    private static string TrialFile => Path.Combine(Platform.DataDir, "trial.txt");
-    /// The server hands out trials (its /status says "trial": true). Servers from before 0.8.14 say nothing: no trial card.
-    public static bool TrialOffered { get; private set; }
-    /// This PC took its trial, as far as this PC knows (the server keeps the record that counts).
-    public static bool TrialUsed => File.Exists(TrialFile);
-
-    /// SHA-256 of a fixed text and the MachineGuid Windows keeps for this PC: the same after a reinstall, and the
-    /// server never sees the GUID itself (사용권 계약 제8조 제4항, the privacy policy). null when it cannot be read.
-    public static string? TrialDevice()
-    {
-        if (!OperatingSystem.IsWindows()) return null;
-        try
-        {
-            using var hive = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64);
-            using var k = hive.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
-            if (k?.GetValue("MachineGuid") is not string g || g.Trim().Length == 0) return null;
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("SystemBoost trial 1|" + g.Trim().ToLowerInvariant()))).ToLowerInvariant();
-        }
-        catch (Exception) { return null; }
-    }
-
-    /// Asks the server for this PC's trial key: Ultra features for 3 days, no payment method, nothing is ever
-    /// charged, and the app is on the Free plan again when it ends. Returns null on success, else a message.
-    public static async System.Threading.Tasks.Task<string?> StartTrialAsync()
-    {
-        if (!ServerConfigured) return "체험은 아직 준비 중이에요";
-        if (IsPremium) return "유료 플랜을 쓰는 중이라 체험을 받을 수 없어요";   // a paid key is never replaced by a trial
-        if (TrialDevice() is not { } device) return "이 PC의 기기 정보를 읽지 못해서 체험을 시작할 수 없어요";
-        try
-        {
-            using var body = new System.Net.Http.StringContent(JsonSerializer.Serialize(new { device }), Encoding.UTF8, "application/json");
-            using var r = await Http.PostAsync($"{ServerUrl}/trial", body);
-            if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return "체험은 아직 준비 중이에요";   // a server from before 0.8.14
-            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
-            if (r.IsSuccessStatusCode && doc.RootElement.TryGetProperty("key", out var key))
-            {
-                var err = Activate(key.GetString() ?? "", "trial");
-                if (err == null) MarkTrialUsed();
-                return err;
-            }
-            var code = doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() : null;
-            if (code == "already") MarkTrialUsed();
-            return code switch
-            {
-                "already" => "이 PC는 이미 체험을 받았어요. 체험은 PC마다 한 번이에요",
-                "busy" => "지금은 체험을 시작할 수 없어요. 잠시 뒤 다시 해 주세요",
-                "closed" => "지금은 체험을 받을 수 없어요",
-                _ => "체험을 시작하지 못했어요",
-            };
-        }
-        catch (Exception e) when (e is System.Net.Http.HttpRequestException or System.Threading.Tasks.TaskCanceledException or JsonException)
-        {
-            return "서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요";
-        }
-    }
-
-    private static void MarkTrialUsed()
-    {
-        try { File.WriteAllText(TrialFile, DateTime.UtcNow.ToString("o")); }
-        catch (Exception) { }   // only hides the button; the server still says "already"
-    }
-
     public static void Deactivate()
     {
         try { File.Delete(KeyFile); } catch (Exception) { }
@@ -299,7 +236,6 @@ public static class License
         try
         {
             using var doc = JsonDocument.Parse(await Http.GetStringAsync($"{ServerUrl}/status"));
-            TrialOffered = doc.RootElement.TryGetProperty("trial", out var t) && t.ValueKind == JsonValueKind.True;
             if (doc.RootElement.TryGetProperty("methods", out var ms) && ms.ValueKind == JsonValueKind.Object)
                 foreach (var m in ms.EnumerateObject())
                     if (methods.TryGetValue(m.Name, out var set) && m.Value.ValueKind == JsonValueKind.Array)
