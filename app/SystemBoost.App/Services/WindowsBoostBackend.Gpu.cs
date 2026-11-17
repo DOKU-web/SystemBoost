@@ -82,6 +82,23 @@ public sealed partial class WindowsBoostBackend
         _ => GpuCapabilities.NvidiaAsBefore,
     };
 
+    private string? _otherGpuName;
+
+    /// For the dashboard: the card's name only, and what can be read of it (free on every plan).
+    public async Task<(GpuVendor vendor, string name, GpuTelemetry? reading)> GpuTileAsync()
+    {
+        var vendor = await GpuVendorAsync();
+        if (vendor == GpuVendor.Amd && Amd.Name.Length > 0) return (vendor, Amd.Name, await Amd.ReadTelemetryAsync());
+        if (vendor == GpuVendor.Nvidia && await Task.Run(Nvml.Read) is { } r) return (vendor, r.Name, GpuTelemetry.Empty with { TempC = r.TempC });
+        if (_otherGpuName == null)   // the engine's list of adapters, once (also an AMD card when ADLX gave no name)
+        {
+            var names = await FrameGenEngine.ListGpusAsync();
+            var first = names.FirstOrDefault(g => g.Value != "same" && !g.Integrated) ?? names.FirstOrDefault(g => g.Value != "same");
+            _otherGpuName = first?.Name ?? "";
+        }
+        return (vendor, _otherGpuName, null);
+    }
+
     // ------------------------------------------------------------ switches (ApplyCoreAsync)
     private async Task<string> GpuTuningOnAsync()
     {
@@ -135,6 +152,54 @@ public sealed partial class WindowsBoostBackend
         var failed = await RestoreAsync(mine);
         Amd.TakeRevertNote();   // already in 최근 동작
         Log(failed == null ? $"{BoostCatalog.All.First(f => f.Id == GameProfileId).Title}: 원래대로 돌렸어요" : "되돌리지 못했어요: " + failed);
+    }
+
+    // ------------------------------------------------------------ AMD, for the GPU page
+    public AmdGpuInfo? AmdGpu => Amd.Gpu;
+    /// Why no AMD card can be used, null when one can.
+    public string? AmdProblem => AmdProtocol.InfoProblem(Amd.Info ?? AmdInfo.Of("failed"));
+    public Task<AmdInfo> ReadAmdAsync() => Amd.ReadInfoAsync();
+    public Task<GpuTelemetry?> ReadAmdTelemetryAsync() => Amd.ReadTelemetryAsync();
+    public Task<AmdProfileState?> ReadAmdProfileAsync() => Amd.ReadProfileAsync();
+    public bool AmdLaptop => PcForm.IsLaptop();
+    public AmdGpuChoice AmdSettings => _s.AmdGpu;
+    public bool AmdTuned => Amd.Tuned;
+    public int AmdTempC => Amd.TempC;
+    public int? AmdConfirmLeft => Amd.ConfirmBy is DateTime t ? Math.Max(0, (int)Math.Ceiling((t - DateTime.UtcNow).TotalSeconds)) : null;
+    /// The risk checkbox was ticked for its current wording (an older tick does not count).
+    public bool AmdRiskAccepted => _s.AmdGpu.RiskAccepted && _s.AmdGpu.RiskTerms >= GpuRiskTerms;
+
+    public void SetAmdChoice(int? powerPct, int? gpuMaxMHz, int? vramMaxMHz, int tempLimitC, bool riskAccepted)
+    {
+        var c = _s.AmdGpu;
+        (c.PowerPct, c.GpuMaxMHz, c.VramMaxMHz, c.RiskAccepted) = (powerPct, gpuMaxMHz, vramMaxMHz, riskAccepted);
+        c.TempLimitC = Math.Clamp(tempLimitC, AmdGpuChoice.MinTempLimitC, AmdGpuChoice.MaxTempLimitC);
+        c.RiskTerms = riskAccepted ? GpuRiskTerms : 0;
+        Save();
+    }
+
+    public Task<string> KeepAmdTuningAsync() => GpuGatedAsync(() => Amd.KeepTuningAsync());
+
+    public Task<string> AmdAutoTuneAsync(GpuAutoTuning kind) =>
+        _measuring ? Task.FromResult(BusyMeasuring) : GpuGatedAsync(() => Amd.ApplyAutoTuningAsync(kind));
+
+    /// Every plan: putting the card back is never locked.
+    public Task<string> AmdResetAsync() => GpuGatedAsync(() => Amd.ResetToFactoryAsync());
+
+    /// AMD Fluid Motion Frames is on in the driver. SystemBoost never turns it off; frame generation says so instead.
+    public async Task<bool> AfmfOnAsync()
+    {
+        if (!AmdDriverPresent) return false;
+        try { return await GpuVendorAsync() == GpuVendor.Amd && (await Amd.ReadProfileAsync())?.Afmf == '1'; }
+        catch (Exception) { return false; }
+    }
+
+    private async Task<string> GpuGatedAsync(Func<Task<string>> work)
+    {
+        await _gate.WaitAsync();
+        try { var r = await work(); Save(); return r; }
+        catch (Exception e) { return "실패했어요: " + e.Message; }
+        finally { _gate.Release(); Publish(); }
     }
 
     // ------------------------------------------------------------ NVIDIA

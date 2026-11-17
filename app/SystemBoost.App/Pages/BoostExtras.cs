@@ -45,7 +45,7 @@ internal static class BoostExtras
                 yield return Ui.Card(TrimTargets(b, status));
                 break;
             case BoostCategory.Gpu:
-                yield return Ui.Card(GpuTuning(b, status));
+                yield return GpuCards.Card(b, () => GpuTuning(b, status), status);   // NVIDIA: GpuTuning, as before
                 break;
             case BoostCategory.Cpu:
                 var cores = WindowsBoostBackend.CoreCounts();

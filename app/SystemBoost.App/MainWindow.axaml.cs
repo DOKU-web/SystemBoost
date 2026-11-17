@@ -19,6 +19,8 @@ public partial class MainWindow : Window
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         var b = new WindowsBoostBackend();
         FrameGenViewModel.Limiter = b;
+        FrameGenViewModel.AfmfProbe = b.AfmfOnAsync;
+        if (AmdSoftware.Find() != null) FrameGenViewModel.OpenAmdSoftware = AmdSoftware.Open;
         // While streaming no notice window opens (the text is in 최근 동작 already): a window hidden from capture
         // over a game looks like a cheat overlay to anti-cheat programs, and a plain one would be in the broadcast.
         b.Notice += text => Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!(OperatingSystem.IsWindows() && b.Streaming)) new NoticeWindow(text).Show(); });

@@ -61,6 +61,7 @@ public partial class FrameGenPage : UserControl
         };
 
         StartButton.Click += (_, _) => vm.Toggle();
+        AmdSoftwareButton.Click += (_, _) => vm.OpenAmd();
         RefreshButton.Click += async (_, _) => await vm.RefreshAsync();
         ApplyButton.Click += (_, _) => vm.Restart();
         DefaultsButton.Click += (_, _) =>

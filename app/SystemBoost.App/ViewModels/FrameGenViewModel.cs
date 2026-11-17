@@ -112,6 +112,31 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
 
     /// Null where the app cannot limit a game (Mac). Set by the main window.
     public static IGameLimiter? Limiter { get; set; }
+
+    // AMD's own frame generation in the driver. SystemBoost never turns it off: when both are on, the page says so
+    // and the user picks one (WindowsBoostBackend.AfmfOnAsync, read through the plain helper; set by the main window).
+    public static Func<Task<bool>>? AfmfProbe { get; set; }
+    /// Opens AMD Software; null when it is not installed. False when it did not start.
+    public static Func<bool>? OpenAmdSoftware { get; set; }
+    public const string AfmfText = "AMD Fluid Motion Frames가 켜져 있어요. SystemBoost 프레임 생성과 같이 쓰면 화면이 흔들릴 수 있어요. 하나만 켜 주세요.";
+    private bool _afmfOn;
+    public bool ShowAfmfWarning { get => _afmfOn; private set => Set(ref _afmfOn, value); }
+    public bool ShowAmdSoftware => OpenAmdSoftware != null;
+    public string AfmfWarning => AfmfText;
+
+    public void OpenAmd()
+    {
+        if (OpenAmdSoftware?.Invoke() != true) Status = "AMD Software를 열지 못했어요. 시작 메뉴에서 AMD Software를 직접 열어 주세요";
+    }
+
+    private async Task CheckAfmfAsync()
+    {
+        if (AfmfProbe is not { } probe) return;
+        bool on = false;
+        try { on = await probe(); }
+        catch (Exception) { }
+        ShowAfmfWarning = on && Running;
+    }
     public bool ShowLimitOption => Limiter != null;
     private bool _autoLimit = true;
     public bool AutoLimit
@@ -389,6 +414,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             EndSession();
             _statsWatch.Stop();
             Running = Generating = false;
+            ShowAfmfWarning = false;
             AutoReason = "";
             ResourceManagers.GameProcess = null;
             if (!Status.StartsWith("오류")) Status = "중지됨";
@@ -485,6 +511,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
             _sessionStart = DateTime.Now; _first = _last = null; _latencyMsSec = 0;
             _sessionDlss = DlssMode;    // flipping the switch ends this run, and the new value belongs to the next one
             _genSec = _genSrc = _genOut = 0; _stoppedInSession = _fitStopped = false;
+            _ = CheckAfmfAsync();
         }
         catch (Exception e) { Status = "오류: " + e.Message; }
     }

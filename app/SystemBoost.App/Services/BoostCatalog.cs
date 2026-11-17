@@ -37,8 +37,8 @@ public static class BoostCatalog
         // GPU
         new("gpu.highperf", BoostCategory.Gpu, "게임을 고성능 GPU로 지정", "노트북·듀얼 GPU, 다음 게임 실행부터 적용", false),
         new("gpu.hags", BoostCategory.Gpu, "하드웨어 가속 GPU 스케줄링", "지원하는 GPU에서만 동작해요", true, NeedsReboot: true),
-        new("gpu.driver", BoostCategory.Gpu, "드라이버 게임 프로필", "NVIDIA 공식 API로 게임의 전원 관리 모드를 '최대 성능 선호'로 · AMD·Intel은 아직 지원하지 않아요", true),
-        new("gpu.oc", BoostCategory.Gpu, "오버클럭 / 전력 제한", "NVIDIA 전용. 앱이 켜져 있는 동안만 적용. 온도 초과·드라이버 오류 시 자동 복구, 기본 꺼짐", true, Needs: PremiumFeature.Overclock),
+        new("gpu.driver", BoostCategory.Gpu, "드라이버 게임 프로필", "NVIDIA 공식 API로 게임의 전원 관리 모드를 '최대 성능 선호'로 · AMD 공식 SDK(ADLX)로 게임 중에만 Anti-Lag 켜기, Radeon Chill 끄기 · 인텔 Arc 드라이버 기능은 아직 지원하지 않아요", true),
+        new("gpu.oc", BoostCategory.Gpu, "오버클럭 / 전력 제한", "NVIDIA · AMD. 앱이 켜져 있는 동안만 적용. 온도 초과·드라이버 오류 시 자동 복구, 기본 꺼짐", true, Needs: PremiumFeature.Overclock),
         // CPU
         new("cpu.priority", BoostCategory.Cpu, "게임 우선순위 '보통 이상'", "다음 게임 실행부터 Windows가 '보통 이상'으로 시작해요. '높음'·'실시간'은 쓰지 않아요", true),
         new("cpu.ecores", BoostCategory.Cpu, "백그라운드를 E코어로", "게임 중, 하이브리드 CPU, 방송·음성 프로그램은 제외", false),
