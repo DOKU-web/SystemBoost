@@ -67,6 +67,7 @@ public partial class FrameGenPage : UserControl
         DefaultsButton.Click += (_, _) =>
         {
             vm.DlssMode = false;
+            vm.ForgetChoice();   // the choice PC 맞춤 추천 saved: the page starts from the plan's defaults again
             vm.Mode = FrameGenViewModel.DefaultMode; vm.MaxMul = FrameGenViewModel.DefaultMaxMul; vm.Quality = "balanced"; vm.Upscale = false; vm.Sharpness = 0.5; vm.Capture = "wgc"; vm.TargetFps = 0;
             TargetBox.Text = ""; Select(TargetSeg, "0");
             Select(ModeSeg, vm.Mode); Select(MaxSeg, vm.MaxMul.ToString(CultureInfo.InvariantCulture)); Select(QualitySeg, "balanced"); Select(CaptureSeg, "wgc");

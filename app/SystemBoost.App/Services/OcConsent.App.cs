@@ -33,12 +33,16 @@ public static partial class OcConsent
     /// fromPreset (a preset with overclock values is about to be put in). True when a valid consent is on record
     /// afterwards; false when the user cancelled (or the record could not be written: Problem says why).
     /// Call on the UI thread.
-    public static async Task<bool> EnsureAsync(Window owner, string gpuName, bool fromPreset)
+    public static Task<bool> EnsureAsync(Window owner, string gpuName, bool fromPreset) => EnsureAsync(owner, gpuName, fromPreset, reason: null);
+
+    /// The same, with `reason` as the line under the headline when the notice is shown (null: WhyAgain's line).
+    /// PC 맞춤 추천 asks with fromPreset: true before it applies a power limit from its own check, which is no preset.
+    public static async Task<bool> EnsureAsync(Window owner, string gpuName, bool fromPreset, string? reason)
     {
         Problem = null;
         var need = Needs(Store.Load(), gpuName, fromPreset);
         if (need == ConsentNeed.None) return true;
-        if (!await new OverclockConsentDialog(ask: true, WhyAgain(need)).ShowDialog<bool>(owner)) return false;
+        if (!await new OverclockConsentDialog(ask: true, reason ?? WhyAgain(need)).ShowDialog<bool>(owner)) return false;
         try
         {
             Agree(Store, gpuName, AppVersion, DateTime.UtcNow);
