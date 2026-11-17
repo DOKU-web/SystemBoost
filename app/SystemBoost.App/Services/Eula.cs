@@ -18,7 +18,10 @@ public static class Eula
     // 2026-11-19 (0.8.17): adds Article 6-2 (the overclocking notice, word for word, and its consent) and Article 12-2,
     // the terms AMD's ADLX licence asks for (section 3, Schedule B), in force
     // 2027-01-01 with the other revisions (Article 13: 30 days' notice).
-    public const string Version = "2026-11-19";
+    // 2026-11-20 (0.8.18): Article 8 adds email accounts, 2-step login, devices, the security log, account recovery,
+    // mail through Resend, key resend, price-change answers and the seller's Discord alerts; Article 6-2(6) the member's
+    // server copy of the overclocking consent. Same 2027-01-01 revision, so its notice is due by 2026-12-02.
+    public const string Version = "2026-11-20";
 
     private sealed record Acceptance(string Version, DateTimeOffset AcceptedAt, string AppVersion);
 

@@ -49,7 +49,7 @@ for (const s of ["지원 환경: 현재 윈도우만 지원해요",
 // the footer comes after the last section, before the script
 assert.ok(HELP_HTML.indexOf('data-t="trademark"') > HELP_HTML.lastIndexOf("</section>") && HELP_HTML.indexOf('data-t="trademark"') < HELP_HTML.indexOf("<script"));
 // every brand the page or the default FAQ names is in the trademark line of each language, and nothing else
-const BRANDS = ["Windows", "Microsoft", "Cloudflare", "Supabase", "Lemon Squeezy", "Discord", "GitHub", "NVIDIA", "DLSS", "AMD", "Radeon", "Intel", "Google", "Stripe"];
+const BRANDS = ["Windows", "Microsoft", "Cloudflare", "Supabase", "Resend", "Lemon Squeezy", "Discord", "GitHub", "NVIDIA", "DLSS", "AMD", "Radeon", "Intel", "Google", "Stripe"];
 const tm = lang => new RegExp(lang + ': \\{[\\s\\S]*?trademark: "([^"]+)"').exec(HELP_HTML)[1];
 const shown = HELP_HTML.replace(/trademark: "[^"]+"/g, "").replace(/\/\/[^\n]*/g, "") + JSON.stringify(DEFAULT_FAQ);
 for (const lang of ["ko", "en"]) {
