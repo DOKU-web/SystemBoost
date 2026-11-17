@@ -15,7 +15,7 @@ namespace SystemBoost.App.Pages;
 
 public sealed partial class AccountPage : UserControl
 {
-    private enum Mode { LogIn, SignUp, Recover, Resend, Request }
+    private enum Mode { LogIn, SignUp, Recover, Resend, Request, Help }
 
     private readonly StackPanel _root = new();
     private Mode _mode = Mode.LogIn;
@@ -207,6 +207,7 @@ public sealed partial class AccountPage : UserControl
             Mode.Recover => Recover(),
             Mode.Resend => Resend(),
             Mode.Request => Request(),
+            Mode.Help => Help(),
             _ => LogIn(),
         });
         return p;
@@ -238,9 +239,11 @@ public sealed partial class AccountPage : UserControl
         }
         go.Click += (_, _) => Go();
         OnEnter(password, Go);
+        var help = Ui.Button("코드·키 찾는 방법", "ghost");
+        help.Click += (_, _) => { _mode = Mode.Help; Show(); };
         p.Children.Add(login);
         p.Children.Add(password);
-        p.Children.Add(Left(go));
+        p.Children.Add(Row(go, help));
         p.Children.Add(msg);
         return p;
     }
