@@ -15,7 +15,7 @@ namespace SystemBoost.App.Pages;
 
 public sealed partial class AccountPage : UserControl
 {
-    private enum Mode { LogIn, SignUp, Recover }
+    private enum Mode { LogIn, SignUp, Recover, Resend, Request }
 
     private readonly StackPanel _root = new();
     private Mode _mode = Mode.LogIn;
@@ -171,7 +171,13 @@ public sealed partial class AccountPage : UserControl
         }
         if (_backupLogin is { } used) _root.Children.Add(Ui.Card(BackupLoginCard(used.left, used.redo), "note"));
         _root.Children.Add(Ui.Card(Member(profile)));
-        if (_features.Totp) _root.Children.Add(Ui.Card(TwoFactor(profile)));   // accounts v2 servers only
+        if (_features.Totp)   // accounts v2 servers only
+        {
+            _root.Children.Add(Ui.Card(Keys()));
+            _root.Children.Add(Ui.Card(LinkKey()));
+            _root.Children.Add(Ui.Card(Devices()));
+            _root.Children.Add(Ui.Card(TwoFactor(profile)));
+        }
         _root.Children.Add(Ui.Card(Invite(profile)));
         _root.Children.Add(Ui.Card(Password(profile)));
         _root.Children.Add(Ui.Card(Leave()));
@@ -192,11 +198,15 @@ public sealed partial class AccountPage : UserControl
         Tab("로그인", Mode.LogIn);
         Tab("회원 가입", Mode.SignUp);
         Tab("비밀번호 찾기", Mode.Recover);
+        Tab("키 다시 받기", Mode.Resend);
+        Tab("계정 복구 요청", Mode.Request);
         p.Children.Add(tabs);
         p.Children.Add(_mode switch
         {
             Mode.SignUp => _features.Email ? SignUpEmail() : SignUp(),
             Mode.Recover => Recover(),
+            Mode.Resend => Resend(),
+            Mode.Request => Request(),
             _ => LogIn(),
         });
         return p;
@@ -285,7 +295,10 @@ public sealed partial class AccountPage : UserControl
         p.Children.Add(code);
         p.Children.Add(Row(go, other, cancel));
         p.Children.Add(msg);
-        p.Children.Add(Ui.Text("휴대폰을 잃었다면 '복구 코드로 로그인'을 눌러 주세요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text("휴대폰을 잃었다면 '복구 코드로 로그인'을 눌러 주세요. 복구 코드도 잃었다면 '계정 복구 요청'을 보내 주세요.", "muted", wrap: true));
+        var request = Ui.Button("계정 복구 요청", "ghost");
+        request.Click += (_, _) => { _pending = null; _mode = Mode.Request; Show(); };
+        p.Children.Add(Left(request));
         return p;
     }
 
@@ -451,7 +464,8 @@ public sealed partial class AccountPage : UserControl
             });
             if (recovery != null) { _recovery = recovery; Show(); }
         };
-        p.Children.Add(Ui.Text("아이디로 가입할 때 받은 복구 코드(XXXX-XXXX-XXXX-XXXX)로 비밀번호를 바꿔요. 복구 코드도 잃었다면 판매자에게 문의해 주세요.", "muted", wrap: true));
+        p.Children.Add(Ui.Text(_features.Totp ? "아이디로 가입할 때 받은 복구 코드(XXXX-XXXX-XXXX-XXXX)로 비밀번호를 바꿔요. 복구 코드도 잃었다면 '계정 복구 요청'을 보내 주세요."
+                                              : "아이디로 가입할 때 받은 복구 코드(XXXX-XXXX-XXXX-XXXX)로 비밀번호를 바꿔요. 복구 코드도 잃었다면 판매자에게 문의해 주세요.", "muted", wrap: true));
         p.Children.Add(id);
         p.Children.Add(code);
         p.Children.Add(next);
@@ -480,17 +494,6 @@ public sealed partial class AccountPage : UserControl
     // ------------------------------------------------------------ signed in
     /// The email shown instead of the id: email accounts have an internal id ("m" + 11 letters and digits).
     private static string Shown(AccountProfile m) => m.Extras?.Email is { } mail && m.Extras.EmailVerified ? mail : m.Id;
-
-    private static Control Member(AccountProfile m)
-    {
-        var p = new StackPanel { Spacing = 10 };
-        p.Children.Add(Ui.Text(Shown(m), "h2"));
-        p.Children.Add(Ui.Text($"가입일 {m.Created.LocalDateTime:yyyy-MM-dd}", "muted"));
-        if (m.TicketPercent is int percent)
-            p.Children.Add(Ui.Text($"할인 티켓 {percent}% · {m.TicketExpires?.LocalDateTime:yyyy-MM-dd}까지 · 플랜 화면의 계좌이체 · 직접 결제에서 쓸 수 있어요(판매자가 그 플랜에 열어 둔 경우, 묶음 키 제외)", "label", wrap: true));
-        p.Children.Add(LogOut());
-        return p;
-    }
 
     private static Control LogOut()
     {
