@@ -1071,6 +1071,7 @@ const ADMIN_VIEWS = {
   "GET /keys": "키 목록", "POST /keys": "키 검색", "GET /key": "키 원문", "POST /lookup": "키 확인", "GET /orders": "주문 목록",
   "GET /members": "회원 목록", "POST /members": "회원 검색", "GET /support": "문의 목록", "POST /support": "문의 검색",
   "GET /support/ticket": "문의 열람", "GET /log": "작업 기록", "GET /price": "가격 변경 동의",
+  "GET /recovery": "복구 요청 목록", "POST /recovery": "복구 요청 목록",
 };
 function viewOf(route, url, body) {
   const action = ADMIN_VIEWS[route];
@@ -1107,7 +1108,7 @@ async function listAccess(env, before) {
   return { rows, more: !!r.more, keepDays: r.keepDays || 366, ...(down ? { down: true } : {}) };
 }
 
-async function admin(req, url, env) {
+async function admin(req, url, env, ctx) {
   if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 6) return json({ error: "not found" }, 404);   // off unless configured
   if (url.pathname === "/admin" && req.method === "GET") return adminPage();
   const tag = await adminTag(env, req.headers.get("CF-Connecting-IP") || "unknown");
@@ -1167,6 +1168,25 @@ async function admin(req, url, env) {
       if (r.error) return json({ error: r.error }, r.status, false);
       await audit(env, "admin", "회원 삭제", String(body.id));
       return json(r, 200, false);
+    }
+    // 복구 요청 (accounts v2): members who lost their 2-step device and backup codes. Approve only after the 72-hour wait.
+    case "GET /recovery":
+    case "POST /recovery": {
+      const r = await accounts(env, "admin/recovery_list", { all: route === "POST /recovery" && body.all === true });
+      if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
+      return json({ ...r, mail: mailOn(env) }, 200, false);
+    }
+    case "POST /recovery/approve": {
+      const r = await accounts(env, "admin/recovery_approve", { id: String(body.id || ""), origin: url.origin }, ctx);
+      if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
+      await audit(env, "admin", "계정 복구 승인", String(body.id) + " · " + r.account + (r.mailed ? " · 재설정 링크 메일" : " · 복구 코드 재발급"));
+      return json(r, 200, false);
+    }
+    case "POST /recovery/reject": {
+      const r = await accounts(env, "admin/recovery_reject", { id: String(body.id || ""), reason: body.reason });
+      if (r.error) return json({ error: r.error === "unavailable" ? "Supabase에 연결하지 못했어요" : r.error }, r.status, false);
+      await audit(env, "admin", "계정 복구 거절", String(body.id) + " · " + r.account);
+      return json({ ok: true }, 200, false);
     }
     case "GET /referrals": return json(await listRefs(env), 200, false);
     case "POST /referrals": return json(await addRef(env, body), 200, false);
