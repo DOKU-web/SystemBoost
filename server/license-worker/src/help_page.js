@@ -19,6 +19,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
 h1{color:var(--accent);margin:0;font-size:26px}h2{font-size:19px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px}
 a{color:var(--accent)}.m{color:var(--muted);font-size:14px}
+footer.m{font-size:12px;margin-top:40px;padding-top:12px;border-top:1px solid var(--line)}
 nav{display:flex;flex-wrap:wrap;gap:8px 16px;margin:16px 0 8px;font-size:14px}
 section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:16px}
 .box{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:16px;white-space:pre-wrap}.warn{border-color:var(--bad)}
@@ -47,6 +48,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <noscript><div class="box warn"><p>이 페이지는 JavaScript가 있어야 동작해요. SystemBoost 앱의 '고객센터'에서도 문의할 수 있어요.</p><p>This page needs JavaScript. You can also send a request from 'Support' in the SystemBoost app.</p></div></noscript>
 <header><h1 data-t="title"></h1><a id="langLink" href="?lang=en"></a></header>
 <p class="m" data-t="lead"></p>
+<p class="m" data-t="about"></p>
 <nav><a href="#s-faq" data-t="faq"></a><a href="#s-refund" data-t="refund"></a><a href="#s-seller" data-t="seller"></a><a href="#s-ask" data-t="ask"></a><a href="#s-mine" data-t="mine"></a><a id="privacyNav" href="/privacy" data-t="privacy"></a><a id="termsNav" href="/terms" data-t="termsNav"></a></nav>
 <div id="offline" class="box warn" hidden></div>
 <div id="notice" class="box" hidden></div>
@@ -75,8 +77,15 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <label><span data-t="reason"></span><select id="reason"></select></label>
 <p class="m note" data-t="refundNeeds"></p>
 </div>
-<label><span data-t="order"></span><input id="order" maxlength="12" placeholder="SB-XXXX-XXXX" autocomplete="off"></label>
+<div id="depositBox" hidden>
+<p class="m note" data-t="depositGuide"></p>
+</div>
+<label><span id="orderLabel" data-t="order"></span><input id="order" maxlength="12" placeholder="SB-XXXX-XXXX" autocomplete="off"></label>
 <p class="m note" data-t="orderNote"></p>
+<div id="payerBox" hidden>
+<label><span data-t="payer"></span><input id="payer" maxlength="40" autocomplete="off"></label>
+<p class="m note" data-t="payerNote"></p>
+</div>
 <label><span data-t="key"></span><input id="key" maxlength="4000" autocomplete="off" spellcheck="false"></label>
 <p class="m note" data-t="keyNote"></p>
 <label><span data-t="contact"></span><span class="cnt" id="contactN"></span><input id="contact" autocomplete="off"></label>
@@ -114,6 +123,8 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 </div>
 </section>
 
+<footer class="m" data-t="trademark"></footer>
+
 <script nonce="__NONCE__">
 (function () {
   "use strict";
@@ -121,6 +132,9 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
   var TX = {
     ko: {
       title: "SystemBoost 고객센터", other: "English", lead: "자주 묻는 질문과 환불 안내를 보고, 앱 없이도 문의를 남길 수 있어요.",
+      about: "지원 환경: 현재 윈도우만 지원해요 · 출시일: 2026년 12월 9일",
+      // Only the names this page and the default FAQ actually show (a FAQ written on the dashboard may add others).
+      trademark: "Windows(윈도우)는 Microsoft 그룹 회사의 상표예요. Cloudflare, Supabase, Lemon Squeezy는 각 소유자의 상표이고, 판매자가 쓰는 서비스를 가리키려고만 써요. SystemBoost는 Microsoft가 만들거나 승인한 제품이 아니에요.",
       faq: "자주 묻는 질문", refund: "환불 · 청약철회", seller: "판매자 정보", ask: "문의하기", mine: "내 문의", loading: "불러오는 중…",
       privacy: "개인정보 처리방침", privacyMore: "자세한 내용은 개인정보 처리방침에서 볼 수 있어요",
       termsNav: "사용권 계약", termsTitle: "사용권 계약 변경 안내 · 2027년 1월 1일 시행", termsLink: "바뀐 사용권 계약 전문 보기",
@@ -147,6 +161,9 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       closedRefunds: "지금은 일반 문의를 받지 않아요. 환불(청약철회) 요청은 그대로 받아요. 다른 문의는 이 페이지의 판매자 정보에 있는 연락처로 보내 주세요. 보낸 문의는 아래 '내 문의'에서 볼 수 있어요.",
       cat: "문의 종류", subject: "제목", text: "내용", reason: "환불 사유", refundNeeds: "환불 요청에는 주문 코드나 라이선스 키 중 하나가 필요해요.",
       order: "주문 코드 (선택)", orderNote: "앱의 '★ 플랜'에서 결제할 때 받은 코드예요. 적은 경우에만 보내요.",
+      orderNeed: "주문 코드 (필수)",
+      depositGuide: "주문 코드(SB-XXXX-XXXX)를 받고 → 판매자 계좌로 입금하고 → 앱에서 '고객센터에 입금 알리기'를 누르면 → 판매자가 확인한 뒤 24시간 안에 키를 보내요. 24시간은 입금을 알린 때부터예요. 앱 없이 여기서 보내도 같아요. 보내면 주문에 입금을 알렸다고 표시돼요.",
+      payer: "입금자명 (선택)", payerNote: "통장에 찍힌 이름이 주문한 사람과 다르면 적어 주세요. 판매자가 입금을 찾는 데만 써요.",
       key: "라이선스 키 또는 키 식별 번호 (선택)",
       keyNote: "키 전체를 붙여 넣으면 서버가 서명으로 구매자의 키인지 확인해요. 키는 확인에만 쓰고 저장하지 않아요. 문의에는 키 식별 번호(16자리)만 남아요. 키 식별 번호만 적으면 주인 확인이 안 돼서 판매자가 더 물어볼 수 있어요.",
       contact: "판매자가 따로 연락할 연락처 (선택, 메일 등)",
@@ -166,6 +183,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       me: "나", admin: "판매자", created: "보낸 때", updated: "바뀐 때", newReply: "새 답장이 있어요",
       err: { cat: "문의 종류를 고르세요.", subject: "제목은 1~80자예요.", text: "내용은 1~2,000자예요.", contact: "연락처는 120자까지예요.",
              order: "주문 코드 형식(SB-XXXX-XXXX)이 아니에요. 환불 요청에는 주문 코드나 키가 필요해요.", keyId: "라이선스 키나 키 식별 번호 형식이 아니에요.",
+             depositOrder: "입금 확인에는 주문 코드(SB-XXXX-XXXX)가 필요해요.", noOrder: "이 주문 코드를 찾지 못했어요. 앱의 '★ 플랜'에서 받은 코드인지 확인해 주세요.",
              "bad key": "이 키를 확인하지 못했어요. 키 전체를 그대로 붙여 넣었는지 확인해 주세요. 키 식별 번호(16자리)만 적어도 보낼 수 있어요.",
              consent: "보관 안내에 동의해 주세요.", reason: "환불 사유를 고르세요.", lang: "보내지 못했어요.", body: "보내지 못했어요.",
              "too large": "내용이 너무 길어요. 줄여서 다시 보내 주세요.",
@@ -177,6 +195,8 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     },
     en: {
       title: "SystemBoost Support", other: "한국어", lead: "Read the FAQ and the refund policy, and send a request without the app.",
+      about: "Supported system: Windows only for now · Release date: December 9, 2026",
+      trademark: "Windows is a trademark of the Microsoft group of companies. Cloudflare, Supabase and Lemon Squeezy are trademarks of their owners, named only to identify services the seller uses. SystemBoost is not made or endorsed by Microsoft.",
       faq: "FAQ", refund: "Refunds and withdrawal", seller: "Seller", ask: "Send a request", mine: "My requests", loading: "Loading…",
       privacy: "Privacy policy", privacyMore: "Details are in the privacy policy",
       termsNav: "License agreement", termsTitle: "License agreement changes · in force January 1, 2027", termsLink: "Read the changed license agreement",
@@ -203,6 +223,9 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       closedRefunds: "General questions are closed for now. Refund (withdrawal) requests are still accepted. For anything else, use the contact details in the seller information on this page. Requests you sent can still be read under 'My requests'.",
       cat: "Category", subject: "Subject", text: "Message", reason: "Reason for the refund", refundNeeds: "A refund request needs an order code or a license key.",
       order: "Order code (optional)", orderNote: "The code you got when paying on '★ Plans' in the app. Sent only if you fill it in.",
+      orderNeed: "Order code (required)",
+      depositGuide: "Get an order code (SB-XXXX-XXXX) → transfer the money to the seller's account → press 'Tell Support you have paid' in the app → the seller checks it and sends the key within 24 hours. The 24 hours count from when you tell us you have paid. Sending it here without the app works the same; the order is then marked as paid by you.",
+      payer: "Payer name (optional)", payerNote: "Fill it in if the name on the transfer differs from the person who ordered. The seller uses it only to find your payment.",
       key: "License key or key ID (optional)",
       keyNote: "Paste the full key and the server checks by its signature that it is yours. The key is used only for that check and is not stored; the request keeps only its key ID (16 characters). With only a key ID nothing can be checked, so the seller may ask you more.",
       contact: "A contact the seller can use (optional, e.g. email)",
@@ -222,6 +245,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
       me: "Me", admin: "Seller", created: "Sent", updated: "Changed", newReply: "There is a new reply",
       err: { cat: "Choose a category.", subject: "The subject must be 1 to 80 characters.", text: "The message must be 1 to 2,000 characters.", contact: "The contact can be up to 120 characters.",
              order: "That is not an order code (SB-XXXX-XXXX). A refund request needs an order code or a key.", keyId: "That is not a license key or key ID.",
+             depositOrder: "A payment notice needs the order code (SB-XXXX-XXXX).", noOrder: "This order code was not found. Check that it is the code you got on '★ Plans' in the app.",
              "bad key": "This key could not be checked. Make sure you pasted the whole key. You can also send just the key ID (16 characters).",
              consent: "Please agree to how your request is kept.", reason: "Choose a reason for the refund.", lang: "Could not send it.", body: "Could not send it.",
              "too large": "That is too long. Please shorten it and send again.",
@@ -352,7 +376,13 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     }
     syncRefund();
   }
-  function syncRefund() { $("refundBox").hidden = $("cat").value !== "refund"; }
+  // 입금 확인 (deposit): the order code is required, and the payer name goes along with the "I paid" note
+  function syncRefund() {
+    var c = $("cat").value;
+    $("refundBox").hidden = c !== "refund";
+    $("depositBox").hidden = $("payerBox").hidden = c !== "deposit";
+    $("orderLabel").textContent = c === "deposit" ? TX.orderNeed : TX.order;
+  }
   $("cat").addEventListener("change", syncRefund);
 
   $("form").addEventListener("submit", function (ev) {
@@ -364,6 +394,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     if (count("contact") > LIM.contact) { say(msg, TX.err.contact, true); return; }
     if (!$("consent").checked) { say(msg, TX.err.consent, true); return; }
     if (cat === "refund" && !order && !key) { say(msg, TX.refundNeeds, true); return; }
+    if (cat === "deposit" && !/^SB-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(order)) { say(msg, TX.err.depositOrder, true); return; }
     var body = { cat: cat, subject: $("subject").value, text: $("text").value, contact: $("contact").value, lang: L, consent: true };
     if (order) body.order = order;
     // a key id alone (16 hex) or the whole key; the whole key goes to the server only to be checked, never kept
@@ -372,7 +403,15 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     else if (key) { say(msg, TX.err.keyId, true); return; }
     if (cat === "refund") body.refund = { reason: $("reason").value };
     btn.disabled = true; say(msg, TX.sending);
-    post("/support/ticket", body).then(function (r) {
+    // 입금 확인: first the order's "I paid" note (the 24 hours count from it), as the app's button does
+    var first = cat === "deposit" ? post("/order/paid", { code: order, payer: $("payer").value.trim() }) : Promise.resolve({ status: 200 });
+    first.then(function (p) {
+      // the order was marked paid before and its payer note was changed too often: the note stands, the request goes on
+      if (p.status === 404) { btn.disabled = false; say(msg, TX.err.noOrder, true); return null; }
+      if (p.status !== 200 && !(p.status === 429 && p.error === "too many changes")) { btn.disabled = false; say(msg, errText(p), true); return null; }
+      return post("/support/ticket", body);
+    }).then(function (r) {
+      if (!r) return;
       btn.disabled = false;
       if (r.status !== 201 || !r.id || !r.token) { say(msg, errText(r), true); return; }
       say(msg, "");

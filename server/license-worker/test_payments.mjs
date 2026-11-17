@@ -11,6 +11,8 @@ import worker from "./src/index.js";
 import { _forgetIpLimits } from "./src/iplimit.js";
 
 const kv = new Map(), md = new Map(), opts = new Map();
+// 0.8.14: live sales need the seller's details (index.js sellerBlocked); made-up but complete, so this test sells as before
+kv.set("config:support", JSON.stringify({ seller: { name: "Test Seller", rep: "Test Rep", address: "Test Address 1", bizNo: "000-00-00000", mailOrderNo: "2026-Test-0000", email: "seller@example.com", phone: "000-0000-0000" } }));
 let failOn = null;          // key => true: that put throws, as a KV write does when the day's quota is gone
 const writes = [];          // every put / delete, in order
 const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });

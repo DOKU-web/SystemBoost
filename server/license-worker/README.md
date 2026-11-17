@@ -91,6 +91,58 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 코드를 나눠 준 사람의 보상은 자동이 아닙니다. 사용 횟수를 보고 직접 키를 발급합니다.
 - 테스트: `node test_referral.mjs <임시 pem>`
 
+## 카드 구독 가격 변경 안내 (0.8.14)
+카드 구독의 가격을 올릴 때만 씁니다. 구독자가 동의해야 새 가격으로 결제되고, 답하지 않으면 동의로 보지 않습니다.
+Lemon Squeezy는 2027년 3월 31일에 결제를 멈추므로 작게 만들었습니다.
+1. Lemon Squeezy에서 새 가격의 구독 상품(variant)을 따로 만듭니다(지금 상품의 가격을 바꾸지 않습니다).
+2. 대시보드 '결제 설정' → '가격 변경 안내'에 플랜, 지금 가격, 새 가격(원), 새 상품 번호, 시행일을 넣습니다. 시행일은 오늘(한국 시간)부터
+   30일 뒤나 그 뒤여야 하고(`PRICE_NOTICE_DAYS`), 새 가격은 지금 가격보다 높아야 합니다. 시행 전인 안내는 플랜마다 하나, 모두 20개까지.
+3. 서버는 아무것도 보내지 않습니다. 앱 문구(한국어, 영어)와 메일 초안이 나오니 메일은 직접 보냅니다. 앱은 `POST /sub/price`로 안내를 받아
+   시행일 전날까지 보여 줍니다.
+4. 구독자가 앱에서 동의하거나 해지합니다(`POST /sub/price/choose`). 해지를 고르면 Lemon Squeezy에서 바로 해지하고(결제한 기간은 끝까지 씀),
+   해지하지 못하면 목록에 'Lemon Squeezy에서 직접 해지하세요'가 뜹니다. 동의는 시행일 전까지 해지로 바꿀 수 있고, 해지는 되돌릴 수 없습니다.
+5. 시행일부터 목록의 '새 가격으로 옮기기'로 동의한 구독만 하나씩 새 상품으로 옮깁니다(`disable_prorations: true`: 지금 결제하지 않고
+   다음 자동 결제부터 새 가격). 옮긴 뒤에도 키 갱신은 그대로 됩니다(갱신은 구독의 플랜 기록 `subplan:`을 씁니다).
+6. 새로 사는 사람도 새 가격으로 팔려면 '카드 결제 설정'의 그 플랜 상품 번호를 새 상품 번호로 바꿉니다.
+- API: `POST /sub/price {key, lang?}` → `{"notice": {id, plan, oldPrice, newPrice, effective, text} | null, "choice": "" | "agree" | "cancel"}`
+  (`403 {"error":"key"}`: 카드 구독 키가 아님). `POST /sub/price/choose {key, id, choice}` → `{"ok": true, "choice", "cancelled"?}`, 오류는
+  `400 bad request` · `403 key` · `404 notice` · `409 closed`(시행일이 됨) · `409 already`(이미 해지) · `409 inactive`(끝난 구독) · `429 busy`.
+- KV: 답 하나에 1번(`pricechoice:<안내>:<구독>`, 3년), 공개 몫에서 셉니다. 안내 목록은 `config:price_notices`.
+- 동의하지 않거나 답하지 않은 구독을 어떻게 할지(지금 가격으로 둘지, 알리고 끝낼지)는 소유자가 정합니다 [사용자 필요]. 앱 문구는 어느 쪽도 약속하지 않습니다.
+- 테스트: `node test_price.mjs`
+
+## KV 쓰기 예산 (`docs/KV_BUDGET.md`)
+- 누구나 보낼 수 있는 요청(주문, '결제했어요', 선물, 가격 변경 안내에 대한 답)의 하루 KV 쓰기 몫은 기본 400번입니다. `wrangler.toml` `[vars]`에
+  `PUBLIC_KV_DAY = "600"`처럼 넣으면 바뀝니다(정수 50~100,000, 그 밖의 값은 무시하고 400). 무료 플랜(하루 1,000번)에서는
+  올리지 마세요. 판매자 작업과 카드 웹훅에 남는 몫이 줄어듭니다.
+- 출시일 계산(설치 300, 주문 30)과 결론은 `docs/KV_BUDGET.md`에 있습니다.
+
+## 계좌이체 입금 확인 (0.8.14)
+- 안내 문구는 한 곳(`src/support.js` `DEPOSIT_GUIDE`)에서 나와 FAQ, `/help`, 구매 확인서(`/thanks`)에 똑같이 들어갑니다:
+  주문 코드(SB-XXXX-XXXX)를 받고 → 판매자 계좌로 입금하고 → 앱에서 '고객센터에 입금 알리기'를 누르면 → 판매자가 확인한 뒤 24시간 안에 키를 보내요. 24시간은 입금을 알린 때부터예요.
+- 24시간은 주문의 `paidAt`(처음 `POST /order/paid`로 '결제했어요'가 된 때, 한 번만 기록)부터 셉니다. `/help`의 '입금 확인' 문의는 문의를 보내기 전에 `/order/paid`를 먼저 부릅니다.
+- 대시보드 홈 할 일: 판매자 결정을 기다리는 주문마다 한 줄, 남은 시간과 함께. 20시간부터 노란색, 24시간부터 빨간색(`DEPOSIT_WARN_HOURS`, `DEPOSIT_HOURS`).
+  `GET /admin/api/summary`의 `deposits: [{code, plan, paidAt, due, hoursLeft, state: "ok"|"warn"|"late", ticket?}]`.
+- '입금 확인' 문의 화면에서 바로 승인 · 거절: `POST /admin/api/support/deposit {id, action: "approve", email?, note?}` 또는
+  `{id, action: "reject", reason}`(사유 1~100자, 구매자에게 그대로 보임). 판매·키의 '승인' · '거절'과 같은 코드(`approveOrder`, `rejectOrder`)로
+  키를 만들고, 문의에 자동으로 답장합니다(승인: "입금을 확인했어요. 키를 보냈어요. …", 거절: "입금을 확인하지 못해 이 주문을 거절했어요. 사유: …").
+  답장 템플릿 '확인 필요'도 있습니다.
+- 테스트: `node test_deposit.mjs`
+
+### 판매자 디스코드 알림 (`src/seller_alert.js`, 비밀 `ADMIN_ALERT_WEBHOOK`)
+- 판매자만 보는 디스코드 채널의 웹후크 주소를 비밀로 넣습니다. 소유자가 직접 실행합니다(코드 · KV · 커밋에 넣지 않음):
+  `wrangler secret put ADMIN_ALERT_WEBHOOK`
+- 넣지 않았거나 디스코드 웹후크 주소가 아니면 아무것도 보내지 않고, 다른 동작도 그대로입니다.
+- 보내는 때: 구매자가 계좌이체 주문에 처음 '결제했어요'(`POST /order/paid`, requested → paid)를 했을 때 한 번,
+  20시간이 지나도 아직 '결제 확인 요청'이면 매시간 cron(`7 * * * *`)이 한 번 더.
+- 보내는 내용: 주문 코드, 플랜, 남은 시간(예: `입금 알림 · SB-XXXX-XXXX · 프로 연간 · 24시간 안에 확인 (12-10 14:05까지, 한국 시간)`)뿐입니다.
+  구매자의 메일, 이름, 입금자명, 메모, IP 주소는 보내지 않습니다. 금액은 서버에 가격표가 없어 보내지 않습니다.
+- 알림을 기록하려고 KV에 쓰지 않습니다. cron은 예정 시각 기준으로 처음 '결제했어요'가 20시간 전 ~ 21시간 전 사이인 주문만 고르므로,
+  한 시간마다 돌면 주문마다 한 번씩만 갑니다(cron이 한 번 빠지면 그 시간의 주문은 다시 알리지 않음).
+  웹후크가 있을 때만 cron이 주문 목록을 한 번 읽습니다(KV list, 하루 24번).
+- 디스코드가 느리거나 실패해도 `/order/paid`는 실패하지 않습니다(`ctx.waitUntil`, 5초 제한, 예외 없음).
+- 테스트: `node test_alert.mjs`
+
 ## 사용 통계 (`src/stats.js`)
 - 앱은 동의 후 `POST /ping`으로 무작위 설치 번호, 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 부스트 여부를 보냅니다. 끌 수 있고, 무엇을 보내는지는 사용권 계약 제8조에 적혀 있습니다. 보내는 항목을 바꾸면 계약 문구도 함께 고치고 `Eula.Version`을 올려야 합니다.
 - 저장 위치는 Durable Object(SQLite)입니다. 신호마다 쓰기가 생기는데 KV 무료 플랜은 하루 1,000번까지만 쓸 수 있어서입니다. `wrangler deploy`가 알아서 만듭니다.
@@ -108,6 +160,8 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - `GET /support/info`: 판매자 정보, 공지, 자주 묻는 질문, 문의 종류, 환불 사유, 제9조(`?lang=en`).
 - `POST /support/ticket`: 새 문의 → `{id, token}`. 확인 코드(`token`)는 이때 한 번만 보여 줍니다.
   키는 `key`(키 전체)나 `keyId`(키 식별 번호, 16자리)로 받습니다. `key`는 서명을 확인한 뒤 키 식별 번호와 `keyVerified: true`만 남기고, 키 자체는 저장하지도, 로그에 남기지도, 돌려주지도 않습니다. 서명이 틀리면 400 `bad key`, `key`와 다른 `keyId`를 함께 보내면 400 `keyId`입니다. `keyId`만 보내면 `keyVerified: false`입니다.
+  문의 종류 `deposit`(입금 확인, 0.8.14)은 `order`(주문 코드, `SB-XXXX-XXXX`)가 꼭 있어야 하고, 없거나 형식이 틀리면 400 `{"error":"order"}`입니다.
+  주문이 서버에 있는지는 묻지 않습니다(대시보드가 보여 줍니다). 결제 · 환불 문의처럼 3년 보관합니다.
 - `GET /support/ticket?id=<번호>`: 문의 보기. 확인 코드는 헤더 `X-Ticket-Token`으로 보냅니다.
 - `POST /support/ticket/reply` `{id, token, text}`, `POST /support/ticket/close` `{id, token}`.
 - `POST /support/tickets/status`: 앱의 답장 확인(아래).
@@ -203,6 +257,11 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 자주 묻는 질문을 비우면 서버의 기본 질문이 나옵니다. 기본 질문은 이 README, 사용권 계약, 앱 문구에 있는 내용으로만 썼습니다.
 - 청약철회 기간은 화면에 보여 주기만 합니다. 7일보다 짧게 넣어도 앱과 /help에는 법정 7일이 나오고, 7일보다 길게 넣으면 그 기간이 판매자가 더 주는 기간으로 나옵니다.
 - 사용권 계약 제9조나 앱 메뉴 이름을 바꾸면 `src/support.js`의 `ARTICLE_9`, `DEFAULT_FAQ`도 함께 고칩니다.
+- 0.8.14부터 윈도우만 팝니다. /help 맨 위에 '지원 환경: 현재 윈도우만 지원해요 · 출시일: 2026년 12월 9일', 맨 아래에 상표 안내가
+  나옵니다(`src/help_page.js` TX의 `about`, `trademark`, 영어도 함께). 상표 안내는 이 페이지와 기본 질문에 나오는 이름(Windows,
+  Cloudflare, Supabase, Lemon Squeezy)만 다룹니다. 대시보드에서 쓴 질문이나 공지에 다른 회사 이름을 넣으면 `trademark`도 고칩니다.
+  사용자가 읽는 글(/help, 기본 질문, /privacy, 구매 확인, 대시보드의 답장 문구와 디스코드 다운로드 양식)에는 Mac · macOS · Apple ·
+  GPTK · Wine · Steam이 없습니다. 통계 코드는 예전 버전이 보내는 os "mac"을 그대로 받습니다.
 - 테스트: `node test_support.mjs`(새 소식은 `node test_stats.mjs`에도)
 
 ## 개인정보 처리방침 (`/privacy`)
@@ -211,6 +270,8 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 빈칸 네 개는 요청마다 `config:support`에서 채웁니다: 보호책임자(판매자 정보의 대표자, 없으면 상호), 메일(판매자 정보의 메일), 회원 DB 위치, 시행일. 마지막 두 개는 대시보드 '고객센터' → 설정의 '개인정보 처리방침' 칸입니다(회원 DB 위치는 Supabase 프로젝트의 지역). 비어 있으면 페이지에 '판매자가 아직 입력하지 않았어요'가 나오고, 대시보드 설정에 경고가 뜹니다.
 - 값은 모두 HTML로 이스케이프하고, 페이지는 /help처럼 요청마다 nonce를 쓰는 CSP로 보내며 스크립트와 외부 자원이 없습니다.
 - 방침의 내용은 코드를 읽고 쓴 것입니다. 저장하는 항목, 보관 기간, 국외 이전을 바꾸면 방침과 사용권 계약 제8조를 함께 고치고 `Eula.Version`을 올립니다.
+- 제12조(EU · EEA · 영국 이용자)는 처리의 법적 근거, 권리, 감독기관 민원, 국외 이전만 적습니다. EU 대리인, 개인정보 보호 담당관(DPO),
+  인증은 정해진 것이 없어 적지 않았습니다. EU 대리인을 둘지는 소유자가 정합니다 [사용자 필요].
 
 ## 설치
 1. `npm i -g wrangler` → `wrangler login`
@@ -235,6 +296,12 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 6. '실판매'로 바꾸면 실제 카드 결제가 열립니다. 테스트 모드의 상품 번호와 API 키는 실판매에서 쓸 수 없으니 실판매 것으로 다시 넣습니다.
    앱에는 사용권 계약의 카드 구독 조항(제3조 제3항)이 시행되는 2026년 12월 8일 0시(한국 시간)부터 나옵니다. 그 전에 '실판매'로 두어도 앱에는 카드 결제가 나오지 않습니다 (`CARD_LIVE_FROM`, src/index.js).
 
+**판매자 정보가 비면 실판매를 막습니다 (0.8.14)**: 판매 모드가 '실판매'인데 대시보드 '고객센터 설정'의 판매자 정보 중
+상호 · 대표자 · 주소 · 사업자등록번호 · 통신판매업 신고번호 · 이메일 · 전화번호 가운데 하나라도 비어 있으면, `/status`는 결제 방식을
+하나도 내놓지 않고 `/order` · `/checkout` · 카드 플랜 변경(`/subscription/change`)은 `503 {"error":"seller info"}`로 답합니다
+(계좌이체 포함). 상담 시간은 비워도 됩니다. 키 확인 · 갱신 · 웹훅 · 환불 · 고객센터 · 이미 있는 주문의 '결제했어요' · 판매자 승인은
+그대로입니다. 대시보드 홈의 할 일에 '판매자 정보 N개 비어 있음'이 뜹니다. '테스트'와 '꺼짐' 모드는 막지 않습니다.
+
 어떤 플랜인지는 Lemon Squeezy가 서명해서 보내는 상품 번호로만 정합니다. 결제창 주소의 custom 값은 구매자가 바꿀 수 있어서
 주문 코드를 찾는 데만 씁니다. 첫 결제는 `subscription_created` 한 번으로 키 하나, 갱신은 `subscription_payment_success`(renewal)마다 새 키,
 고객 포털에서 플랜을 바꾸면 `subscription_updated`로 바뀐 플랜의 키가 나갑니다. 첫 결제나 갱신을 환불하면 그 키를 차단합니다.
@@ -243,6 +310,8 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - `node test_card.mjs`: 가짜 Lemon Squeezy와 서명한 웹훅으로 카드 결제 전부(플랜별 결제창, 울트라 키, 중복 없음, 갱신 기간,
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
+- `node test_kv_public.mjs` (공개 저장 몫이 차도 키 확인 · 갱신 · 웹훅 · 승인은 됨, `PUBLIC_KV_DAY`), `node test_kv_writes.mjs` (동작마다 KV 쓰기 수, `docs/KV_BUDGET.md`)
+- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내), `node test_price.mjs` (가격 변경 동의)
 
 ## 확인 필요
 - Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.

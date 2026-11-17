@@ -170,6 +170,7 @@ button.todoRow:hover{border-color:var(--or)}
 .todoRow .tn{font-size:26px;font-weight:700;min-width:2.2em;text-align:center;font-variant-numeric:tabular-nums}
 .todoRow .tt{flex:1;min-width:0;display:grid;gap:2px}.todoRow .tg{color:var(--mut);white-space:nowrap}
 .todoRow.warn{border-color:#6a5420}.todoRow.warn .tn{color:var(--warn)}
+.todoRow.bad{border-color:#6a2626}.todoRow.bad .tn{color:var(--bad)}
 .todoDone{color:var(--ok);padding:6px 2px}
 .budget{display:grid;gap:10px;margin-bottom:12px}
 .bRow{display:grid;grid-template-columns:minmax(120px,210px) 1fr auto;gap:12px;align-items:center;font-size:14px}
@@ -202,7 +203,7 @@ button.todoRow:hover{border-color:var(--or)}
   <div class="usage" id="usage">
     <div class="card">
       <h2>실시간 사용 현황 <small id="uNote">불러오는 중</small></h2>
-      <div class="hero"><span class="dot" id="uDot"></span><div><div class="hn" id="uLive">—</div><div class="mut" id="uLiveL">지금 켜져 있는 앱</div></div></div>
+      <div class="hero"><span class="dot" id="uDot"></span><div><div class="hn" id="uLive">—</div><div class="mut" id="uLiveL">지금 켜져 있는 앱</div><div class="mut" id="uOptIn">통계를 켠 사용자만 셉니다</div></div></div>
       <div class="stats in" id="uStats" style="margin-bottom:0"></div>
     </div>
 
@@ -210,7 +211,7 @@ button.todoRow:hover{border-color:var(--or)}
   <div class="card" id="budgetCard">
     <h2>오늘 서버 저장 횟수 <small>Cloudflare 무료 요금제는 서버 전체가 하루 1,000번까지 저장할 수 있어요. 한국 시간 오전 9시(UTC 자정)에 0으로 돌아가요.</small></h2>
     <div class="budget" id="budget"></div>
-    <p class="mut" style="margin:0">구매자가 보내는 요청만 세고, 선물 하나는 저장 3번으로 세요. 판매자 작업(승인, 키 발급, 설정 저장)과 카드 결제 알림은 세지도 막지도 않아서 칸이 다 차도 하루 350번 넘게 남아요. 칸이 다 차면 그날 남은 시간 동안 그 요청에는 '잠시 뒤 다시 시도'가 떠요.</p>
+    <p class="mut" style="margin:0">구매자가 보내는 요청만 세고, 선물 하나는 저장 3번으로 세요. 판매자 작업(승인, 키 발급, 설정 저장)과 카드 결제 알림은 세지도 막지도 않아서 칸이 다 차도 하루 <span id="kvLeft">350</span>번 넘게 남아요(무료 요금제 기준). 칸이 다 차면 그날 남은 시간 동안 그 요청에는 '잠시 뒤 다시 시도'가 떠요.</p>
   </div>
 </section>
 <section class="tab hide" data-tab="sales" aria-label="판매·키">
@@ -408,6 +409,23 @@ button.todoRow:hover{border-color:var(--or)}
         <div class="row"><button class="p" id="saveLinks">링크 저장</button><span id="pMsg" class="mut"></span></div>
       </div>
     </div>
+
+    <div class="card" id="priceCard">
+      <h2>가격 변경 안내 <small>카드 구독의 가격을 올릴 때만 써요. 구독자가 동의해야 새 가격으로 결제돼요</small></h2>
+      <div class="mut">안내를 만들면 앱이 그 플랜의 카드 구독자에게 시행일 전날까지 보여 주고, 구독자가 동의하거나 해지를 골라요. 답하지 않으면 동의로 보지 않아요.
+        메일은 보내지 않아요: 만든 뒤 나오는 초안을 복사해 직접 보내세요. Lemon Squeezy에서 새 가격의 상품을 먼저 만들고 그 번호를 넣으세요.
+        시행일은 오늘(한국 시간)부터 30일 뒤나 그 뒤여야 해요. 시행일이 되면 동의한 구독을 하나씩 새 가격으로 옮겨요(지금 결제하지 않고 다음 자동 결제부터).</div>
+      <div class="cIds">
+        <label class="mut">플랜<select id="prPlan"></select></label>
+        <label class="mut">지금 가격 (원)<input id="prOld" inputmode="numeric" placeholder="예: 2900"></label>
+        <label class="mut">새 가격 (원)<input id="prNew" inputmode="numeric" placeholder="예: 3900"></label>
+        <label class="mut">새 가격 상품(variant) 번호<input id="prVariant" inputmode="numeric"></label>
+        <label class="mut">시행일 (한국 시간)<input id="prDay" type="date"></label>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="p" id="prMake">안내 만들기</button><span id="prMsg" class="mut"></span></div>
+      <textarea id="prOut" class="hide" rows="12" readonly style="margin-top:10px"></textarea>
+      <div id="prList" style="margin-top:12px"></div>
+    </div>
 </section>
 <section class="tab hide" data-tab="ann" aria-label="디스코드 공지">
   <span id="annTop"></span>
@@ -535,7 +553,7 @@ async function api(path, body) {
 
 // ------------------------------------------------------------ views
 async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadKeys(), loadLog(), loadLinks(), loadRefs(), loadMembers(), loadAnnounce(), loadCard(),
-                                               loadSupport(), loadSupCfg(), loadAccess(), tkId ? openTicket(tkId, true) : null]); }
+                                               loadSupport(), loadSupCfg(), loadAccess(), loadPrice(), tkId ? openTicket(tkId, true) : null]); }
 const CARD_PLANS = ["monthly", "yearly", "ultra_monthly", "ultra_yearly", "biz_monthly", "biz_yearly"];
 function showCard(c) {
   const mark = (id, on) => { $(id).textContent = on ? "등록됨" : "없음"; $(id).className = on ? "yes" : "no"; };
@@ -549,6 +567,37 @@ function showCard(c) {
 }
 async function loadCard() {
   try { showCard(await api("/card")); } catch (e) { if (e.message !== "401") $("cReady").textContent = "— 불러오지 못했어요: " + e.message; }
+}
+// Price increase notices of card subscriptions (GET /admin/api/price): who agreed, who cancelled; no answer is no consent.
+let priceNow = null;
+const CHOICE_KO = { agree: "동의", cancel: "해지" };
+$("prPlan").innerHTML = CARD_PLANS.map(p => `<option value="${p}">${esc(PLAN[p])}</option>`).join("");
+function showPriceText(r) {
+  $("prOut").value = ["[앱 문구]", r.text.ko, "", "[App text, English]", r.text.en, "",
+                      "[메일 초안] 제목: " + r.email.ko.subject, r.email.ko.body, "", "[E-mail draft] Subject: " + r.email.en.subject, r.email.en.body].join("\n");
+  $("prOut").classList.remove("hide");
+}
+function priceRow(n, c) {
+  const act = c.choice !== "agree" ? ""
+    : c.moved ? `<span class="mut">새 가격으로 옮김 ${when(c.moved)}</span>`
+    : n.open ? '<span class="mut">시행일부터 옮길 수 있어요</span>'
+    : `<button data-pr-move="${esc(n.id)}" data-sub="${esc(c.sub)}">새 가격으로 옮기기</button>`;
+  const ls = c.choice === "cancel" && c.cancelled === false ? ' <span class="err">Lemon Squeezy에서 직접 해지하세요</span>' : "";
+  return `<tr><td class="m">${esc(c.sub)}</td><td>${esc(CHOICE_KO[c.choice] || c.choice)}${ls}</td><td class="m">${when(c.at)}</td><td>${act}</td></tr>`;
+}
+function showPrice(r) {
+  $("prDay").min = r.minEffective;
+  if (!$("prDay").value) $("prDay").value = r.minEffective;
+  $("prList").innerHTML = !r.notices.length ? '<div class="mut">만든 안내가 없어요.</div>' : r.notices.map(n => `<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+    <b>${esc(PLAN[n.plan] || n.plan)}</b> ₩${num(n.oldPrice)} → ₩${num(n.newPrice)} · ${esc(n.effective)} 시행 · 상품 ${esc(n.variant)} · ${n.open ? "시행 전" : "시행됨"}
+    <div class="mut">동의 ${num(n.agree)} · 해지 ${num(n.cancel)} · 답하지 않은 구독은 여기에 없고, 동의로 보지 않아요</div>
+    <div class="row" style="margin-top:6px"><button data-pr-text="${esc(n.id)}">앱 문구 · 메일 초안</button><button class="d" data-pr-del="${esc(n.id)}">지우기</button></div>
+    ${n.choices.length ? `<div class="tbl"><table><thead><tr><th>구독 번호</th><th>답</th><th>시각</th><th></th></tr></thead><tbody>${n.choices.map(c => priceRow(n, c)).join("")}</tbody></table></div>` : ""}
+  </div>`).join("");
+}
+async function loadPrice() {
+  try { priceNow = await api("/price"); showPrice(priceNow); }
+  catch (e) { if (e.message !== "401") $("prList").textContent = "불러오지 못했어요: " + e.message; }
 }
 async function loadMembers() {
   let list;
@@ -586,7 +635,7 @@ async function loadRefs() {
     <td style="text-align:right;white-space:nowrap"><button data-ref-set="${esc(r.code)}" data-on="${r.on ? "" : "1"}">${r.on ? "끄기" : "켜기"}</button> <button class="d" data-ref-del="${esc(r.code)}">지우기</button></td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">아직 추천 코드가 없어요</td></tr>`;
 }
-let sumCounts = null;
+let sumCounts = null, sellerNow = null, depositsNow = null;   // depositsNow: GET /summary deposits (bank transfers waiting)   // sellerNow: GET /summary sellerMissing (empty seller fields) and sellerBlocked (live mode)
 function sumTiles(c) {
   $("stats").innerHTML = [["결제 확인 요청", c.ordersPaid || 0, "var(--or)"], ["답변할 문의", c.ticketsOpen || 0, "var(--or)"], ["환불 진행 중", c.refundsOpen || 0, "var(--bad)"], ["사용 중", c.active, "var(--ok)"], ["최근 30일 발급", c.last30], ["만료", c.expired], ["차단", c.revoked, "var(--bad)"], ["전체 키", c.total]]
     .map(([l, n, col]) => `<div class="stat"><div class="n" style="color:${col || "inherit"}">${n}</div><div class="l">${l}</div></div>`).join("");
@@ -594,6 +643,8 @@ function sumTiles(c) {
 }
 async function loadSummary() {
   const s = await api("/summary"), c = s.counts;
+  sellerNow = { missing: s.sellerMissing || [], blocked: !!s.sellerBlocked };
+  depositsNow = Array.isArray(s.deposits) ? s.deposits : null;
   sumCounts = c; renderBudget(s.budget); supBadge(c); sumTiles(c);
   const partial = [c.keysMore && "키가 2만 개를 넘어 앞의 2만 개만 셌어요", c.ordersMore && "주문이 1,000개를 넘어 앞의 1,000개만 셌어요",
                    c.ticketsMore && "문의가 1,000개를 넘어 앞의 1,000개만 셌어요"].filter(Boolean);
@@ -734,15 +785,17 @@ function drawCharts() {
 }
 addEventListener("resize", drawCharts);
 
+// every number here comes from usage pings, which only apps with usage statistics turned on send
+const OPT_IN = "통계를 켠 사용자만 셉니다";
 function renderStats(s) {
   const clock = new Date(s.now).toLocaleTimeString("ko-KR");
   const mins = Math.round(s.liveFor / 60);
-  $("uNote").textContent = `${mins}분 안에 신호를 보낸 앱을 세요. 15초마다 갱신 · ${clock}. 0.8.6 이후 버전에서 사용 통계를 켠 앱만 포함돼요.`;
+  $("uNote").textContent = `${mins}분 안에 신호를 보낸 앱을 세요. 15초마다 갱신 · ${clock}. 0.8.6 이후 버전에서 사용 통계를 켠 앱만 포함돼요(0.8.14부터 사용 통계는 처음에 꺼져 있어요).`;
   $("uLive").textContent = num(s.live.total);
   $("uDot").classList.toggle("on", s.live.total > 0);
   const each = s.today.active ? Math.round(s.today.seconds / s.today.active) : 0;
   $("uStats").innerHTML = tiles([
-    ["오늘 사용자", num(s.today.active)], ["최근 7일 사용자", num(s.week)], ["최근 30일 사용자", num(s.month)], ["누적 설치", num(s.installs)], ["오늘 새 설치", num(s.today.installs)],
+    ["오늘 사용자", num(s.today.active)], ["최근 7일 사용자", num(s.week)], ["최근 30일 사용자", num(s.month)], ["누적 설치", num(s.installs), OPT_IN], ["오늘 새 설치", num(s.today.installs), OPT_IN],
     ["오늘 앱을 켜 둔 시간", dur(s.today.seconds), s.today.active ? "1인 평균 " + dur(each) : ""], ["오늘 프레임 생성", dur(s.today.frameGenSeconds)],
     ["지금 프레임 생성", num(s.live.frameGen)], ["지금 원클릭 부스트", num(s.live.boost), "Windows만"]]);
 
@@ -840,6 +893,21 @@ $("cSave").onclick = async () => {
   } catch (e) { if (e.message !== "401") msg(e.message, "err"); }
   finally { $("cSave").disabled = false; }
 };
+$("prMake").onclick = async () => {
+  const msg = (t, cls) => { $("prMsg").textContent = t; $("prMsg").className = cls; };
+  const b = { plan: $("prPlan").value, oldPrice: Number($("prOld").value), newPrice: Number($("prNew").value), variant: $("prVariant").value.trim(), effective: $("prDay").value };
+  if (!(await ask("가격 변경 안내를 만들까요?", `${esc(PLAN[b.plan])}: ₩${num(b.oldPrice)} → ₩${num(b.newPrice)}<br>시행일: ${esc(b.effective)} (한국 시간)<br>새 가격 상품 번호: ${esc(b.variant)}<br><br>앱이 이 플랜의 카드 구독자에게 바로 보여 줘요. 메일은 보내지 않아요.`, "만들기"))) return;
+  $("prMake").disabled = true;
+  try {
+    const r = await api("/price", b);
+    showPriceText(r);
+    msg("만들었어요. 아래 메일 초안을 복사해 직접 보내세요.", "okc");
+    ["prOld", "prNew", "prVariant"].forEach(i => $(i).value = "");
+    loadPrice(); loadLog();
+  } catch (e) { if (e.message !== "401") msg(e.message, "err"); }
+  finally { $("prMake").disabled = false; }
+};
+$("prOut").onclick = () => { $("prOut").select(); copy($("prOut").value); };
 $("mFind").onclick = () => loadMembers();
 $("mQ").onkeydown = e => { if (e.key === "Enter") loadMembers(); };
 $("rAdd").onclick = async () => {
@@ -857,6 +925,19 @@ $("rAdd").onclick = async () => {
 document.addEventListener("click", e => onClick(e).catch(err => { if (err.message !== "401") toast("실패했어요: " + err.message); }));
 async function onClick(e) {
   const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.prText) { const n = (priceNow?.notices || []).find(x => x.id === t.dataset.prText); if (n) showPriceText(n); return; }
+  if (t.dataset.prDel) {
+    if (await ask("가격 변경 안내를 지울까요?", "앱에 더는 보이지 않아요. 이미 받은 답(동의 · 해지)은 3년 동안 서버에 남지만 이 화면에서는 볼 수 없어요.", "지우기")) {
+      await api("/price/delete", { id: t.dataset.prDel }); toast("지웠어요"); loadPrice(); loadLog();
+    }
+    return;
+  }
+  if (t.dataset.prMove) {
+    if (await ask("새 가격으로 옮길까요?", `구독 <code>${esc(t.dataset.sub)}</code> — 새 가격에 동의한 구독이에요. Lemon Squeezy에서 새 가격의 상품으로 바꾸고, 지금은 결제하지 않아요. 다음 자동 결제부터 새 가격이에요.`, "옮기기")) {
+      await api("/price/move", { id: t.dataset.prMove, sub: t.dataset.sub }); toast("옮겼어요"); loadPrice(); loadLog();
+    }
+    return;
+  }
   if (t.dataset.memBlock) { await api("/members/block", { id: t.dataset.memBlock, on: !!t.dataset.on }); loadMembers(); loadLog(); return; }
   if (t.dataset.memRec) {
     if (await ask("복구 코드를 새로 만들까요?", `<code>${esc(t.dataset.memRec)}</code> — 본인인지 확인했을 때만 만드세요. 지금 코드는 쓸 수 없게 돼요.`, "새로 만들기")) {
@@ -960,18 +1041,35 @@ let budgetNow = null;   // GET /summary budget: [count, cap] each, counted in th
 const BUDGET_ROWS = [["pub", "주문 · 입금 알림 · 선물", "번"], ["gifts", "추천 · 초대 선물", "개"], ["support", "고객센터 문의와 답장", "번"]];
 function renderBudget(b) {
   budgetNow = b || null;
+  // what stays for the seller on the free plan's 1,000 a day: the caps can move (env PUBLIC_KV_DAY)
+  if (b && Array.isArray(b.pub) && Array.isArray(b.support)) $("kvLeft").textContent = num(Math.max(0, 1000 - Number(b.pub[1]) - Number(b.support[1])));
   if (!b) { $("budget").innerHTML = `<div class="mut">통계 저장소에 연결하지 못해 지금은 보여 줄 수 없어요.</div>`; return; }
   $("budget").innerHTML = BUDGET_ROWS.filter(([k]) => Array.isArray(b[k])).map(([k, label, unit]) => {
     const [n, max] = b[k].map(Number), pct = max ? Math.min(100, n / max * 100) : 0;
     return `<div class="bRow${n >= max ? " full" : pct >= 80 ? " near" : ""}"><span>${esc(label)}</span><div class="bBar"><div style="width:${pct.toFixed(1)}%"></div></div><span class="v">${num(n)} / ${num(max)}${unit}</span></div>`;
   }).join("");
 }
+// One row a bank transfer waiting for the seller, with the 24 hours counted from the buyer's first "I paid":
+// amber from 20 hours, red from 24 (server: support.js DEPOSIT_WARN_HOURS, DEPOSIT_HOURS).
+function depositRows(list) {
+  const shown = list.slice(0, 10), more = list.length - shown.length;
+  return shown.map(d => {
+    const h = Number(d.hoursLeft), cls = d.state === "late" ? " bad" : d.state === "warn" ? " warn" : "";
+    const left = h <= 0 ? `기한 ${Math.ceil(-h)}시간 지남` : h < 1 ? "1시간 안에 보내야 해요" : `${Math.floor(h)}시간 남음`;
+    const go = d.ticket ? `data-go="support" data-seg="" data-open-tk="${esc(d.ticket)}"` : `data-go="sales" data-seg=""`;
+    return `<button class="todoRow${cls}" ${go}><span class="tn"${cls ? "" : ' style="color:var(--or)"'}>${h <= 0 ? "!" : Math.max(1, Math.floor(h)) + "h"}</span><span class="tt"><b>입금 확인 ${esc(d.code)} · ${esc(planName(d.plan))}</b><span class="mut">${esc(left)} · 입금 알림 ${esc(when(d.paidAt))}${d.ticket ? " · 문의 " + esc(d.ticket) : ""}. 입금을 찾으면 승인하세요.</span></span><span class="tg">보기 ›</span></button>`;
+  }).join("") + (more > 0 ? `<button class="todoRow" data-go="sales" data-seg=""><span class="tn" style="color:var(--or)">+${num(more)}</span><span class="tt"><b>입금 확인 ${num(more)}건 더</b><span class="mut">판매·키의 결제 신청에 있어요.</span></span><span class="tg">보기 ›</span></button>` : "");
+}
 function renderTodo(c) {
-  const rows = [[c.ordersPaid, "결제 확인 요청", "구매자가 결제했다고 알렸어요. 입금을 확인한 뒤 승인하세요.", "sales", "", "var(--or)"],
+  const rows = [[depositsNow ? 0 : c.ordersPaid, "결제 확인 요청", "구매자가 결제했다고 알렸어요. 입금을 확인한 뒤 승인하세요.", "sales", "", "var(--or)"],
                 [c.ticketsOpen, "답변할 문의", "구매자가 답장을 기다리고 있어요.", "support", "open", "var(--or)"],
                 [c.refundsOpen, "환불 진행 중", "환불 요청을 승인하거나 거절하고, 돈을 돌려준 뒤 '환불 완료'를 누르세요.", "support", "refund", "var(--bad)"]]
     .filter(r => Number(r[0]) > 0);
-  let html = rows.map(([n, label, what, tab, seg, col]) => `<button class="todoRow" data-go="${tab}" data-seg="${seg}"><span class="tn" style="color:${col}">${num(n)}</span><span class="tt"><b>${esc(label)}</b><span class="mut">${esc(what)}</span></span><span class="tg">보기 ›</span></button>`).join("");
+  let html = (depositsNow ? depositRows(depositsNow) : "") +
+    rows.map(([n, label, what, tab, seg, col]) => `<button class="todoRow" data-go="${tab}" data-seg="${seg}"><span class="tn" style="color:${col}">${num(n)}</span><span class="tt"><b>${esc(label)}</b><span class="mut">${esc(what)}</span></span><span class="tg">보기 ›</span></button>`).join("");
+  // the seller's details a buyer must see (전자상거래법): in live mode the server sells nothing while one is empty
+  const gaps = (sellerNow && sellerNow.missing) || [];
+  if (gaps.length) html = `<button class="todoRow ${sellerNow.blocked ? "bad" : "warn"}" data-go="support" data-seg="" data-scroll="sfCard"><span class="tn">${num(gaps.length)}</span><span class="tt"><b>판매자 정보 ${num(gaps.length)}개 비어 있음</b><span class="mut">${esc(gaps.map(k => (SELLER.find(([f]) => f === k) || [k, k])[1]).join(", "))}. ${sellerNow.blocked ? "실판매 중이라 다 채울 때까지 앱에서 결제할 수 없어요(계좌이체 포함)." : "판매 모드가 '실판매'이면 다 채울 때까지 앱에서 결제할 수 없어요(계좌이체 포함)."}</span></span><span class="tg">채우기 ›</span></button>` + html;
   const near = budgetNow ? BUDGET_ROWS.filter(([k]) => Array.isArray(budgetNow[k]) && budgetNow[k][1] && budgetNow[k][0] >= budgetNow[k][1] * 0.8) : [];
   if (near.length) html += `<div class="todoRow warn"><span class="tn">!</span><span class="tt"><b>오늘 서버 저장 한도가 거의 찼어요</b><span class="mut">${esc(near.map(([k, label]) => label + " " + num(budgetNow[k][0]) + " / " + num(budgetNow[k][1])).join(" · "))}. 아래 '오늘 서버 저장 횟수'를 보세요.</span></span></div>`;
   if (!html) html = `<div class="todoDone">지금 처리할 일이 없어요.</div>`;
@@ -986,6 +1084,8 @@ $("todo").addEventListener("click", e => {
   showTab(b.dataset.go);
   if (b.dataset.go === "sales" && ostatus !== "open") document.querySelector('#oseg [data-o="open"]').click();
   if (b.dataset.seg && sstatus !== b.dataset.seg) document.querySelector('#tkSeg [data-ts="' + b.dataset.seg + '"]').click();
+  if (b.dataset.scroll) $(b.dataset.scroll).scrollIntoView();
+  if (b.dataset.openTk) openTicket(b.dataset.openTk, false, true);
 });
 $("out").onclick = () => logout("");
 function logout(msg) { token = ""; feedNew = 0; feedTitle(); try { sessionStorage.removeItem("sbAdmin"); } catch (e) {} $("app").classList.add("hide"); $("login").classList.remove("hide"); $("lerr").textContent = msg; }
@@ -1012,7 +1112,7 @@ const AN_TEMPLATES = [
   { label: "🗺️ 로드맵", channel: "road", ping: "", data: () => ({ title: "🗺️ 로드맵 업데이트", desc: "-# 목표 일정이며 바뀔 수 있어요.", fields: [
     { name: "✅ 완료", value: "- ", inline: true }, { name: "🔨 진행 중", value: "- ", inline: true }, { name: "📅 예정", value: "- ", inline: true }] }) },
   { label: "⬇️ 다운로드", channel: "dl", ping: "ann", data: () => ({ title: "⬇️ SystemBoost v0.0.0 다운로드", desc: "공식 다운로드 링크는 이곳뿐이에요. 다른 곳의 재업로드 파일은 받지 마세요.", fields: [
-    { name: "🪟 Windows (설치판)", value: "[다운로드](https://)", inline: true }, { name: "🪟 Windows (포터블)", value: "[다운로드](https://)", inline: true }, { name: "🍎 macOS", value: "[다운로드](https://)", inline: true }] }) },
+    { name: "🪟 Windows (설치판)", value: "[다운로드](https://)", inline: true }, { name: "🪟 Windows (포터블)", value: "[다운로드](https://)", inline: true }] }) },
   { label: "🧪 베타 공지", channel: "beta", ping: "beta", data: () => ({ title: "🧪 베타 테스트 안내", desc: "테스트 기간, 빌드 위치, 집중해서 봐 줄 부분을 적어 주세요.\n\n피드백은 <#1568552144016113764> 에 남겨 주세요." }) },
   { label: "🔧 점검 안내", channel: "ann", ping: "ann", data: () => ({ title: "🔧 서버/다운로드 점검 안내", desc: "**일시:** \n**영향:** \n\n점검 중에는 일부 기능이 동작하지 않을 수 있어요." }) },
 ];
@@ -1227,7 +1327,7 @@ $("anSaveHooks").onclick = async () => {
 // a manual one is paid back by hand, and '환불 완료' here then blocks the keys and marks the order refunded.
 const TK_ST = { open: "답변 대기", answered: "답변함", closed: "닫힘" };
 const TK_SEG = { open: "처리할 것", answered: "답변함", closed: "닫힘", refund: "환불", all: "전체" };
-const TK_CAT = { pay: "결제", refund: "환불", bug: "오류 신고", howto: "사용 방법", idea: "제안", other: "기타" };
+const TK_CAT = { pay: "결제", deposit: "입금 확인", refund: "환불", bug: "오류 신고", howto: "사용 방법", idea: "제안", other: "기타" };
 const RF_ST = { requested: "환불 요청됨", approved: "환불 승인됨", rejected: "환불 거절됨", done: "환불 완료" };
 const RF_WHY = { change_mind: "단순 변심", not_working: "작동하지 않음 · 표시나 광고와 다름", double: "중복 결제", other: "기타" };
 const UNOWNED = "키 소유 확인 안 됨: 구매자가 키 식별 번호만 적었어요";
@@ -1238,14 +1338,15 @@ const SELLER = [["name", "상호"], ["rep", "대표자"], ["address", "주소"],
 const CANNED = [
   { label: "키 재전송 안내", text: "안녕하세요, SystemBoost예요.\n키를 아래에 다시 보내 드려요. 앱 '★ 플랜'의 '라이선스 키' 칸에 붙여 넣고 '등록'을 눌러 주세요. 키 하나는 PC 한 대에만 써요.\n\n" },
   { label: "결제 확인 중", text: "안녕하세요, SystemBoost예요.\n결제를 확인하고 있어요. 확인되면 키를 보내 드리고 이 문의로 알려 드릴게요.\n계좌이체로 결제하셨다면 입금자명과 금액을 알려 주시면 더 빨리 찾을 수 있어요." },
+  { label: "확인 필요", text: "안녕하세요, SystemBoost예요.\n입금 내역을 아직 찾지 못했어요. 입금자명과 입금한 시각, 금액을 알려 주세요." },
   { label: "환불 접수 안내", text: "안녕하세요, SystemBoost예요.\n환불 요청을 받았어요. 주문과 키를 확인한 뒤 이 문의로 결과를 알려 드릴게요.\n환불과 청약철회는 사용권 계약 제9조를 따라요." },
-  { label: "오류 정보 요청", text: "안녕하세요, SystemBoost예요.\n불편을 드려 죄송해요. 원인을 찾을 수 있게 아래 내용을 알려 주세요.\n- 문제가 생긴 게임이나 프로그램\n- 어떤 순서로 하면 생기는지\n- 앱 버전과 Windows 또는 macOS 버전\n- 그래픽카드 이름" },
+  { label: "오류 정보 요청", text: "안녕하세요, SystemBoost예요.\n불편을 드려 죄송해요. 원인을 찾을 수 있게 아래 내용을 알려 주세요.\n- 문제가 생긴 게임이나 프로그램\n- 어떤 순서로 하면 생기는지\n- 앱 버전과 Windows 버전\n- 그래픽카드 이름" },
 ];
 const CLAUSE9 = ["1. 사용자는 키를 받은 날부터 7일 이내에 청약을 철회할 수 있습니다.",
   "2. 키를 등록해 유료 기능을 쓰기 시작하면 디지털콘텐츠의 제공이 시작된 것으로 보아 청약철회가 제한될 수 있습니다.",
   "3. 프로그램이 표시나 광고의 내용과 다르거나 계약과 다르게 제공된 경우, 사용자는 받은 날부터 3개월 이내, 그 사실을 안 날 또는 알 수 있었던 날부터 30일 이내에 청약을 철회할 수 있습니다.",
   "4. 환불이 끝나면 판매자는 해당 키를 막습니다."];
-let sstatus = "open", tkId = "", tkCur = null, tkKeys = [], tkOther = null, tkCanned = "", supCfg = null, sfFaq = [], sfDirty = false;
+let sstatus = "open", tkId = "", tkCur = null, tkKeys = [], tkOther = null, tkDep = null, tkCanned = "", supCfg = null, sfFaq = [], sfDirty = false;
 const planName = p => PLAN[p] || TIER_KO[p] || p || "—";
 const won = n => "₩" + Number(n).toLocaleString("ko-KR");
 
@@ -1290,7 +1391,7 @@ async function openTicket(id, keep, jump) {   // keep: a reply being written sta
   try { r = await api("/support/ticket?id=" + encodeURIComponent(id)); }
   catch (e) { if (e.message !== "401") { tkId = id; tkCur = null; tkEmpty("불러오지 못했어요: " + e.message); } return; }
   const same = tkId === id;
-  tkId = id; tkKeys = r.keys || []; tkOther = r.otherKeys || null;
+  tkId = id; tkKeys = r.keys || []; tkOther = r.otherKeys || null; tkDep = r.depositOrder || null;
   renderTk(r.ticket, keep && same);
   document.querySelectorAll("#tkRows tr").forEach(tr => tr.classList.toggle("on", tr.dataset.tk === id));
   if (jump && matchMedia("(max-width:900px)").matches) $("tkView").scrollIntoView();
@@ -1341,6 +1442,33 @@ function rfPanel(t) {
     ${done ? "" : `<p class="note">${esc(note)}</p>`}${acts}
     <details><summary>사용권 계약 제9조</summary><blockquote>${CLAUSE9.map(esc).join("<br>")}</blockquote></details></div>`;
 }
+// A 입금 확인 ticket: the order it names (GET /support/ticket depositOrder) and its 24 hours, counted from the buyer's
+// first "I paid". 승인 issues the key as 판매·키's '승인' does; both answer the buyer in this thread.
+function hoursLeft(due) { return (Date.parse(due) - Date.now()) / 36e5; }
+function dueText(due) {
+  if (!due) return '<span class="mut">구매자가 아직 입금을 알리지 않았어요</span>';
+  const h = hoursLeft(due);
+  return h <= 0 ? `<span class="err">${esc(when(due))}까지였어요 · ${Math.ceil(-h)}시간 지남</span>`
+       : `${esc(when(due))}까지 · <span${h <= 4 ? ' style="color:var(--warn)"' : ""}>${h < 1 ? "1시간 안" : Math.floor(h) + "시간 남음"}</span>`;
+}
+function depPanel(t) {
+  if (t.cat !== "deposit") return "";
+  const o = tkDep;
+  if (!o) return `<div class="rf"><h3>입금 확인</h3><p class="note">주문 <code>${esc(t.order || "—")}</code>을 서버에서 찾지 못했어요. 주문 코드가 맞는지 구매자에게 물어보세요.</p></div>`;
+  const open = o.status !== "approved" && o.status !== "refunded";
+  const facts = kvList([
+    ["주문", `<code>${esc(o.code)}</code> <span class="tag o-${esc(o.status)}">${OS[o.status] || esc(o.status)}</span>`],
+    ["플랜", esc(planName(o.plan))],
+    ["입금자", o.payer ? esc(o.payer) : '<span class="mut">적지 않음</span>'],
+    o.msg && ["구매자 메모", esc(o.msg)],
+    ["입금 알린 시각", o.paidAt ? esc(when(o.paidAt)) : "—"],
+    open && ["키 보낼 기한", dueText(o.due)],
+    o.keyId && ["보낸 키", `<code>${esc(o.keyId)}</code>`],
+    o.reason && o.status === "rejected" && ["거절 사유", esc(o.reason)],
+  ]);
+  const acts = open ? `<div class="acts"><button class="p" data-dep="approve">입금 확인 · 키 보내기</button><button class="d" data-dep="reject">거절</button></div>` : "";
+  return `<div class="rf"><h3>입금 확인</h3>${facts}${open ? '<p class="note">은행이나 토스 내역에서 입금을 찾은 뒤에만 승인하세요. 승인하면 키가 만들어져 구매자 앱에 바로 뜨고, 이 문의에 자동으로 답장해요.</p>' : ""}${acts}</div>`;
+}
 function renderTk(t, keepDraft) {
   const draft = keepDraft && $("tkText") ? $("tkText").value : "";
   tkCur = t;
@@ -1364,7 +1492,7 @@ function renderTk(t, keepDraft) {
     <div class="acts"><span class="mut" id="tkCnt"></span><span class="sp"></span><button class="p" data-tk-send="reply">보내기</button><button data-tk-send="close">보내고 닫기</button></div>`;
   $("tkView").innerHTML = `<h2>${esc(t.subject) || "(제목 없음)"} <small>${esc(t.id)} · ${esc(TK_CAT[t.cat] || t.cat)}</small></h2>
     <div class="acts" style="margin:0 0 12px"><span class="tag k-${esc(t.status)}">${TK_ST[t.status] || esc(t.status)}</span>${t.unreadUser ? '<span class="mut">구매자가 아직 답장을 읽지 않았어요</span>' : ""}</div>
-    ${facts}${rfPanel(t)}<div class="tkMsgs">${thread}</div>${reply}
+    ${facts}${depPanel(t)}${rfPanel(t)}<div class="tkMsgs">${thread}</div>${reply}
     <div class="acts" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">${closed ? '<button data-tk-st="open">다시 열기</button>' : '<button data-tk-st="closed">답장 없이 닫기</button>'}<span class="sp"></span><button class="d" data-tk-del="1">삭제</button></div>`;
   if ($("tkText")) { $("tkText").value = draft; $("tkText").oninput = tkCount; tkCount(); }
   if (!keepDraft) tkCanned = "";
@@ -1411,6 +1539,31 @@ async function supClick(e) {
     if (!(await ask("문의를 지울까요?", `<code>${esc(id)}</code> · ${esc(tkCur.subject)}<br>되돌릴 수 없어요. 구매자 앱에서도 더는 열리지 않아요.`, "삭제"))) return;
     await api("/support/delete", { id });
     tkId = ""; tkCur = null; tkKeys = []; tkEmpty(); toast("지웠어요"); afterSup();
+    return;
+  }
+  if (ds.dep && tkCur.cat === "deposit" && tkDep) {
+    const o = tkDep;
+    let body;
+    if (ds.dep === "approve") {
+      if (!(await ask("입금을 확인했나요?", `<code>${esc(o.code)}</code> · ${esc(planName(o.plan))}<br>입금자: <b>${esc(o.payer || "적지 않음")}</b>${o.msg ? `<br>구매자 메모: <b>${esc(o.msg)}</b>` : ""}<br><br>` +
+                      "입금이 실제로 들어온 걸 확인했을 때만 승인하세요. 승인하면 키가 무작위로 만들어져 구매자 앱에 바로 뜨고, 이 문의에 '입금을 확인했어요. 키를 보냈어요.'로 답장해요." +
+                      `<br><br><input id="apEmail" placeholder="구매자 메일 (선택)"><div style="height:6px"></div><input id="apNote" placeholder="메모 (선택, 비우면 입금자명 사용)">`, "승인하고 키 보내기"))) return;
+      body = { id, action: "approve", email: dlgVal("apEmail"), note: dlgVal("apNote") };
+    } else if (ds.dep === "reject") {
+      if (!(await ask("이 주문을 거절할까요?", `<code>${esc(o.code)}</code><br>사유는 구매자 앱과 이 문의에 그대로 보여요.<br><br><input id="rjWhy" maxlength="100" placeholder="거절 사유 (꼭 적어 주세요, 100자까지)">`, "거절"))) return;
+      const reason = dlgVal("rjWhy");
+      if (!reason) return toast("거절 사유를 적어 주세요");
+      body = { id, action: "reject", reason };
+    } else return;
+    tkBusy(true);
+    try {
+      const r = await api("/support/deposit", body);
+      tkDep = r.depositOrder || tkDep;
+      renderTk(r.ticket, true);
+      toast(body.action === "approve" ? "승인했어요 · 키 " + (r.id || "") + (r.replied === false ? " · 메시지가 30개라 답장은 못 했어요" : "")
+                                      : "거절했어요" + (r.replied === false ? " · 메시지가 30개라 답장은 못 했어요" : ""));
+      afterSup(); loadOrders(); loadKeys();
+    } finally { tkBusy(false); }
     return;
   }
   if (!ds.rf || !tkCur.refund) return;
@@ -1706,6 +1859,9 @@ function demoApi(path, b) {
         { id: "e81c4a7d09b3f562", email: "hana.lee@example.com", note: "SB-QW3R-T8YU · Lemon Squeezy 구독", plan: "ultra", issued: d(-1.6), expires: d(32.4), src: "subscription", sub: "1048576", revoked: "" }] };
     const msg = (from, at, text) => ({ from, at: d(at), text });
     demo.tickets = [
+      { id: "T-D3PS-8KQW", cat: "deposit", subject: "입금했어요", status: "open", created: d(-0.02), updated: d(-0.02), consentAt: d(-0.02), lang: "ko",
+        order: "SB-7K2M-Q9XD", orderMatched: true, unreadUser: false,
+        messages: [{ from: "user", at: d(-0.02), text: "토스로 49,900원 보냈어요. 입금자명은 김민준이에요." }] },
       { id: "T-R7KD-2MXP", cat: "refund", subject: "2대 묶음 환불 요청해요", status: "open", created: d(-0.2), updated: d(-0.2), consentAt: d(-0.2), lang: "ko",
         contact: "jihoon.park@example.com", order: "SB-M3QF-8TJW", orderMatched: true, keyId: "5b0e9a2c7d41f8e3", keyVerified: false, unreadUser: false,
         messages: [msg("user", -0.2, "회사 PC 두 대에 쓰려고 프로 연간 2대 묶음을 계좌이체로 샀어요.\n그런데 회사 보안 정책 때문에 두 PC 모두 설치가 막혀서 쓸 수가 없어요. 키는 아직 등록하지 않았어요.\n두 키 모두 환불받고 싶어요. 입금자명은 박지훈이에요.")],
@@ -1755,7 +1911,14 @@ function demoApi(path, b) {
     demo.keys.forEach(k => c[st(k)]++); c.ordersPaid = demo.orders.filter(o => o.status === "paid").length;
     c.ordersOpen = demo.orders.filter(o => ["requested", "paid"].includes(o.status)).length;
     c.ticketsOpen = demo.tickets.filter(t => t.status === "open").length; c.refundsOpen = demo.tickets.filter(t => t.refund && ["requested", "approved"].includes(t.refund.status)).length;
-    return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c, budget: { pub: [137, 400], gifts: [4, 60], support: [212, 250] } }); }
+    const sellerMissing = ["name", "rep", "address", "bizNo", "mailOrderNo", "email", "phone"].filter(k => !String(demo.supCfg.seller[k] || "").trim());
+    const deposits = demo.orders.filter(o => o.status === "paid" && o.paidAt).map(o => {
+      const h = (Date.now() - Date.parse(o.paidAt)) / 36e5, tk = demo.tickets.find(t => t.cat === "deposit" && t.order === o.code && t.status !== "closed");
+      return { code: o.code, plan: o.plan, paidAt: o.paidAt, due: new Date(Date.parse(o.paidAt) + 24 * 36e5).toISOString(), hoursLeft: Math.round((24 - h) * 10) / 10,
+               state: h >= 24 ? "late" : h >= 20 ? "warn" : "ok", ...(tk ? { ticket: tk.id } : {}) };
+    });
+    return R({ sales: demo.mode, autoReady: ["monthly", "yearly", "lifetime"], counts: c, budget: { pub: [137, 400], gifts: [4, 60], support: [212, 250] },
+               sellerMissing, sellerBlocked: demo.mode === "live" && sellerMissing.length > 0, deposits }); }
   if (p.startsWith("/support")) return demoSupport(p, q, b, { st, L, R });
   if (p === "/orders") { const w = q.get("status"); const count = { requested: 0, paid: 0, approved: 0, rejected: 0, refunded: 0 }; demo.orders.forEach(o => count[o.status]++);
     return R({ count, orders: demo.orders.filter(o => w === "all" || (w === "open" ? ["requested", "paid"].includes(o.status) : o.status === w)) }); }
@@ -1767,6 +1930,25 @@ function demoApi(path, b) {
     const mq = (b && b.q) || "";   // a search comes in a POST body
     const ms = demo.members.filter(m => !mq || m.id.includes(mq));
     return R({ members: ms, summary: { total: demo.members.length, week: 2, active: 2, invited: 1, blocked: demo.members.filter(m => m.blocked).length } });
+  }
+  if (p.startsWith("/price")) {   // like GET/POST /admin/api/price*, with short texts
+    const kd = n => new Date(Date.now() + 9 * 36e5 + n * 864e5).toISOString().slice(0, 10), today = kd(0), min = kd(30);
+    const txt = n => ({ text: { ko: `${PLAN[n.plan]} 구독 가격이 ${n.effective} 이후 자동 결제부터 ${num(n.oldPrice)}원에서 ${num(n.newPrice)}원으로 바뀌어요. (시연)`, en: "(demo) The price changes." },
+                        email: { ko: { subject: "[SystemBoost] 구독 가격 변경 안내 (시연)", body: "(시연)" }, en: { subject: "[SystemBoost] Subscription price change (demo)", body: "(demo)" } } });
+    demo.price = demo.price || [{ id: "a1b2c3d4", plan: "monthly", oldPrice: 2900, newPrice: 3900, variant: "111", effective: kd(-1), created: new Date().toISOString(),
+      choices: [{ sub: "1043", choice: "agree", at: new Date(Date.now() - 20 * 864e5).toISOString(), key: "c0ffee0123456789" },
+                { sub: "1051", choice: "cancel", at: new Date(Date.now() - 25 * 864e5).toISOString(), key: "0ddba11012345678", cancelled: true }] }];
+    if (p === "/price" && b) {
+      if (!(b.newPrice > b.oldPrice)) return Promise.reject(new Error("새 가격이 지금 가격보다 높을 때만 동의를 받아요"));
+      if (!(b.effective >= min)) return Promise.reject(new Error(`시행일은 오늘(한국 시간)부터 30일 뒤인 ${min}이나 그 뒤여야 해요`));
+      const n = { id: Math.random().toString(16).slice(2, 10), plan: b.plan, oldPrice: b.oldPrice, newPrice: b.newPrice, variant: b.variant, effective: b.effective, created: new Date().toISOString(), choices: [] };
+      demo.price.unshift(n); L("가격 변경 안내", PLAN[b.plan] + " · 시연");
+      return R({ notice: n, ...txt(n) });
+    }
+    if (p === "/price/delete") { demo.price = demo.price.filter(n => n.id !== b.id); return R({ ok: true }); }
+    if (p === "/price/move") { const c = demo.price.flatMap(n => n.id === b.id ? n.choices : []).find(c => c.sub === b.sub); if (c) c.moved = new Date().toISOString(); L("새 가격으로 옮김", "구독 " + b.sub); return R({ ok: true }); }
+    return R({ notices: demo.price.map(n => ({ ...n, ...txt(n), open: today < n.effective, agree: n.choices.filter(c => c.choice === "agree").length, cancel: n.choices.filter(c => c.choice === "cancel").length })),
+               today, minEffective: min, noticeDays: 30 });
   }
   if (p === "/card") {
     demo.card = demo.card || { store: "", variants: {}, apiKey: false, signing: false, ready: [], webhook: "https://systemboost-license.example/webhook/lemonsqueezy" };
@@ -1870,7 +2052,21 @@ function demoSupport(p, q, b, { st, L, R }) {
   }
   const t = demo.tickets.find(x => x.id === (b ? b.id : q.get("id")));
   if (!t) return fail("문의를 찾지 못했어요");
-  if (p === "/support/ticket") return R({ ticket: t, keys: keysOf(t) });
+  const depOf = t => { const o = demo.orders.find(x => x.code === t.order); if (!o) return null;
+    return { code: o.code, plan: o.plan, status: o.status, method: o.method, at: o.at, paidAt: o.paidAt || "", due: o.paidAt ? new Date(Date.parse(o.paidAt) + 24 * 36e5).toISOString() : "",
+             payer: o.payer || "", msg: o.msg || "", keyId: o.keyId || "", reason: o.reason || "" }; };
+  if (p === "/support/ticket") return R({ ticket: t, keys: keysOf(t), ...(t.cat === "deposit" ? { depositOrder: depOf(t) } : {}) });
+  if (p === "/support/deposit") {   // like POST /admin/api/support/deposit: the order's own approve / reject, then a reply
+    const o = demo.orders.find(x => x.code === t.order);
+    if (t.cat !== "deposit" || !o) return fail("입금 확인 문의가 아니에요");
+    if (b.action === "approve") return demoApi("/orders/approve", { code: o.code, email: b.email, note: b.note }).then(x => {
+      say(t, "입금을 확인했어요. 키를 보냈어요. 앱의 '★ 플랜' 화면에서 바로 확인할 수 있어요. 키가 보이지 않으면 '★ 플랜'의 '주문 코드로 키 받기' 칸에 주문 코드 " + o.code + "를 넣어 주세요.");
+      t.status = "answered"; return R({ ticket: t, depositOrder: depOf(t), replied: true, key: x.key, id: x.id }); });
+    if (!b.reason) return fail("거절 사유를 1~100자로 적어 주세요. 구매자에게 그대로 보여요");
+    return demoApi("/orders/reject", { code: o.code, reason: b.reason }).then(() => {
+      say(t, "입금을 확인하지 못해 이 주문을 거절했어요. 사유: " + b.reason + "\n궁금한 점은 이 문의에 답장해 주세요.");
+      t.status = "answered"; return R({ ticket: t, depositOrder: depOf(t), replied: true }); });
+  }
   if (p === "/support/reply") {
     if (t.messages.length >= 30) return fail("messages");
     say(t, String(b.text).slice(0, 2000)); t.status = b.close ? "closed" : "answered"; L("문의 답장", t.id + (b.close ? " · 닫음" : ""));
