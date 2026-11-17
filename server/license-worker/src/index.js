@@ -1444,20 +1444,40 @@ async function referral(req, env) {
   return stop ? json({ error: stop.error }, stop.status) : json(await useRef(env, r, device));
 }
 
-// ---------------------------------------------------------------- member accounts (src/accounts.js)
-const ACCOUNT_ACTIONS = ["signup", "login", "recover", "me", "invite", "reward", "logout", "password", "delete"];
-
-async function account(req, url, env) {
-  const action = url.pathname.slice("/account/".length);
-  if (!ACCOUNT_ACTIONS.includes(action)) return json({ error: "not found" }, 404);
-  const body = req.method === "POST" ? await readJson(req) : {};
-  body.ip = req.headers.get("CF-Connecting-IP") || "unknown";
-  body.token = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
-  const r = action === "signup" ? await signup(env, body)
-          : action === "reward" ? await reward(env, body)
-          : await accounts(env, action, body);
-  const { status = 200, ...rest } = r;
-  return json(rest, status);
+// ---------------------------------------------------------------- member accounts (src/accounts.js, src/account_web.js)
+// What the account routes use from here: the 아이디 sign-up with its referral gifts, the invite reward key, and reads of
+// the key registry (KV reads only) for the keys of a member and the link-a-key mail.
+const ACCOUNT_DEPS = {
+  signup: (env, b) => signup(env, b),
+  reward: (env, b) => reward(env, b),
+  isSellerCode: async (env, code) => REF_RE.test(code) && !!(await getRef(env, code)),
+  keyRecord: (env, text) => linkableKey(env, text),
+  readKey: (env, id) => memberKey(env, id),
+  emailKeyId: async (env, email) => { const k = await env.LICENSES.get("email:" + email); return k ? keyId(k) : null; },
+  keyId,
+};
+// A key a member may link to the account: issued here, registered in this spelling, not revoked under either signature.
+// Unlike heldKey() a key that has run out may be linked (the member still sees it in the list).
+async function linkableKey(env, text) {
+  const key = canonicalKey(text);
+  if (!key) return null;
+  const [p, s] = key.split(".");
+  if (!(await verifySig(env, p, s))) return null;
+  const id = await keyId(key);
+  const r = await env.LICENSES.getWithMetadata("lic:" + id);
+  if (r?.value !== key || !r.metadata || r.metadata.revoked) return null;
+  const twin = twinKey(key);
+  for (const x of [id, twin && (await keyId(twin))]) if (x && (await env.LICENSES.get("revoked:" + x)) !== null) return null;
+  let payload = {};
+  try { payload = JSON.parse(new TextDecoder().decode(unb64url(p))) || {}; } catch { /* the record's email is enough */ }
+  return { id, payload, meta: r.metadata };
+}
+async function memberKey(env, id) {
+  const r = await env.LICENSES.getWithMetadata("lic:" + id);
+  if (!r?.value) return null;
+  const m = r.metadata || {};
+  const revoked = !!m.revoked || (await env.LICENSES.get("revoked:" + id)) !== null;
+  return { id, plan: m.plan || "", key: r.value, issued: m.issued || "", expires: m.expires || "", revoked };
 }
 
 // A problem with the code stops the sign-up, so nothing is left half done and the user can fix it.
