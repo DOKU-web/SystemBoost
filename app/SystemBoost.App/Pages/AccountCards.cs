@@ -24,7 +24,7 @@ public sealed partial class AccountPage
         head.Children.Add(Ui.Text(Shown(m), "h2"));
         if (x.Email != null && x.EmailVerified) head.Children.Add(Ui.Badge("이메일 확인됨"));
         p.Children.Add(head);
-        if (Shown(m) != m.Id && !InternalId(m.Id)) p.Children.Add(Ui.Text($"아이디 {m.Id}", "muted"));
+        if (Shown(m) != m.Id && !InternalId(m.Id)) p.Children.Add(Ui.Text($"아이디: {m.Id}", "muted"));
         p.Children.Add(Ui.Text($"가입일 {m.Created.LocalDateTime:yyyy-MM-dd}", "muted"));
         if (m.TicketPercent is int percent)
             p.Children.Add(Ui.Text($"할인 티켓 {percent}% · {m.TicketExpires?.LocalDateTime:yyyy-MM-dd}까지 · 플랜 화면의 계좌이체 · 직접 결제에서 쓸 수 있어요(판매자가 그 플랜에 열어 둔 경우, 묶음 키 제외)", "label", wrap: true));
@@ -32,7 +32,7 @@ public sealed partial class AccountPage
         if (x.Email != null && x.EmailVerified) return p;
         if (x.Email != null)
         {
-            p.Children.Add(Ui.Text($"이메일 {x.Email} · 확인 대기 중", "label", wrap: true));
+            p.Children.Add(Ui.Text($"이메일: {x.Email} · 확인 대기 중", "label", wrap: true));
             p.Children.Add(Ui.Text("보낸 메일의 링크를 누르면 이메일이 추가돼요. 메일이 오지 않았다면 아래에서 다시 보낼 수 있어요.", "muted", wrap: true));
         }
         AddEmail(p, m);
