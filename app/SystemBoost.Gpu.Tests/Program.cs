@@ -1,4 +1,5 @@
-// The AMD (ADLX) half of the app without a Radeon: AmdGpuBackend and AmdProtocol over a pretend sb_helper (FakeRadeon.cs).
+// The AMD (ADLX) half of the app without a Radeon: AmdGpuBackend and AmdProtocol over a pretend sb_helper (FakeRadeon.cs);
+// the consent to the overclocking notice in ConsentTests.cs.
 // dotnet run --project app/SystemBoost.Gpu.Tests -c Release   ->  exit code 1 when a check fails.
 using System;
 using System.Collections.Generic;
@@ -53,7 +54,7 @@ internal sealed class Rig
     public int Applies => Gpu.Writes.Count(w => w.StartsWith("amd.tuning.apply", StringComparison.Ordinal) || w.StartsWith("amd.auto.apply", StringComparison.Ordinal));
 }
 
-internal static class Program
+internal static partial class Program
 {
     private const string U = AmdProtocol.Unchanged;
     private static readonly string[] Reads = { "amd.info", "amd.metrics", "amd.profile.get" };
@@ -895,6 +896,8 @@ internal static class Program
             Eq("anything else", AmdProtocol.ErrorText("anything else"), "as it came");
             Eq(("켜짐", "꺼짐", "지원하지 않음"), (AmdProtocol.SwitchText('1'), AmdProtocol.SwitchText('0'), AmdProtocol.SwitchText('-')), "switches");
         });
+
+        DefineConsent();   // ConsentTests.cs
     }
 
     private static AmdGpuInfo Gpu(int index, bool integrated) => new(index, integrated ? "AMD Radeon(TM) Graphics" : "AMD Radeon RX 7800 XT", integrated, true,

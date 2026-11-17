@@ -31,6 +31,7 @@ public sealed class ConsentRecord
     [JsonPropertyName("app")] public string App { get; set; } = "";
     [JsonPropertyName("withdrawn")] public bool Withdrawn { get; set; }
 
+    [JsonIgnore]
     public DateTime? AtUtc =>
         DateTime.TryParse(At, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t) ? t : null;
 }
