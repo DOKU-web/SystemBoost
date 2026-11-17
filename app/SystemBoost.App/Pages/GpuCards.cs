@@ -39,12 +39,76 @@ internal static class GpuCards
             holder.Content = vendor switch
             {
                 GpuVendor.Amd => AmdTuning(b, status),
-                GpuVendor.Intel => Intel(),
+                GpuVendor.Intel => Intel(b, status),
                 _ => nvidia(),
             };
         }
         Fill();
         return Ui.Card(holder);
+    }
+
+    // ------------------------------------------------------------ the overclocking notice (OcConsent)
+    /// The line every tuning card shows, whatever the plan: "오버클럭은 본인 책임으로 사용해요. 자세히 보기" (the notice, read
+    /// only), and '동의 철회' while a consent is on record: asked once, then recorded (and the server hook told), gpu.oc off
+    /// through its journal and the card back at its factory values (WithdrawOcAsync).
+    public static Control ConsentLine(WindowsBoostBackend b, TextBlock status)
+    {
+        var line = new WrapPanel { Orientation = Orientation.Horizontal };
+        var text = Ui.Text("오버클럭은 본인 책임으로 사용해요.", "label");
+        text.VerticalAlignment = VerticalAlignment.Center;
+        text.Margin = new Thickness(0, 0, 8, 0);
+        var more = Link("자세히 보기");
+        var withdraw = Link("동의 철회");
+        withdraw.Margin = new Thickness(16, 0, 0, 0);
+        line.Children.Add(text);
+        line.Children.Add(more);
+        line.Children.Add(withdraw);
+
+        more.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(more) is Window owner) await OcConsent.ShowAsync(owner);
+        };
+        withdraw.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(withdraw) is not Window owner || !await new OverclockWithdrawDialog().ShowDialog<bool>(owner)) return;
+            withdraw.IsEnabled = false;
+            status.Text = "동의 철회: 처리하는 중…";
+            try
+            {
+                string? gpu = null;
+                try { gpu = await b.TuningGpuNameAsync(); } catch (Exception) { }
+                string recorded;
+                try { OcConsent.RecordWithdrawal(gpu ?? ""); recorded = "동의를 철회했어요"; }
+                catch (Exception e) { recorded = "철회 기록을 저장하지 못했어요: " + e.Message; }   // the card still goes back
+                status.Text = recorded + " · " + await b.WithdrawOcAsync();
+            }
+            catch (Exception e) { status.Text = "동의 철회: 실패했어요: " + e.Message; }
+            finally
+            {
+                withdraw.IsEnabled = true;
+                Refresh();
+            }
+        };
+
+        void Refresh() => withdraw.IsVisible = OcConsent.InForce();
+        void Changed() => Dispatcher.UIThread.Post(Refresh);
+        line.AttachedToVisualTree += (_, _) => { OcConsent.Changed += Changed; Refresh(); };
+        line.DetachedFromVisualTree += (_, _) => OcConsent.Changed -= Changed;
+        Refresh();
+        return line;
+    }
+
+    // A text link in the orange accent.
+    private static Button Link(string text)
+    {
+        var b = new Button
+        {
+            Content = new TextBlock { Text = text, Foreground = Orange, FontSize = 14, TextDecorations = TextDecorations.Underline },
+            Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0, 2),
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+        };
+        Avalonia.Automation.AutomationProperties.SetName(b, text);
+        return b;
     }
 
     /// Before an overclocking or power limit write (the '오버클럭 / 전력 제한' switch, the AMD auto tuning buttons): the notice
@@ -61,10 +125,11 @@ internal static class GpuCards
         return false;
     }
 
-    private static Control Intel()
+    private static Control Intel(WindowsBoostBackend b, TextBlock status)
     {
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("오버클럭 / 전력 제한 값", "h2"));
+        p.Children.Add(ConsentLine(b, status));   // a consent given on another card can still be withdrawn here
         p.Children.Add(Ui.Text(GpuCapabilities.IntelNotYet, "muted", wrap: true));
         return p;
     }
@@ -95,6 +160,7 @@ internal static class GpuCards
     {
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("오버클럭 / 전력 제한 값", "h2"));
+        p.Children.Add(ConsentLine(b, status));
         if (b.AmdGpu is not { } first)
         {
             p.Children.Add(Ui.Text(b.AmdProblem ?? "AMD 드라이버에서 정보를 읽지 못했어요", "muted", wrap: true));

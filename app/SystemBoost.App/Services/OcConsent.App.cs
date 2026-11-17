@@ -51,6 +51,10 @@ public static partial class OcConsent
         }
     }
 
+    /// '동의 철회': the withdrawal on record (and the server hook told). Throws when the file could not be written.
+    /// The GPU page then turns gpu.oc off and puts the card back (WindowsBoostBackend.WithdrawOcAsync).
+    public static void RecordWithdrawal(string gpu) => Withdraw(Store, gpu, AppVersion, DateTime.UtcNow);
+
     /// '자세히 보기': the notice without the agree button, with how the consent stands.
     public static Task ShowAsync(Window owner) => new OverclockConsentDialog(ask: false, Standing()).ShowDialog(owner);
 

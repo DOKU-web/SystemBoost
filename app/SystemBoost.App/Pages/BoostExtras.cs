@@ -211,6 +211,7 @@ internal static class BoostExtras
     {
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("오버클럭 / 전력 제한 값", "h2"));
+        p.Children.Add(GpuCards.ConsentLine(b, status));   // always there: the notice, and '동의 철회' (every plan)
         var gpu = WindowsBoostBackend.ReadGpu();
         if (gpu == null)
         {

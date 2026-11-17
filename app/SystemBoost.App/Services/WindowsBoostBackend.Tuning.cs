@@ -48,8 +48,9 @@ public sealed class GameProfile
     public List<ProfileResult> Results { get; set; } = new();
 }
 
+/// PowerDefaultMw: the driver's default power limit exactly (for '동의 철회', which puts it back with oc.restore).
 public sealed record GpuReading(string Name, int PowerNowW, int PowerDefaultW, int PowerMinW, int PowerMaxW,
-                                int CoreMHz, int MemMHz, int TempC, uint PowerNowMw);
+                                int CoreMHz, int MemMHz, int TempC, uint PowerNowMw, uint PowerDefaultMw = 0);
 
 /// Read-only NVML calls, which need no elevation. Tuning goes through the helper.
 internal static class Nvml
@@ -95,7 +96,7 @@ internal static class Nvml
             if (GetOffset(_device, ref core) != 0 || GetOffset(_device, ref mem) != 0) return null;
             if (GetTemperature(_device, TemperatureGpu, out var temp) != 0) return null;
             return new GpuReading(Encoding.UTF8.GetString(name).TrimEnd('\0'), Watts(now), Watts(def), Watts(min), Watts(max),
-                                  core.OffsetMHz, mem.OffsetMHz, (int)temp, now);
+                                  core.OffsetMHz, mem.OffsetMHz, (int)temp, now, def);
         }
         catch (DllNotFoundException) { return null; }
         catch (EntryPointNotFoundException) { return null; }
@@ -206,6 +207,30 @@ public sealed partial class WindowsBoostBackend
         Log(line);
         Notice?.Invoke(line);
         Publish();
+    }
+
+    /// '동의 철회' on an NVIDIA card, after gpu.oc is off: the driver's default power limit and no clock offsets (performance
+    /// state 0, the ones gpu.oc sets), through oc.restore, the helper's command that puts recorded values back. Every plan.
+    /// Values set with NVAPI by other tools (other performance states, voltage, fan) are not NVML's and stay.
+    public async Task<string> NvidiaFactoryAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var gpu = Nvml.Read();
+            if (gpu == null || gpu.PowerDefaultMw == 0) return "NVIDIA 그래픽카드를 읽지 못해서 공장 초기값으로 돌리지 못했어요";
+            if (Has("gpu.oc")) return "오버클럭 / 전력 제한이 켜져 있어서 공장 초기값으로 돌리지 않았어요";
+            if (gpu.PowerNowMw == gpu.PowerDefaultMw && gpu.CoreMHz == 0 && gpu.MemMHz == 0) return "이미 공장 초기값이에요";
+            var e = await _helper.EnsureAsync();
+            if (e != null) return "공장 초기값으로 돌리지 못했어요: " + e;
+            var failed = await HelperError("oc.restore", gpu.PowerDefaultMw.ToString(CultureInfo.InvariantCulture), "0", "0");
+            if (failed != null) return "공장 초기값으로 돌리지 못했어요: " + failed;
+            _gpuConfirmBy = null;
+            Log("NVIDIA 그래픽카드를 공장 초기값으로 돌렸어요 (기본 전력 제한, 클럭 오프셋 0)");
+            return "공장 초기값으로 돌렸어요";
+        }
+        catch (Exception x) { return "공장 초기값으로 돌리지 못했어요: " + x.Message; }
+        finally { _gate.Release(); Publish(); }
     }
 
     // After a crash, or when the helper is gone. Nothing to do if the card is already back.

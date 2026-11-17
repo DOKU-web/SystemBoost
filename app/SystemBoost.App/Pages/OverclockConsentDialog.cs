@@ -4,6 +4,7 @@
 //               button and has the focus. Enter never agrees: the window catches it before any control (also on the agree
 //               button) and treats it as '취소'. The X and Esc are '취소' too.
 //   ask: false  '자세히 보기' on the GPU page: the same text, how the consent stands, and '닫기'. No checkbox, no agree button.
+// OverclockWithdrawDialog below: '동의 철회' asks once, the same way ('취소' first, Enter never withdraws).
 using System;
 using System.Diagnostics;
 using Avalonia;
@@ -161,5 +162,41 @@ public sealed class OverclockConsentDialog : Window
             p.Children.Add(lines);
         }
         return p;
+    }
+}
+
+/// '동의 철회' asks once. ShowDialog<bool> is true only from '철회하기'; '취소' is the default and cancel button with the focus,
+/// Enter never withdraws, and the X and Esc are '취소'.
+public sealed class OverclockWithdrawDialog : Window
+{
+    public OverclockWithdrawDialog()
+    {
+        Title = "동의 철회";
+        Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://SystemBoost/Assets/SystemBoost.ico")));
+        Width = 540;
+        SizeToContent = SizeToContent.Height;
+        CanResize = false;
+        ShowInTaskbar = false;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        var p = new StackPanel { Spacing = 12, Margin = new Thickness(24, 20) };
+        var title = Ui.Text("오버클럭 · 전력 제한 동의를 철회할까요?", "h2", wrap: true);
+        title.Foreground = new SolidColorBrush(Color.Parse("#FF7A1A"));
+        p.Children.Add(title);
+        p.Children.Add(Ui.Text("오버클럭 / 전력 제한을 끄고, 그래픽카드를 공장 초기값으로 돌려요. "
+                               + "다른 프로그램에서 직접 맞춘 전력·클럭 값도 공장 초기값으로 돌아가요.", "label", wrap: true));
+        p.Children.Add(Ui.Text("관리자 확인 창이 뜰 수 있어요. 다시 쓰려면 안내를 읽고 다시 동의해야 해요.", "muted", wrap: true));
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
+        var cancel = Ui.Button("취소", "ghost");
+        cancel.IsDefault = true;
+        cancel.IsCancel = true;
+        cancel.Click += (_, _) => Close(false);
+        var confirm = Ui.Button("철회하기", "primary");
+        confirm.Click += (_, _) => Close(true);
+        row.Children.Add(cancel);
+        row.Children.Add(confirm);
+        p.Children.Add(row);
+        Content = p;
+        OverclockConsentDialog.GuardEnter(this, confirm, () => Close(false));
+        Opened += (_, _) => Dispatcher.UIThread.Post(() => cancel.Focus(), DispatcherPriority.Input);
     }
 }

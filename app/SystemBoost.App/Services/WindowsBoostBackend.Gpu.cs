@@ -196,6 +196,32 @@ public sealed partial class WindowsBoostBackend
     /// Every plan: putting the card back is never locked.
     public Task<string> AmdResetAsync() => GpuGatedAsync(() => Amd.ResetToFactoryAsync());
 
+    /// '동의 철회', after the withdrawal is on record (every plan): gpu.oc goes off through its journal the way the switch
+    /// turns it off, then the card goes to its factory values: AMD with amd.tuning.reset (AmdResetAsync), NVIDIA with
+    /// oc.restore of the driver's default power limit and no clock offsets (NvidiaFactoryAsync). The line to show.
+    public async Task<string> WithdrawOcAsync()
+    {
+        var parts = new List<string>();
+        if (Has("gpu.oc"))
+        {
+            parts.Add("오버클럭 / 전력 제한: " + await RevertAsync("gpu.oc"));
+            if (Has("gpu.oc"))   // still on (the administrator prompt was declined): the helper puts it back when the app ends
+                return string.Join(" · ", parts.Append("켜져 있는 동안은 공장 초기값으로 돌리지 않아요. 앱을 끄면 원래 값으로 돌아가요"));
+        }
+        var vendor = await GpuVendorAsync();
+        string factory;
+        if (vendor == GpuVendor.Amd)
+        {
+            await Amd.ReadInfoAsync();
+            factory = Amd.Gpu is { AtFactory: true } ? "이미 공장 초기값이에요" : await AmdResetAsync();
+            if (!factory.Contains("공장 초기값")) factory = "공장 초기값으로 돌리지 못했어요: " + factory;
+        }
+        else if (vendor == GpuVendor.Intel) factory = "이 그래픽카드는 SystemBoost가 전력과 클럭을 바꾸지 않아요";
+        else factory = await NvidiaFactoryAsync();
+        parts.Add(factory);
+        return string.Join(" · ", parts);
+    }
+
     /// AMD Fluid Motion Frames is on in the driver. SystemBoost never turns it off; frame generation says so instead.
     public async Task<bool> AfmfOnAsync()
     {
