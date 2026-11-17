@@ -21,8 +21,6 @@ export { Stats } from "./stats.js";
 //   GET  /status                 {sales, pay:{monthly,yearly}} - the app enables "결제하기" only for plans
 //                                that have a payment link (links are set in the dashboard); in live mode nothing
 //                                while the seller's details are incomplete (sellerBlocked)
-//                                trial: true when POST /trial gives keys (sales test or live, TRIAL not "off")
-//   POST /trial {device}         3-day Ultra key, one per PC -> {key}
 //   POST /order?plan=…           app gets an order code (SB-XXXX-XXXX) to write in the payment memo;
 //                                the owner confirms the payment and issues the key for that code in /admin,
 //                                and the app (polling /claim?session=<code>) pops it up
@@ -164,15 +162,15 @@ const isPlan = p => typeof p === "string" && Object.hasOwn(PLANS, p);
 
 // Calls per IP address an hour on the public routes that write KV or call Lemon Squeezy (src/iplimit.js: no KV writes
 // for the counting). Approximate; the day's share of KV writes (publicKvDay) and REF_DAILY stay the backstop.
-const IP_LIMIT = { order: 20, paid: 30, checkout: 20, change: 10, referral: 30, trial: 10 };
+const IP_LIMIT = { order: 20, paid: 30, checkout: 20, change: 10, referral: 30 };
 
 // The Workers free plan allows 1,000 KV writes a day (UTC) for the whole worker; past that every put fails until
 // 09:00 KST, approvals and card webhooks included. Requests anyone can make share publicKvDay(env) of them (default
-// PUBLIC_KV_DAY_DEFAULT): new orders, "I paid" notes, referral / invite gifts and 3-day trials (support has its own
-// 150 + 100, support.js LIMITS). The count lives in the Stats object, so counting writes no KV. The seller's actions,
+// PUBLIC_KV_DAY_DEFAULT): new orders, "I paid" notes and referral / invite gifts (support has its own 150 + 100,
+// support.js LIMITS). The count lives in the Stats object, so counting writes no KV. The seller's actions,
 // keys of approved orders and Lemon Squeezy webhooks are never counted or refused: with the default, at least 350
 // writes a day stay for them (docs/KV_BUDGET.md). While the object cannot be reached the old KV caps hold (300
-// orders, REF_DAILY gifts, TRIAL_DAILY trials), as before the object counted.
+// orders, REF_DAILY gifts), as before the object counted.
 // env PUBLIC_KV_DAY (wrangler.toml [vars]) moves the share: a whole number from PUBLIC_KV_MIN to PUBLIC_KV_MAX
 // (a paid Workers plan allows far more writes); anything else, or nothing, keeps the default.
 const PUBLIC_KV_DAY_DEFAULT = 400, PUBLIC_KV_MIN = 50, PUBLIC_KV_MAX = 100000;
@@ -333,13 +331,12 @@ export default {
       if (req.method === "POST" && url.pathname === "/renew") { const b = await readJson(req); return await renew(String(b.sub || ""), String(b.key || ""), env); }
       if (req.method === "GET" && url.pathname === "/renew") return await renew(url.searchParams.get("sub") || "", "", env);
       if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
-      if (req.method === "GET" && url.pathname === "/status") { const sales = await salesMode(env); return json({ sales, ...(await openPlans(env)), trial: trialOpen(env, sales) }); }
+      if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);
       if (req.method === "GET" && url.pathname === "/check") return await check(url, env);
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
-      if (req.method === "POST" && url.pathname === "/trial") return await trial(req, env);
       if (url.pathname.startsWith("/account/")) return await account(req, url, env);
       if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
       if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
@@ -1119,13 +1116,11 @@ function state(m, t = Date.now()) {
 }
 async function summary(env) {
   const all = await allRecords(env), t = Date.now(), month = t - 30 * 864e5;
-  const c = { total: all.length, active: 0, revoked: 0, expired: 0, test: 0, last30: 0, lifetime: 0, subscription: 0, manual: 0, trials: 0, trialsToday: 0 };
-  const today = kstDay(t);
+  const c = { total: all.length, active: 0, revoked: 0, expired: 0, test: 0, last30: 0, lifetime: 0, subscription: 0, manual: 0 };
   for (const m of all) {
     c[state(m, t)]++;
     if (Date.parse(m.issued) > month) c.last30++;
     if (m.src === "manual") c.manual++; else if (m.sub) c.subscription++; else c.lifetime++;
-    if (m.src === "trial") { c.trials++; if (kstDay(Date.parse(m.issued)) === today) c.trialsToday++; }   // 3-day trials (/trial)
   }
   const op = await env.LICENSES.list({ prefix: "ord:", limit: 1000 });
   c.ordersOpen = op.keys.filter(k => ["requested", "paid"].includes(k.metadata?.status)).length;
@@ -1161,7 +1156,7 @@ function depositsDue(keys, tickets, t = Date.now()) {
   return out.sort((a, b) => a.paidAt.localeCompare(b.paidAt)).slice(0, 50);
 }
 // Today's share of KV writes for requests anyone can make (Workers free plan), as [count, cap] for the dashboard's
-// home: orders, "I paid" notes, gifts and trials (publicKvDay), gifts (REF_DAILY) and support (both lanes). One read of the
+// home: orders, "I paid" notes and gifts (publicKvDay), gifts (REF_DAILY) and support (both lanes). One read of the
 // Stats object, no KV; null when it does not answer (the counts are then in KV, and the caps still hold).
 async function kvBudget(env) {
   const s = budgetNames(), names = [pubName(), refName(), s.w, s.vw];
@@ -1257,45 +1252,6 @@ async function referral(req, env) {
   if (!r) return json({ error: (await accounts(env, "code", { code })).member ? "signup" : "unknown" }, 409);
   const stop = refClosed(r) || (await refBlocked(env, device));
   return stop ? json({ error: stop.error }, stop.status) : json(await useRef(env, r, device));
-}
-
-// ---------------------------------------------------------------- 3-day trial (0.8.14)
-// POST /trial {"device": "<64 lowercase hex>"} -> {"key"}: an Ultra key for TRIAL_DAYS, one per PC. The app sends a
-// hash of the PC (SHA-256 of a salt and the Windows MachineGuid); the GUID itself never leaves the PC. The hash is
-// kept TRIAL_DEVICE_TTL (the privacy policy says 400 days) as trialdev:<hash>, only to say "already" to a second try.
-// Errors: 503 "closed" (sales mode off, or env TRIAL = "off"), 400 "bad request", 429 "busy" (per-address limit, the
-// day's public KV share or TRIAL_DAILY used up), 409 "already" (this PC had its trial).
-// A trial is TRIAL_WRITES KV writes (trialdev:, lic:), counted in the day's public share (takePublic) and in
-// TRIAL_DAILY; while the Stats object cannot be reached a KV count (count:trial:<day>) caps it instead.
-const TRIAL_DAYS = 3;
-const TRIAL_DEVICE = /^[0-9a-f]{64}$/;
-const TRIAL_DEVICE_TTL = 60 * 60 * 24 * 400;
-const TRIAL_WRITES = 2;
-const TRIAL_DAILY = 150;
-const trialName = () => "kv:trial:" + now().slice(0, 10);   // the Stats object's count of today's trials
-const trialDay = () => "count:trial:" + now().slice(0, 10);  // KV: only while the Stats object cannot be reached
-
-// Whether POST /trial gives keys at all (GET /status "trial": the app 0.8.14 shows its 3일 체험 card only then): sales
-// mode test or live, and env TRIAL not "off". The per-PC, per-address and daily limits are not part of it.
-const trialOpen = (env, sales) => env.TRIAL !== "off" && (sales === "test" || sales === "live");
-async function trial(req, env) {
-  if (!trialOpen(env, await salesMode(env))) return json({ error: "closed" }, 503);
-  const b = await readJson(req);
-  const device = typeof b.device === "string" ? b.device : "";
-  if (!TRIAL_DEVICE.test(device)) return json({ error: "bad request" }, 400);
-  if (await overIp(req, env, "trial", IP_LIMIT.trial)) return json({ error: "busy" }, 429);
-  if (await env.LICENSES.get("trialdev:" + device)) return json({ error: "already" }, 409);
-  const pub = await takePublic(env, TRIAL_WRITES, [{ name: trialName(), ttl: 2 * 86400, max: TRIAL_DAILY }]);
-  if (pub === "full") return json({ error: "busy" }, 429);
-  if (pub === "down") {
-    const day = trialDay(), n = Number((await env.LICENSES.get(day)) || 0);
-    if (n >= TRIAL_DAILY) return json({ error: "busy" }, 429);
-    await env.LICENSES.put(day, String(n + 1), { expirationTtl: 60 * 60 * 48 });
-  }
-  await env.LICENSES.put("trialdev:" + device, now(), { expirationTtl: TRIAL_DEVICE_TTL });
-  const key = await makeKey(env, { plan: "ultra", email: "", expires: addDays(now(), TRIAL_DAYS), src: "trial", note: TRIAL_DAYS + "일 체험" });
-  await audit(env, "app", "체험 키", "울트라 " + TRIAL_DAYS + "일");
-  return json({ key });
 }
 
 // ---------------------------------------------------------------- member accounts (src/accounts.js)
@@ -1514,7 +1470,6 @@ function unb64url(s) {
 }
 async function readJson(req) { const b = await req.json().catch(() => null); return b && typeof b === "object" ? b : {}; }   // "null" is JSON too
 function now() { return new Date().toISOString().replace(/\.\d+Z$/, "Z"); }
-const kstDay = ms => new Date(ms + 9 * 36e5).toISOString().slice(0, 10);   // the day in Korea (UTC+9), "2026-12-09"
 function b64url(bytes) {
   let s = "";
   for (const b of bytes) s += String.fromCharCode(b);

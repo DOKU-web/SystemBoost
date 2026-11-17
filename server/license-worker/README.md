@@ -91,24 +91,11 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 코드를 나눠 준 사람의 보상은 자동이 아닙니다. 사용 횟수를 보고 직접 키를 발급합니다.
 - 테스트: `node test_referral.mjs <임시 pem>`
 
-## 3일 체험 (0.8.14, `POST /trial`)
-- 요청: `POST /trial` 본문 `{"device": "<소문자 16진수 64자>"}`. 앱이 보내는 값은 PC의 Windows MachineGuid에 salt를 붙여 SHA-256으로 만든
-  값이고, MachineGuid 자체는 보내지 않습니다.
-- 성공: `200 {"key": "..."}`. 울트라 키, 3일(`TRIAL_DAYS`), 이메일 없음, 키 목록에 출처 '3일 체험', 메모 `3일 체험`.
-- 실패: `409 {"error":"already"}` 이 PC는 이미 체험함(`trialdev:<해시>`, 400일 뒤 삭제) · `429 {"error":"busy"}` 주소당 한 시간 10번
-  (`IP_LIMIT.trial`), 하루 공개 저장 몫(`PUBLIC_KV_DAY`)이나 하루 체험 150개(`TRIAL_DAILY`)가 다 참 · `400 {"error":"bad request"}`
-  · `503 {"error":"closed"}` 판매 모드 '꺼짐'이거나 `TRIAL = "off"`(wrangler.toml [vars]).
-- 체험 하나는 KV 저장 2번(`trialdev:`, `lic:`)이고 통계 저장소에서 셉니다. 통계 저장소가 응답하지 않으면 KV(`count:trial:<날짜>`)로 하루 150개를 셉니다.
-- `GET /status`에 `"trial": true | false`가 붙습니다. `POST /trial`이 키를 줄 수 있는 상태(판매 모드 '테스트'나 '실판매', `TRIAL`이 "off"가 아님)일 때만
-  true입니다. 앱 0.8.14는 이 값이 true일 때만 '3일 체험' 카드를 보여 줍니다(PC별 · 주소별 · 하루 한도는 반영하지 않음).
-- 대시보드 홈에 '오늘 3일 체험' · '전체 3일 체험' 숫자가 나옵니다.
-- 테스트: `node test_trial.mjs`
-
 ## KV 쓰기 예산 (`docs/KV_BUDGET.md`)
-- 누구나 보낼 수 있는 요청(주문, '결제했어요', 선물, 체험)의 하루 KV 쓰기 몫은 기본 400번입니다. `wrangler.toml` `[vars]`에
+- 누구나 보낼 수 있는 요청(주문, '결제했어요', 선물)의 하루 KV 쓰기 몫은 기본 400번입니다. `wrangler.toml` `[vars]`에
   `PUBLIC_KV_DAY = "600"`처럼 넣으면 바뀝니다(정수 50~100,000, 그 밖의 값은 무시하고 400). 무료 플랜(하루 1,000번)에서는
   올리지 마세요. 판매자 작업과 카드 웹훅에 남는 몫이 줄어듭니다.
-- 출시일 계산(설치 300, 체험 100, 주문 30)과 결론은 `docs/KV_BUDGET.md`에 있습니다.
+- 출시일 계산(설치 300, 주문 30)과 결론은 `docs/KV_BUDGET.md`에 있습니다.
 
 ## 계좌이체 입금 확인 (0.8.14)
 - 안내 문구는 한 곳(`src/support.js` `DEPOSIT_GUIDE`)에서 나와 FAQ, `/help`, 구매 확인서(`/thanks`)에 똑같이 들어갑니다:
@@ -304,7 +291,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
 - `node test_kv_public.mjs` (공개 저장 몫이 차도 키 확인 · 갱신 · 웹훅 · 승인은 됨, `PUBLIC_KV_DAY`), `node test_kv_writes.mjs` (동작마다 KV 쓰기 수, `docs/KV_BUDGET.md`)
-- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_trial.mjs` (3일 체험), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내)
+- `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내)
 
 ## 확인 필요
 - Lemon Squeezy 웹훅 필드 이름(variant_id, billing_reason, order_id, renews_at)은 문서 기준입니다. 실제 테스트 모드 결제로 한 번 확인하세요.

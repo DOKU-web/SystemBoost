@@ -19,13 +19,12 @@ Effective date: {{EFFECTIVE_DATE}}
 - Renewing a subscription key: the subscription number and the key in use (only checked against that subscription). Not stored.
 - Bank transfer and direct payment: the order code, plan, status and times, the payer name and payment memo you type, a discount ticket's percentage; when approved, the key ID and an email address the seller may enter; a rejection reason or refund time.
 - Card payment: from Lemon Squeezy, the payment email, subscription number, order number, payment (invoice) number, plan, next payment date and whether it is a test payment. Other details in Lemon Squeezy's notice (such as the name) are not stored.
-- Every key: the full key text and its record (plan, dates, how it was received (direct payment, card, referral or invite, 3-day trial, issued by the seller), email address, note, subscription number, blocked or not). The note can hold the order code, the payer name and memo of a direct payment, a referral code, or a member ID. The key itself contains the email address, so showing the key to someone shows the email address too.
+- Every key: the full key text and its record (plan, dates, how it was received (direct payment, card, referral or invite, issued by the seller), email address, note, subscription number, blocked or not). The note can hold the order code, the payer name and memo of a direct payment, a referral code, or a member ID. The key itself contains the email address, so showing the key to someone shows the email address too.
 - Referral and invite codes: the code and a random device number made by the app.
-- 3-day trial: a hash of this PC (SHA-256 of a fixed text and the MachineGuid Windows gives the PC; the MachineGuid itself is not sent) and the time, to give each PC one trial. The trial key is recorded like every key (received as: 3-day trial, no email address).
 - Members (optional): ID, password and recovery code as hashes only, sign-up and last login times, the consent text version and time, invite codes and relations, rewards, discount tickets (including the order code they were used on), failed logins and lockout, blocked or not, login sessions as hashes.
 - Support requests and refund requests: category, subject, messages and replies, times, status, consent time, language, the access code as a hash, the member ID when sent from a signed-in app, and what you choose to give (contact, order code, key ID, app details). A refund request also carries the order and key details the server holds. A full key sent for a check is never stored.
 - Usage statistics (optional: sent only if 'Send usage statistics' is turned on, on the agreement screen or in Settings; off at first from version 0.8.14, ticked at first in earlier versions; nothing is sent before the agreement is accepted): a random install number, app version, operating system, plan, frame generation multiplier, one-click boost use, the country (from Cloudflare), first and last connection. No IP address is stored with them.
-- Abuse limits: hashes made from IP addresses with a value only the server knows (sign-up, login, support, orders and payment requests, referral codes, trial requests, wrong dashboard passwords), and a daily count per key ID of subscription-management links handed out.
+- Abuse limits: hashes made from IP addresses with a value only the server knows (sign-up, login, support, orders and payment requests, referral codes, wrong dashboard passwords), and a daily count per key ID of subscription-management links handed out.
 - The seller's activity log: what the seller did and automatic steps, with details such as order codes, key IDs, subscription numbers, member IDs, email addresses (masked) and key notes, payer names and memos (first character only).
 - The dashboard access log: each dashboard sign-in and each view of member or purchase data, with the time, a one-way hash of the address and the screen and item viewed (never search words).
 - Deleted member IDs: a salted hash of an ID that was deleted, so nobody else can register the same ID.
@@ -37,8 +36,8 @@ Effective date: {{EFFECTIVE_DATE}}
 - Orders: 90 days from the last change. Key-collection records: 7 days (card) or 30 days (direct payment).
 - Key records, the email index, links between Lemon Squeezy orders and keys, blocked keys, subscription plans and referral codes: no set retention period, kept until the seller deletes them.
 - Members: until they leave or the seller deletes the account; leaving deletes the account from the live database at once, and Supabase backups keep it up to 7 more days. The member ID stays in invite-reward key notes (no set period), the activity log (180 days) and support requests (their own period).
-- Login sessions: 90 days. Sign-up and login IP hashes: a little over an hour. Support, order, referral and trial IP hashes: up to 1 hour after the last request.
-- Trial PC hashes: 400 days from the trial, then deleted. Referral and invite device numbers: 90 days.
+- Login sessions: 90 days. Sign-up and login IP hashes: a little over an hour. Support, order and referral IP hashes: up to 1 hour after the last request.
+- Referral and invite device numbers: 90 days.
 - Support requests: 3 years for payment and refund requests, 1 year for the rest, from the last change.
 - Usage statistics: 90 days after the last connection. Activity log: 180 days. Dashboard access log: one year. Wrong dashboard password counts (by address hash): 15 minutes after the last miss. Daily portal-link counts: 2 days.
 - Hashes of deleted member IDs: no set retention period, kept until the seller deletes them.
@@ -67,9 +66,9 @@ This applies where the GDPR or the UK GDPR covers you, together with the rest of
 
 - Controller: the seller; contact details below.
 - Legal bases
-  - Contract: issuing, checking and renewing keys, orders and payment checks, the 3-day trial key, member features, answering requests, withdrawal and refunds.
+  - Contract: issuing, checking and renewing keys, orders and payment checks, member features, answering requests, withdrawal and refunds.
   - Consent: usage statistics, sent only if you turn them on. You can withdraw consent at any time by turning them off in Settings; this does not make earlier processing unlawful.
-  - Legitimate interests: preventing abuse: IP address hashes to stop too many requests, the trial PC hash so each PC gets one trial, stopping dashboard password guessing, and logging the seller's actions and dashboard access. You can object to this processing.
+  - Legitimate interests: preventing abuse: IP address hashes to stop too many requests, stopping dashboard password guessing, and logging the seller's actions and dashboard access. You can object to this processing.
 - Your rights: access, rectification, erasure, restriction of processing, data portability, objection (to processing based on legitimate interests) and withdrawal of consent. Ask as described under 'Your rights'.
 - Complaints: you can complain to the data protection supervisory authority where you live, work or think the infringement happened; in the UK, the Information Commissioner's Office (ICO).
 - International transfers: personal information goes to the processors named above: Cloudflare (a US company, data centers worldwide), Supabase (database location above), Lemon Squeezy if you pay by card, and Discord (USA) if the seller turned on alerts; the app connects to GitHub (USA) for updates. Safeguards for these transfers follow the providers' terms.

@@ -11,8 +11,8 @@ import { ADMIN_HTML } from "./src/admin_page.js";
 import { CATEGORIES, DEFAULT_FAQ, DEPOSIT_GUIDE, REFUND_REASONS } from "./src/support.js";
 
 const src = f => readFileSync(new URL(f, import.meta.url), "utf8");
-// "-apple-system" is a CSS font name; MachineGuid is the Windows value the trial hashes
-const clean = s => String(s).replace(/-apple-system/g, "").replace(/MachineGuid/g, "");
+// "-apple-system" is a CSS font name
+const clean = s => String(s).replace(/-apple-system/g, "");
 const MAC = /\bmac\b|macos|os x|osx|apple|gptk|game porting toolkit|\bwine\b|steam|valve|맥|애플|스팀/i;
 const noMac = (what, s) => { const m = MAC.exec(clean(s)); assert.equal(m, null, what + ": " + (m && clean(s).slice(Math.max(0, m.index - 40), m.index + 40))); };
 

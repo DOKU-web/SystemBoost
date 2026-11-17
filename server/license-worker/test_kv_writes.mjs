@@ -2,7 +2,7 @@
 // change the document too. Fake KV, fake Stats object, signed webhooks; global fetch refuses everything.
 //   node test_kv_writes.mjs          (prints the table; fails if it differs from WANT)
 import assert from "node:assert/strict";
-import { createHash, createHmac, generateKeyPairSync } from "node:crypto";
+import { createHmac, generateKeyPairSync } from "node:crypto";
 import worker from "./src/index.js";
 import { fakeStats } from "./fake_stats.mjs";
 
@@ -60,7 +60,6 @@ await count("install / app start (status, ping, key check)", async () => {
   await postJ("/ping", { id: "a".repeat(32), v: "0.8.14", os: "win", plan: "free" });
   await j("/check?id=" + "0".repeat(16));
 });
-await count("3-day trial (POST /trial)", async () => assert.ok((await postJ("/trial", { device: createHash("sha256").update("pc").digest("hex") })).key));
 // bank transfer, start to end
 const bank = await count("bank transfer: order (POST /order)", async () => j("/order?plan=yearly&method=manual", { method: "POST" }));
 await count("bank transfer: first \"I paid\" (POST /order/paid)", async () => assert.equal((await postJ("/order/paid", { code: bank.code, payer: "홍길동" })).status, "paid"));
@@ -83,7 +82,6 @@ await count("referral code gift (POST /referral)", async () => assert.ok((await 
 console.table(rows.map(r => ({ action: r.label, puts: r.puts, deletes: r.deletes })));
 const WANT = {
   "install / app start (status, ping, key check)": [0, 0],
-  "3-day trial (POST /trial)": [2, 0],
   "bank transfer: order (POST /order)": [1, 0],
   "bank transfer: first \"I paid\" (POST /order/paid)": [1, 0],
   "bank transfer: 입금 확인 ticket (POST /support/ticket)": [1, 0],
