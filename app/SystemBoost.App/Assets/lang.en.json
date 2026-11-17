@@ -765,6 +765,7 @@
 "아이디나 비밀번호, 복구 코드가 맞지 않아요": "The ID, password or recovery code is not correct",
 "여러 번 틀려서 잠겼어요. 15분 뒤 다시 해 주세요": "Locked after too many wrong tries. Please try again in 15 minutes",
 "이 계정은 막혀 있어요. 판매자에게 문의해 주세요": "This account is blocked. Please contact the seller",
+"2단계 인증을 켠 계정은 복구 코드만으로 비밀번호를 바꿀 수 없어요. '계정 복구 요청'을 보내 주세요": "With 2-step verification on, the recovery code alone cannot change the password. Please send an 'Account recovery request'.",
 "요청이 많아요. 잠시 뒤 다시 해 주세요": "Too many requests. Please try again soon",
 "이 기기는 이미 추천 코드나 초대 코드를 썼어요. 코드를 지우고 가입해 주세요": "This device has already used a referral or invite code. Clear the code to sign up",
 "받을 보상이 없어요": "There is no reward to claim",
