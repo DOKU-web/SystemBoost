@@ -2,8 +2,9 @@
 
 No AMD file is kept in this folder or in this repository. `adlx.cmake` fetches 17 ADLX interface
 headers at configure time, pinned by commit and by SHA-256, only when sb_helper is configured with
-`-DSB_ADLX=ON`. The default is OFF: every `amd.*` command then answers as if amdadlx64.dll were
-absent (`src/amd_none.cpp`).
+`-DSB_ADLX=ON`. The default is OFF: `amd.info` then answers status `off` and every other `amd.*`
+command `err off` (`src/amd_none.cpp`), and the app shows "AMD 드라이버 기능은 아직 준비 중이에요"
+instead of asking Radeon owners to update a driver that may be fine.
 
 ## Source
 
