@@ -54,6 +54,9 @@ def index_body(L):
     btable = f'<tr><th></th><th>{s["b5"]}</th><th>{s["b10"]}</th></tr>' + "".join(
         f'<tr><td class="{name[t][1]}">{s[name[t][0]]}</td><td>{won(t5)} <span class="w">{s["each"]} {won(e5)}</span></td>'
         f'<td>{won(t10)} <span class="w">{s["each"]} {won(e10)}</span></td></tr>' for t, t5, e5, t10, e10 in BUNDLES)
+    # The news box has an optional first card (n1t, n1p, n1l); 0.8.14 has only the list of changes (n2t, n2l).
+    n1 = (f'<div class="ni"><h3>{s["n1t"]}</h3><p>{s["n1p"]}</p><ul>{lis(s["n1l"])}</ul></div>\n  '
+          if s.get("n1t") else "")
     return f'''{header(s, "index")}
 <section class="hero" id="top">
   <img src="icon.png" alt="SystemBoost">
@@ -70,8 +73,7 @@ def index_body(L):
 <section id="news" class="news">
   <div class="nh"><span class="badge">{s["nb"]}</span><h2>{s["nt"]}</h2></div>
   <p class="nd">{s["nd"]}</p>
-  <div class="ng"><div class="ni"><h3>{s["n1t"]}</h3><p>{s["n1p"]}</p><ul>{lis(s["n1l"])}</ul></div>
-  <div class="ni"><h3>{s["n2t"]}</h3><ul>{lis(s["n2l"])}</ul></div></div>
+  <div class="ng">{n1}<div class="ni"><h3>{s["n2t"]}</h3><ul>{lis(s["n2l"])}</ul></div></div>
   <p class="nf">{f(s["nf"])}</p>
 </section>
 <h2 id="plans">{s["ph"]}</h2>
@@ -135,7 +137,7 @@ R8, R9, R27 = "2026-12-08", "2026-12-09", "2027-01-01"
 # (article index from 0, paragraph) -> revisions
 REVS = {(1, "1"): (R9,),                                                      # Art. 2(1)
         (2, "2"): (R9, R27), (2, "3"): (R8, R27), (2, "5"): (R9,), (2, "8"): (R9,), (2, "9"): (R9,),
-        (2, "10"): (R27,), (2, "11"): (R27,), (2, "12"): (R27,),              # Art. 3
+        (2, "10"): (R27,), (2, "11"): (R27,),                                 # Art. 3
         (5, "1"): (R9,),                                                      # Art. 6(1)
         (8, "2"): (R27,), (8, "5"): (R27,),                                   # Art. 9(2), 9(5)
         (9, "3"): (R27,),                                                     # Art. 10(3)
@@ -164,7 +166,7 @@ def eula_html(secs, rev_label):
 
 LT = {
  "ko": dict(h1="사용권 계약 · 개인정보", sub='앱을 처음 실행할 때 보여 주는 사용권 계약과 같은 내용이에요. 앱의 설정 → "사용권 계약 보기"에서도 볼 수 있어요.',
-   revh="계약 개정 안내", revp='계약이 세 번 바뀌어요. 바뀐 조항에는 개정 날짜가 붙어 있어요.<br>• <b>2026년 12월 8일</b>: 카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요.<br>• <b>2026년 12월 9일</b>: 산업 플랜, 5대 · 10대 묶음 키, 플랜 이름에 맞춰 <a href="#a2">제2조 제1항</a>, <a href="#a3">제3조 제2항 · 제5항 · 제8항 · 제9항</a>, <a href="#a6">제6조 제1항</a>, <a href="#a11">제11조 제2항</a>이 바뀌어요. 프리미엄 플랜은 이름만 프로로 바뀌고 기능과 가격은 그대로예요. 묶음 키는 그날부터 팔아요.<br>• <b>2027년 1월 1일</b>: <a href="#a1">제1조</a>의 판매 페이지와 Windows용 프로그램, <a href="#a3">제3조 제2항 · 제3항의 해지와 환급 · 제10항 · 제11항 · 제12항</a>, <a href="#a8">제8조</a> 개인정보, <a href="#a9">제9조 제2항 · 제5항</a>, <a href="#a10">제10조 제3항</a>이 바뀌어요. 3일 체험(제3조 제12항)과 처음에는 꺼져 있는 사용 통계(제8조 제3항)도 여기에 들어 있어요.<br>앱을 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
+   revh="계약 개정 안내", revp='계약이 세 번 바뀌어요. 바뀐 조항에는 개정 날짜가 붙어 있어요.<br>• <b>2026년 12월 8일</b>: 카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요.<br>• <b>2026년 12월 9일</b>: 산업 플랜, 5대 · 10대 묶음 키, 플랜 이름에 맞춰 <a href="#a2">제2조 제1항</a>, <a href="#a3">제3조 제2항 · 제5항 · 제8항 · 제9항</a>, <a href="#a6">제6조 제1항</a>, <a href="#a11">제11조 제2항</a>이 바뀌어요. 프리미엄 플랜은 이름만 프로로 바뀌고 기능과 가격은 그대로예요. 묶음 키는 그날부터 팔아요.<br>• <b>2027년 1월 1일</b>: <a href="#a1">제1조</a>의 판매 페이지와 Windows용 프로그램, <a href="#a3">제3조 제2항 · 제3항의 해지와 환급 · 제10항 · 제11항</a>, <a href="#a8">제8조</a> 개인정보, <a href="#a9">제9조 제2항 · 제5항</a>, <a href="#a10">제10조 제3항</a>이 바뀌어요. 처음에는 꺼져 있는 사용 통계(제8조 제3항)도 여기에 들어 있어요.<br>앱을 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
    rev="2026년 12월 8일 개정", rev9="2026년 12월 9일 개정", rev27="2027년 1월 1일 개정", toc="목차", imp="표시가 있는 조항(주황 테두리)은 꼭 읽어 주세요.",
    priv="개인정보 처리 안내", oss="오픈소스 라이선스", contact="판매자 정보와 문의",
    privsum="사용권 계약 제8조를 표로 정리했어요. 보내는 정보는 아래가 전부예요.",
@@ -174,7 +176,6 @@ LT = {
          ["결제 주문", "판매자 라이선스 서버", "플랜, 주문 코드, 사용자가 직접 적은 입금자명과 메모", "키 관리와 환불 처리 동안, 법정 보관 기간"],
          ["카드 구독 결제 (2026년 12월 8일부터)", "Lemon Squeezy 결제창 → 판매자 서버", "카드 정보는 Lemon Squeezy 결제창에만 입력하고, 판매자는 받지도 저장하지도 않아요. 판매자 서버는 결제 메일, 주문·구독 번호, 결제·해지 상태를 받아 키 발급과 연장에 써요.", "키 관리와 환불 처리 동안, 법정 보관 기간"],
          ["추천 코드 입력", "판매자 서버", "코드, 무작위 기기 번호", "90일"],
-         ["3일 체험을 받을 때", "판매자 서버", "PC 식별값의 해시값: 정해진 값(솔트)과 Windows가 이 PC에 붙인 MachineGuid를 합쳐 SHA-256으로 만든 값. MachineGuid 원문은 보내지 않고, PC마다 체험을 한 번만 주는 데에만 써요.", "400일"],
          ["회원 가입 (선택, 만 14세 이상)", "Supabase 데이터베이스", "아이디, 암호화한 비밀번호와 복구 코드, 가입·마지막 로그인·동의 시각, 초대 코드와 초대 관계. 메일은 받지 않아요.", "탈퇴하면 바로 삭제"],
          ["가입·로그인 남용 방지", "판매자 서버", "접속 IP를 되돌릴 수 없게 바꾼 값", "1시간"],
          ["업데이트 확인", "GitHub", "없음 (최신 버전 목록만 받아요)", "—"]],
@@ -182,10 +183,10 @@ LT = {
    ossp="SystemBoost가 쓰는 다른 사람의 소프트웨어와 그 라이선스예요. 앱 설정 화면의 \"라이선스 전문 보기\"에서 전문을 볼 수 있어요.",
    osscols=["구성 요소", "라이선스", "쓰는 곳"],
    ossuse=["앱 화면", "설치 파일에 함께 들어 있음", "설치와 자동 업데이트", "Windows NVIDIA 드라이버 설정"],
-   own="SystemBoost 자체 코드(앱, 프레임 생성 엔진, 셰이더)는 DOKKU가 직접 만든 것이에요.",
-   contactp=f'판매자: DOKKU<br>라이선스, 키, 시험 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
+   own="만든 방법: 코드, 셰이더, 문서는 Anthropic Claude(claude.ai, Claude Code)를 써서 만들었고, 로고는 Anthropic Claude(claude.ai)로 만들었어요. AI 도구로 만든 부분에 저작권이 생기는지, 생긴다면 누구에게 있는지는 확인하지 않았어요. 이 고지로 저작권을 주장하지 않아요.",
+   contactp=f'판매자: DOKKU<br>라이선스, 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
  "en": dict(h1="License Agreement · Privacy", sub='This is the same agreement the app shows on first start. You can read it again in the app under Settings → "View license agreement".',
-   revh="Upcoming revisions", revp='The agreement changes three times. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>• <b>January 1, 2027</b>: the sales page and the Windows program in <a href="#a1">Article 1</a>; cancellation and refunds in <a href="#a3">Article 3(3)</a>; <a href="#a3">Article 3(2), (10), (11) and (12)</a>; personal information in <a href="#a8">Article 8</a>; <a href="#a9">Article 9(2) and (5)</a>; and <a href="#a10">Article 10(3)</a> change. This includes the 3-day trial (Article 3(12)) and usage statistics that start off (Article 8(3)).<br>After updating the app you accept the revised agreement once.',
+   revh="Upcoming revisions", revp='The agreement changes three times. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>• <b>January 1, 2027</b>: the sales page and the Windows program in <a href="#a1">Article 1</a>; cancellation and refunds in <a href="#a3">Article 3(3)</a>; <a href="#a3">Article 3(2), (10) and (11)</a>; personal information in <a href="#a8">Article 8</a>; <a href="#a9">Article 9(2) and (5)</a>; and <a href="#a10">Article 10(3)</a> change. This includes usage statistics that start off (Article 8(3)).<br>After updating the app you accept the revised agreement once.',
    rev="Revised Dec 8, 2026", rev9="Revised Dec 9, 2026", rev27="Revised Jan 1, 2027", toc="Contents", imp="Please read the marked articles (orange border) carefully.",
    priv="Privacy summary", oss="Open-source licenses", contact="Seller and contact",
    privsum="Article 8 of the agreement as a table. This is everything the app sends.",
@@ -195,7 +196,6 @@ LT = {
          ["Payment order", "Seller's license server", "Plan, order code, and the payer name and memo you type", "While the key and refunds are handled, plus legally required periods"],
          ["Card subscription (from Dec 8, 2026)", "Lemon Squeezy checkout → seller's server", "Card details are entered only in Lemon Squeezy's checkout; the seller never receives or stores them. The seller's server receives the payment email, order/subscription numbers and payment/cancellation status to issue and extend keys.", "While the key and refunds are handled, plus legally required periods"],
          ["Referral code", "Seller's server", "The code and a random device ID", "90 days"],
-         ["Taking the 3-day trial", "Seller's server", "A hash of this PC's identifier: SHA-256 of a fixed salt and the MachineGuid Windows keeps for this PC. The MachineGuid itself is not sent. Used only to give each PC one trial.", "400 days"],
          ["Account sign-up (optional, 14+)", "Supabase database", "Username, hashed password and recovery code, sign-up/last login/consent times, invite code and invite relations. No email.", "Deleted immediately when you delete the account"],
          ["Sign-up / login abuse prevention", "Seller's server", "A one-way hash of the connecting IP", "1 hour"],
          ["Update check", "GitHub", "Nothing (only fetches the list of versions)", "—"]],
@@ -203,8 +203,8 @@ LT = {
    ossp="Other people's software that SystemBoost uses, and its licenses. Full texts are in the app under Settings → \"View full licenses\".",
    osscols=["Component", "License", "Used for"],
    ossuse=["App UI", "Bundled with the installer", "Installer and automatic updates", "Windows NVIDIA driver settings"],
-   own="SystemBoost's own code (app, frame-generation engine, shaders) is original work by DOKKU.",
-   contactp=f'Seller: DOKKU<br>For license, key, trial key, payment, withdrawal/refund and privacy questions, post in #help on the <a href="{DC}">official Discord</a>. Never post your full key in a public channel. Staff never DM you first.'),
+   own="How it was made: the code, shaders and documents were made with Anthropic Claude (claude.ai and Claude Code); the logo was made with Anthropic Claude (claude.ai). Whether copyright exists in the AI-made parts, and who would hold it, has not been checked, and this notice does not claim it.",
+   contactp=f'Seller: DOKKU<br>For license, key, payment, withdrawal/refund and privacy questions, post in #help on the <a href="{DC}">official Discord</a>. Never post your full key in a public channel. Staff never DM you first.'),
 }
 OSS = [('<a href="https://github.com/AvaloniaUI/Avalonia">Avalonia</a>', "MIT"), ('<a href="https://github.com/dotnet/runtime">.NET</a>', "MIT"),
        ('<a href="https://github.com/velopack/velopack">Velopack</a>', "MIT"), ('<a href="https://github.com/NVIDIA/nvapi">NVAPI</a>', "MIT")]

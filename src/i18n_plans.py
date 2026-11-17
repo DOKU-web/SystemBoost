@@ -43,7 +43,7 @@ P["ja"] = _other("プロ", "ビジネス", "プレミアム", "または ₩89,9
 
 P["zh"] = _other("专业版", "商业版", "高级版", "或 ₩89,900 / 年（约每月 ₩7,492）",
   ["直播模式（直播软件优先 · 直播时关闭通知）", "工作模式（视频会议和工作软件优先）", "启动项管理"],
-  "免费版的基础功能可以一直使用。专业版增加自动、3 倍、4 倍和画质模式；至尊版再增加 6 倍、8 倍和双 GPU 等；商业版在至尊版基础上增加直播和工作功能。效果因游戏和电脑而异，请先免费试用，并用应用内的基准测试确认后再决定。",
+  "免费版的基础功能可以一直使用。专业版增加自动、3 倍、4 倍和画质模式；至尊版再增加 6 倍、8 倍和双 GPU 等；商业版在至尊版基础上增加直播和工作功能。效果因游戏和电脑而异，请先使用免费版，并用应用内的基准测试确认后再决定。",
   "5 台 · 10 台套装密钥（2026 年 12 月 9 日起）", "5 台", "10 台", "每台", "合计",
   "一次购买同一套餐的 5 个或 10 个年付密钥。每个密钥用于一台电脑，适用于购买者管理的电脑，例如公司办公电脑或家人的电脑。仅支持转账 / 直接付款，不自动续费，不能使用折扣券。",
   ["<b>商业版</b>密钥需要 0.8.10 或更高版本。", "已有的高级版密钥会继续作为专业版使用。"])
@@ -57,7 +57,7 @@ P["es"] = _other("Pro", "Business", "Premium", "o ₩89,900 / año (≈ ₩7,492
 
 P["pt"] = _other("Pro", "Business", "Premium", "ou ₩89,900 / ano (≈ ₩7,492 / mês)",
   ["Modo live (app de transmissão primeiro · notificações desligadas ao vivo)", "Modo trabalho (videochamadas e apps de trabalho primeiro)", "Programas de inicialização"],
-  "O plano grátis continua funcionando sem limite de tempo. Pro adiciona Auto, 3× e 4× e o modo Qualidade; Ultra adiciona 6×, 8×, GPU dupla e mais; Business adiciona ao Ultra recursos de transmissão e trabalho. Os resultados variam por jogo e PC: teste grátis primeiro e confira com o benchmark do app antes de comprar.",
+  "O plano grátis continua funcionando sem limite de tempo. Pro adiciona Auto, 3× e 4× e o modo Qualidade; Ultra adiciona 6×, 8×, GPU dupla e mais; Business adiciona ao Ultra recursos de transmissão e trabalho. Os resultados variam por jogo e PC: use primeiro o plano grátis e confira com o benchmark do app antes de comprar.",
   "Pacotes de 5 e 10 PCs (a partir de 9 de dezembro de 2026)", "5 PCs", "10 PCs", "por PC", "Total",
   "5 ou 10 chaves anuais do mesmo plano em uma compra. Uma chave por PC, para PCs que você gerencia, como os do trabalho ou da família. Só transferência / pagamento direto; sem renovação automática e sem cupons de desconto.",
   ["Chaves <b>Business</b> precisam da versão 0.8.10 ou posterior.", "Chaves Premium que você já tem continuam valendo como Pro."])
