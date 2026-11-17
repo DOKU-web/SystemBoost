@@ -9,6 +9,7 @@
 //   Only while a game runs   ram.standby, ram.workingset, cpu.ecores, cpu.power,
 //                            net.monitor, sys.focus, boost.profiles
 //   Only while the app runs  gpu.oc, the frame limit for frame generation (fg.limit)
+//   GPU makers (WindowsBoostBackend.Gpu.cs, Services/Gpu)  NVIDIA behind IGpuVendorBackend
 //   Biz (WindowsBoostBackend.Biz.cs)  biz.stream and biz.work while their programs run; startup programs until turned back
 // Admin-only work goes through sb_helper (BoostHelper.cs).
 using Microsoft.Win32;
@@ -27,21 +28,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace SystemBoost.App.Services;
-
-/// One saved value. Kind says how to put it back.
-public sealed class BoostBackup
-{
-    public string Feature { get; set; } = "";
-    public string Kind { get; set; } = "";     // hkcu, hags, ifeo, netpm, nv, nvlimit, power, wu, ecores, oc, startup
-    public string Target { get; set; } = "";   // game path, exe name or adapter
-    public string Key { get; set; } = "";
-    public string Name { get; set; } = "";
-    public bool Existed { get; set; }
-    public bool Dword { get; set; }
-    public string Value { get; set; } = "";
-    public string ValueKind { get; set; } = "";   // hkcu: the registry type before (records from before this: Dword)
-    public string SetTo { get; set; } = "";       // what SystemBoost wrote; "" in records from before this
-}
 
 public sealed class BoostState
 {
@@ -549,9 +535,9 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
             case "gpu.highperf": return ApplyGpuPreference();
             case "gpu.hags": return await ApplyHagsAsync();
             case "cpu.priority": return await ApplyPriorityAsync();
-            case "gpu.driver": return await ApplyDriverAsync();
+            case "gpu.driver": return await Nvidia.ApplyGameProfileAsync(null);   // ApplyDriverAsync, as before
             case "net.adapterpower": return await ApplyAdapterPowerAsync();
-            case "gpu.oc": return await ApplyGpuTuningAsync();
+            case "gpu.oc": return await Nvidia.ApplyTuningAsync();               // ApplyGpuTuningAsync, as before
             case "boost.profiles" when !License.Allowed(PremiumFeature.PerGameProfiles): return $"{License.PlanOf(PremiumFeature.PerGameProfiles)} 기능이에요 (바뀐 것 없음)";
             case "biz.stream" or "biz.work": return ApplyBizMode(id);
         }
@@ -645,9 +631,9 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
                 if (b.SetTo.Length > 0 && ReadMachineDword(Ifeo + b.Target + @"\PerfOptions", "CpuPriorityClass")?.ToString(CultureInfo.InvariantCulture) != b.SetTo) return null;
                 return await HelperError(b.Existed ? new[] { "ifeo.set", b.Target, b.Value } : new[] { "ifeo.del", b.Target });
             case "netpm": return await HelperError("net.pm.set", b.Target, "1");
-            case "nv": return await HelperError("nv.restore", b.Target, b.Name, b.Value);
+            case "nv": return await Nvidia.RevertGameProfileAsync(b);   // HelperError("nv.restore", ...), as before
             case "nvlimit": return await EndLimitCallAsync(b);
-            case "oc": return await RestoreGpuAsync(b);
+            case "oc": return await Nvidia.RevertTuningAsync(b);       // RestoreGpuAsync, as before
             case "wu":
                 if (!RestoreRules.StillOurs(b.SetTo, ReadMachineString(UpdateUx, b.Name))) return null;   // Windows or the user changed it since
                 return await HelperError(b.Existed ? new[] { "wu.set", b.Name, b.Value } : new[] { "wu.del", b.Name });
@@ -992,7 +978,7 @@ public sealed partial class WindowsBoostBackend : IBoostBackend, IGameLimiter, I
 
     private async Task TickAsync()
     {
-        await WatchGpuAsync();
+        await Nvidia.WatchTuningAsync();   // WatchGpuAsync, as before
         if (_s.Enabled.Count == 0 && !_s.OneClick && !_gameRunning && !_streaming && _raised.Count == 0) return;
         var names = ProcessNames();
         var game = RunningGames(names);
