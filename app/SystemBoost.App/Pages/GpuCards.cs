@@ -120,8 +120,14 @@ internal static class GpuCards
         try { gpu = await b.TuningGpuNameAsync(); }
         catch (Exception) { gpu = null; }   // the tuning checks the consent again and refuses without one
         if (gpu == null) return true;
-        if (TopLevel.GetTopLevel(from) is Window owner && await OcConsent.EnsureAsync(owner, gpu, fromPreset: false)) return true;
-        status.Text = $"{what}: {OcConsent.Problem ?? "안내에 동의하지 않아서 켜지 않았어요 (바뀐 것 없음)"}";
+        const string declined = "안내에 동의하지 않아서 켜지 않았어요 (바뀐 것 없음)";
+        if (TopLevel.GetTopLevel(from) is not Window owner)
+        {
+            status.Text = $"{what}: {declined}";
+            return false;
+        }
+        if (await OcConsent.EnsureAsync(owner, gpu, fromPreset: false)) return true;
+        status.Text = $"{what}: {OcConsent.Problem ?? declined}";
         return false;
     }
 
