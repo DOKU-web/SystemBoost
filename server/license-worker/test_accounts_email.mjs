@@ -134,7 +134,7 @@ const signupEmail = (email, password, extra) => send("/account/signup_email", { 
 async function emailMember(email, password) {   // sign-up, verify by the page, log in
   assert.equal((await signupEmail(email, password)).sent, true);
   const l = linkIn(lastTo(email));
-  assert.equal((await page("/account/verify", { t: l.t })).status, 200);
+  assert.equal((await page("/account/verify", { t: l.t, password })).status, 200);
   const r = await send("/account/login", { email, password, device: { name: "PC " + email, key: K1 } });
   assert.equal(r.status, 200, JSON.stringify(r));
   return r;
@@ -198,20 +198,27 @@ assert.equal(p.status, 200);
 assert.match(p.headers.get("content-security-policy"), /default-src 'none'.*form-action 'self'/);
 assert.equal(p.headers.get("referrer-policy"), "no-referrer");
 assert.equal(p.headers.get("x-frame-options"), "DENY");
-assert.ok(p.html.includes(`name="t" value="${l.t}"`) && p.html.includes("가입 완료"));
+assert.ok(p.html.includes(`name="t" value="${l.t}"`) && p.html.includes("가입 완료") && p.html.includes('name="password" type="password"'));
 assert.ok(!/<script/i.test(p.html));
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.accounts WHERE email = $1", ALICE), 0);
 assert.match((await page(l.url, null, { headers: { "Accept-Language": "en-US,en;q=0.9" } })).html, /Finish sign-up/);
 assert.match((await page(l.url.replace("?", "?lang=en&"))).html, /Finish sign-up/);
-p = await page("/account/verify", { t: l.t, lang: "ko" });
+// the link alone does not make the account: the password chosen in the app is asked for too
+p = await page("/account/verify", { t: l.t, lang: "ko", password: "not-alices-pw-1" });
+assert.equal(p.status, 400);
+assert.match(p.html, /비밀번호가 맞지 않아요/);
+assert.deepEqual(await send("/account/verify", { t: l.t }), { status: 400, error: "password" });
+assert.equal(await count("SELECT COUNT(*) AS n FROM public.accounts WHERE email = $1", ALICE), 0);
+assert.equal((await one("SELECT tries FROM public.account_tokens WHERE kind = 'signup' AND email = $1", ALICE)).tries, 2);
+p = await page("/account/verify", { t: l.t, lang: "ko", password: PWA });
 assert.equal(p.status, 200);
 assert.match(p.html, /가입이 끝났어요/);
 const alice = await one("SELECT * FROM public.accounts WHERE email = $1", ALICE);
 assert.match(alice.id, /^m[a-z0-9]{11}$/);
 assert.ok(alice.email_at && alice.consent.startsWith(CONSENT_NOW + " "));
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_tokens WHERE email = $1", ALICE), 0);
-assert.equal((await page("/account/verify", { t: l.t })).status, 400);                       // once
-assert.deepEqual(await send("/account/verify", { t: l.t }), { status: 400, error: "expired" });
+assert.equal((await page("/account/verify", { t: l.t, password: PWA })).status, 400);         // once
+assert.deepEqual(await send("/account/verify", { t: l.t, password: PWA }), { status: 400, error: "expired" });
 assert.equal((await page("/account/verify?t=zz")).status, 400);
 
 // the same address again: the same reply, and an "already" mail to the owner instead of a link
@@ -226,13 +233,15 @@ const bob1 = linkIn(lastTo(BOB));
 await signupEmail(BOB, "bob-strong-pw-2");
 const bob2 = linkIn(lastTo(BOB));
 assert.notEqual(bob1.t, bob2.t);
-assert.match((await page("/account/verify", { t: bob2.t })).html, /가입이 끝났어요/);
-assert.equal((await page("/account/verify", { t: bob1.t })).status, 400);
+// somebody else signed up the address first (bob1): its link does not take the owner's password
+assert.match((await page("/account/verify", { t: bob1.t, password: "bob-strong-pw-2" })).html, /비밀번호가 맞지 않아요/);
+assert.match((await page("/account/verify", { t: bob2.t, password: "bob-strong-pw-2" })).html, /가입이 끝났어요/);
+assert.equal((await page("/account/verify", { t: bob1.t, password: "bob-strong-pw-1" })).status, 400);
 assert.equal((await send("/account/login", { email: BOB, password: "bob-strong-pw-1" })).error, "wrong");
 assert.equal((await send("/account/login", { email: BOB, password: "bob-strong-pw-2" })).status, 200);
 // an email sign-up without "consent" (as an older text would) records the text before versions were sent
 await send("/account/signup_email", { email: "plain@example.com", password: "plain-strong-pw1", agree: true, age14: true });
-await page("/account/verify", { t: linkIn(lastTo("plain@example.com")).t });
+await page("/account/verify", { t: linkIn(lastTo("plain@example.com")).t, password: "plain-strong-pw1" });
 assert.match((await one("SELECT consent FROM public.accounts WHERE email = 'plain@example.com'")).consent, /^2026-11-12 /);
 // 아이디 sign-ups: the app's consent version too, and the old one without it
 assert.equal((await send("/account/signup", okUser("con_new", { consent: CONSENT_NOW }))).status, 200);
@@ -472,6 +481,7 @@ assert.deepEqual(await send("/account/add_email", { email: DAVE, password: "id-m
 m = lastTo(DAVE);
 assert.equal(kindOf(m), "verify");
 assert.match(m.text, /연결/);
+assert.match(m.text, /아이디 dave_id/);                                    // the mail names the account
 l = linkIn(m);
 assert.equal(l.query, "&add=1");
 const aliceMails = mailsTo(ALICE).length;
@@ -619,6 +629,8 @@ row = await one("SELECT totp, totp_pending FROM public.accounts WHERE id = $1", 
 assert.deepEqual([row.totp, row.totp_pending], [null, null]);
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_backup WHERE account = $1", erin.id), 0);
 assert.equal((await send("/account/me", undefined, erin.token)).error, "session");
+assert.equal((await send("/account/login", { email: ERIN, password: PWE })).error, "wrong");   // the old password is gone too
+await unlock(erin.id);
 rt = await one("SELECT * FROM public.account_tokens WHERE kind = 'reset' AND account = $1", erin.id);
 assert.ok(Math.abs(new Date(rt.expires) - new Date(rt.created) - 24 * 3600e3) < 5000);
 assert.match((await page("/account/reset", { t: l.t, password: "erin-after-pw-1", password2: "erin-after-pw-1" })).html, /비밀번호를 바꿨어요/);
@@ -710,5 +722,45 @@ for (const line of logged) for (const s of secrets) assert.ok(!line.includes(s),
 const errorReplies = replies.filter(t => t.startsWith('{"error"'));
 for (const t of errorReplies) for (const s of secrets) assert.ok(!t.includes(s), "error reply: " + t.slice(0, 60));
 for (const t of mails.map(x => x.text)) for (const s of [PWA, PWA2, "id-member-pass1", ...tc.backup]) assert.ok(!t.includes(s), "a mail holds a secret");
+
+// ---------------------------------------------------------------------------------------------- review 2026-11-18
+freshLimits();
+// a 아이디 account with 2-step login: its recovery code alone does not set a password or open a session
+const tf = await send("/account/signup", okUser("tf_member"));
+assert.equal(tf.status, 200);
+assert.match(tf.recovery, /^[A-Z0-9]{4}(-[A-Z0-9]{4}){3}$/);
+const tfs = await send("/account/totp_start", { password: "id-member-pass1" }, tf.token);
+assert.equal((await send("/account/totp_confirm", { code: await codeAt(unb32(tfs.secret)) }, tf.token)).backup.length, 10);
+assert.deepEqual(await send("/account/recover", { id: "tf_member", recovery: tf.recovery, next: "tf-new-strong-pw1" }), { status: 403, error: "twofa" });
+assert.equal((await send("/account/me", undefined, tf.token)).id, "tf_member");                 // nothing changed
+assert.equal((await send("/account/login", { id: "tf_member", password: "id-member-pass1" })).twofa, true);
+// a reset by mail voids a recovery code handed out before (by a password change)
+const RITA = "rita@example.com", PWR = "rita-strong-pw1";
+const rita = await emailMember(RITA, PWR);
+const rch = await send("/account/password", { password: PWR, next: "rita-strong-pw2" }, rita.token);
+assert.match(rch.recovery, /-/);
+await send("/account/forgot", { email: RITA });
+await page("/account/reset", { t: linkIn(lastTo(RITA)).t, password: "rita-strong-pw3", password2: "rita-strong-pw3" });
+assert.equal((await send("/account/login", { email: RITA, password: "rita-strong-pw3" })).status, 200);
+assert.equal((await send("/account/recover", { id: rita.id, recovery: rch.recovery, next: "rita-taken-pw-9" })).error, "wrong");
+assert.equal((await send("/account/login", { email: RITA, password: "rita-strong-pw3" })).status, 200);
+// five wrong passwords end a sign-up's link
+freshLimits();
+const SAM = "sam@example.com";
+await signupEmail(SAM, "sam-strong-pw-1");
+const sam = linkIn(lastTo(SAM));
+for (let i = 0; i < 5; i++) assert.deepEqual(await send("/account/verify", { t: sam.t, password: "sam-wrong-pw-" + i }), { status: 400, error: "password" });
+assert.deepEqual(await send("/account/verify", { t: sam.t, password: "sam-strong-pw-1" }), { status: 400, error: "expired" });
+assert.equal(await count("SELECT COUNT(*) AS n FROM public.accounts WHERE email = $1", SAM), 0);
+// sign-up mails use at most half of the day's mails: a reset still goes out after many made-up sign-ups
+freshLimits();
+const day6 = { ...env, MAIL_DAY: "6" };
+let n6 = mails.length;
+for (let i = 0; i < 5; i++) await send("/account/signup_email", { email: `junk${i}@example.com`, password: "junk-strong-pw-1", agree: true, age14: true, consent: CONSENT_NOW }, null, { env: day6 });
+assert.equal(mails.length - n6, 3);                                       // half of 6
+n6 = mails.length;
+await send("/account/forgot", { email: RITA }, null, { env: day6 });
+assert.equal(mails.length - n6, 1);
+assert.equal(kindOf(lastTo(RITA)), "reset");
 
 console.log("account email tests passed (" + mails.length + " mails recorded, none sent)");

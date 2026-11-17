@@ -55,7 +55,7 @@ const fmt = o => `median ${o.median.toFixed(1)} ms (p10 ${o.p10.toFixed(1)}, p90
 const out = (...a) => console.log(...a);
 async function member(email, password) {
   await call("/account/signup_email", { email, password, agree: true, age14: true, consent: "2026-11-18" });
-  await call("/account/verify", { t: tokenIn(lastTo(email)) });
+  await call("/account/verify", { t: tokenIn(lastTo(email)), password });
   return (await call("/account/login", { email, password })).body;
 }
 const PW = "victim-strong-pw1";

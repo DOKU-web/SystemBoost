@@ -111,10 +111,11 @@ const TEXT = {
     expired: "링크가 만료됐거나 이미 쓰였어요. 앱에서 다시 시도하세요.",
     unavailable: "지금은 처리할 수 없어요. 잠시 뒤 다시 시도하세요.",
     busy: "시도가 너무 많아요. 잠시 뒤 다시 시도하세요.",
-    verify: { title: "메일 주소 확인", lead: "아래 버튼을 누르면 회원 가입이 끝나요.", button: "가입 완료",
+    verify: { title: "메일 주소 확인", lead: "앱에서 가입할 때 정한 비밀번호를 넣고 아래 버튼을 누르면 회원 가입이 끝나요.", button: "가입 완료",
+              p1: "비밀번호", wrong: "비밀번호가 맞지 않아요. 앱에서 가입할 때 정한 비밀번호를 넣으세요. 다섯 번 틀리면 이 링크는 더 쓸 수 없어요.",
               done: "가입이 끝났어요. 이제 앱의 '◈ 계정'에서 이 메일 주소와 비밀번호로 로그인하세요.",
               already: "이 메일 주소는 이미 다른 계정에 연결돼 있어요. 앱에서 그 계정으로 로그인하거나 '비밀번호 찾기'를 쓰세요." },
-    add: { title: "메일 주소 연결", lead: "아래 버튼을 누르면 이 메일 주소가 계정에 연결돼요.", button: "연결 완료",
+    add: { title: "메일 주소 연결", lead: "아래 버튼을 누르면 이 메일 주소가 메일에 적힌 아이디의 계정에 연결되고, 이 주소로 산 키가 그 계정에 보여요. 본인이 요청하지 않았다면 누르지 마세요.", button: "연결 완료",
            done: "메일 주소를 연결했어요. 이제 이 주소로도 로그인하고 비밀번호 재설정 링크를 받을 수 있어요." },
     reset: { title: "새 비밀번호 정하기", lead: "새 비밀번호를 두 번 입력하세요. 바꾸면 모든 기기에서 로그아웃돼요.",
              rule: "10~72자이고, 아이디나 메일 주소(또는 @ 앞부분)와 같지 않고, 흔한 비밀번호가 아니어야 해요.",
@@ -131,10 +132,11 @@ const TEXT = {
     expired: "This link has expired or was already used. Please try again from the app.",
     unavailable: "This cannot be done right now. Please try again in a while.",
     busy: "Too many tries. Please try again in a while.",
-    verify: { title: "Confirm your email", lead: "Press the button below to finish signing up.", button: "Finish sign-up",
+    verify: { title: "Confirm your email", lead: "Enter the password you chose in the app and press the button below to finish signing up.", button: "Finish sign-up",
+              p1: "Password", wrong: "The password is not right. Enter the password you chose when signing up in the app. After five wrong tries this link stops working.",
               done: "You're signed up. Now log in under '◈ Account' in the app with this email address and your password.",
               already: "This email address already belongs to another account. Log in to that account in the app or use 'Forgot password'." },
-    add: { title: "Link your email", lead: "Press the button below to link this email address to your account.", button: "Finish",
+    add: { title: "Link your email", lead: "Pressing the button below links this email address to the account with the ID in the email, and keys bought with this address show in that account. If you did not ask for this, do not press it.", button: "Finish",
            done: "Your email address is linked. You can now log in with it and get password reset links at it." },
     reset: { title: "Choose a new password", lead: "Enter the new password twice. Changing it logs you out on every device.",
              rule: "10 to 72 characters, not your ID or email address (or the part before @), and not a common password.",
@@ -188,12 +190,19 @@ async function page(req, url, env, ctx, deps, which, form) {
 <label for="p2">${esc(P.p2)}</label><input id="p2" name="password2" type="password" autocomplete="new-password" minlength="10" maxlength="72" required>
 <button type="submit">${esc(P.button)}</button></form>`, err ? 400 : 200);
 
+  // a sign-up's verify page asks for the password chosen in the app
+  const verifyForm = (err = "") => html(lang, P.title, `<p>${esc(P.lead)}</p>${err ? `<p class="err">${esc(err)}</p>` : ""}
+<form method="post" action="${action}">${hidden}
+<label for="p1">${esc(P.p1)}</label><input id="p1" name="password" type="password" autocomplete="current-password" maxlength="72" required>
+<button type="submit">${esc(P.button)}</button></form>`, err ? 400 : 200);
+
   const body = fromRequest(req, url, { t, lang });
   if (!form) {
     if (which === "reset") {
       const r = await accounts(env, "reset_peek", body, ctx, deps);
       return r.error ? failed(r) : resetForm();
     }
+    if (kind === "verify") return verifyForm();
     return html(lang, P.title, `<p>${esc(P.lead)}</p><form method="post" action="${action}">${hidden}<button type="submit">${esc(P.button)}</button></form>`);
   }
   if (which === "reset") {
@@ -204,7 +213,8 @@ async function page(req, url, env, ctx, deps, which, form) {
     return r.error ? failed(r) : msg(P.done);
   }
   const act = { verify: "verify", link: "link_key_confirm", "recovery/cancel": "recovery_cancel" }[which];
-  const r = await accounts(env, act, body, ctx, deps);
+  const r = await accounts(env, act, kind === "verify" ? { ...body, password: String(form.get("password") || "") } : body, ctx, deps);
+  if (r.error === "password" && kind === "verify") return verifyForm(P.wrong);
   if (r.error) return failed(r);
   return msg(which === "verify" ? (r._added ? T.add.done : T.verify.done) : P.done);
 }

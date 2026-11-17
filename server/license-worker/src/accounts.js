@@ -40,6 +40,7 @@ const LIMITS = {
   logDays: 30,                  // the security log (raw IP addresses)
   devicesKept: 20, consentsKept: 50, keysKept: 20,
   mailPerIp: 10,                // forgot, recovery requests and other mails asked for from one address an hour
+  verifyTries: 5,               // wrong passwords on a sign-up's "verify" page before its link ends
 };
 const TIMEOUT_MS = 10000;
 const ID_RE = /^[a-z0-9_]{4,20}$/;
@@ -413,8 +414,10 @@ async function signupEmail(env, s, b, ctx, deps) {
 async function verify(env, s, b, ctx, where) {
   if (!TOKEN_RE.test(b.t || "")) return fail(400, "expired");
   const t = await sha(b.t);
+  // a sign-up's link needs the password chosen in the app (an added email's does not: its account asked with its password)
+  const pw = typeof b.password === "string" && b.password ? await s.password(b.password.slice(0, 100)) : null;
   for (let i = 0; i < 5; i++) {   // a new member's id is drawn at random; "retry" if it is somebody's already
-    const r = await db(env, "verify", { t, id: newMemberId(), proof: await s.proof(newRecovery()), ...where });
+    const r = await db(env, "verify", { t, id: newMemberId(), proof: await s.proof(newRecovery()), ...(pw ? { pw } : {}), ...where });
     if (r.error === "retry") continue;
     if (r.error) return r;
     if (r.mail === "email_added") sendMail(env, ctx, { to: r.email, kind: "email_added", lang: langOf(b), data: { id: r.id } });
@@ -456,7 +459,7 @@ async function addEmail(env, s, token, b, ctx, where) {
   const r = await db(env, "add_email", { token, pw: await s.password(String(b.password || "").slice(0, 100)), ip: await s.ip(b.ip),
                                          email, t: await sha(t), ...where });
   if (r.error) return r;
-  if (r.mail === "verify") sendMail(env, ctx, { to: email, kind: "verify", lang, data: { link: link(env, b, "verify", t, lang) + "&add=1", add: true } });
+  if (r.mail === "verify") sendMail(env, ctx, { to: email, kind: "verify", lang, data: { link: link(env, b, "verify", t, lang) + "&add=1", add: true, id: r.id } });
   else if (r.mail === "already") sendMail(env, ctx, { to: email, kind: "already", lang, data: {} });
   return { sent: true };
 }

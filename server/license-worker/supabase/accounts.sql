@@ -370,6 +370,9 @@ begin
       return account_missed(a, b);
     end if;
     if a.blocked then return account_fail(403, 'blocked'); end if;
+    -- 2-step login on: the recovery code alone does not stand in for the password and the second step (a member who
+    -- lost both asks for account recovery, which turns 2-step login off only after the wait and the seller's check)
+    if action = 'recover' and a.totp is not null then return account_fail(403, 'twofa'); end if;
     -- "dry": the code is right; the Worker checks the new password against the email before anything changes
     if action = 'recover' and coalesce((b->>'dry')::boolean, false) then
       return jsonb_build_object('id', a.id, 'email', a.email, 'dry', true);
@@ -460,6 +463,16 @@ begin
   if action = 'verify' then
     select * into tok from account_tokens where token = b->>'t' and kind in ('signup', 'email') and expires > now() for update;
     if tok.token is null then return account_fail(400, 'expired'); end if;
+    -- a sign-up needs the password chosen in the app as well as the mailbox, so the link of somebody else's sign-up of
+    -- this address (with a password the owner does not know) cannot make the account. Wrong passwords end the link.
+    if tok.kind = 'signup' and tok.hash <> crypt(coalesce(b->>'pw', ''), tok.hash) then
+      if tok.tries + 1 >= (b->>'verifyTries')::integer then
+        delete from account_tokens where token = tok.token;
+      else
+        update account_tokens set tries = tries + 1 where token = tok.token;
+      end if;
+      return account_fail(400, 'password');
+    end if;
     if exists (select 1 from accounts where email = tok.email) then
       delete from account_tokens where token = tok.token;
       return account_fail(409, 'already');
@@ -516,7 +529,9 @@ begin
     select * into a from accounts where id = tok.account for update;
     if a.id is null then return account_fail(400, 'expired'); end if;
     if action = 'reset_peek' then return jsonb_build_object('id', a.id, 'email', a.email); end if;
-    update accounts set hash = crypt(b->>'next', gen_salt('bf', 10)), fails = 0, fail_at = null, locked_until = null where id = a.id;
+    -- the recovery code goes too: whoever had it (or the old password) is out; a password change in the app gives a new one
+    update accounts set hash = crypt(b->>'next', gen_salt('bf', 10)), recovery = 'void:' || encode(gen_random_bytes(16), 'hex'),
+      fails = 0, fail_at = null, locked_until = null where id = a.id;
     delete from account_sessions where account = a.id;
     delete from account_tokens where account = a.id and kind in ('reset', 'login2');
     perform account_log(a.id, 'password_changed', b);
@@ -621,13 +636,16 @@ begin
     if a.email is not null and not coalesce((b->>'mail')::boolean, false) then
       return account_fail(409, '메일 발송이 꺼져 있어 메일 계정의 복구를 승인할 수 없어요');
     end if;
-    update accounts set totp = null, totp_pending = null, totp_step = 0, fails = 0, fail_at = null, locked_until = null where id = a.id;
+    -- the old password goes too (whoever asked may have had it): the mailed reset link or the new recovery code sets one
+    update accounts set hash = crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf', 10)),
+      totp = null, totp_pending = null, totp_step = 0, fails = 0, fail_at = null, locked_until = null where id = a.id;
     delete from account_backup where account = a.id;
     delete from account_sessions where account = a.id;
     delete from account_tokens where account = a.id and kind in ('reset', 'login2');
     if a.email is not null then
       insert into account_tokens (token, kind, account, email, expires)
         values (b->>'t', 'reset', a.id, a.email, now() + make_interval(hours => (b->>'approvedHours')::integer));
+      update accounts set recovery = 'void:' || encode(gen_random_bytes(16), 'hex') where id = a.id;
     else
       update accounts set recovery = b->>'proof' where id = a.id;
     end if;
@@ -790,7 +808,7 @@ begin
       delete from account_tokens where account = a.id and kind = 'email';
       insert into account_tokens (token, kind, account, email, expires)
         values (b->>'t', 'email', a.id, b->>'email', now() + make_interval(hours => (b->>'signupHours')::integer));
-      return jsonb_build_object('mail', 'verify');
+      return jsonb_build_object('mail', 'verify', 'id', a.id);
     end if;
     -- leaving: pending links for the address go too; everything else of the member goes with the account (cascade)
     delete from account_tokens where a.email is not null and email = a.email;

@@ -505,7 +505,7 @@ const codeAt = (secret, k = 0) => hotp(secret, stepAt() + k);
 const mailTokens = () => mails.map(tokenIn).filter(Boolean);
 async function emailMember(email, password = MPW, ip) {
   assert.equal((await send("/account/signup_email", { email, password, agree: true, age14: true, consent: "2026-11-18" })).sent, true);
-  assert.equal((await send("/account/verify", { t: tokenIn(lastMail(email)) })).done, true);
+  assert.equal((await send("/account/verify", { t: tokenIn(lastMail(email)), password })).done, true);
   const r = await send("/account/login", { email, password, device: { name: "PC", key: "ab".repeat(32) } }, null, ip);
   assert.equal(r.status, 200, email);
   return { ...r, email };

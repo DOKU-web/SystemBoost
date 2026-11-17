@@ -30,7 +30,7 @@ async function deliver(env, { to, kind, lang, data }) {
   to = String(to || "").trim().toLowerCase();
   if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(to) || to.length > 254) return { ok: false, why: "to" };
   if (!MAIL_KINDS.includes(kind)) return { ok: false, why: "kind" };
-  if (!(await allow(env, to))) return { ok: false, why: "limit" };
+  if (!(await allow(env, to, kind === "verify" && !data?.add))) return { ok: false, why: "limit" };
   const m = render(kind, lang === "en" ? "en" : "ko", data || {});
   try {
     const res = await fetch(RESEND, {
@@ -58,9 +58,12 @@ async function tag(env, to) {
   if (saltOf !== k) { salt = k ? await sha("systemboost-mail|" + k) : ""; saltOf = k; }
   return (await sha(salt + "|" + to)).slice(0, 24);
 }
-async function allow(env, to) {
+// signup: a sign-up's verify mail, which anyone can send to any address; those may use only half of the day's mails,
+// so the rest stays for password resets, recovery and alerts.
+async function allow(env, to, signup = false) {
   const t = new Date().toISOString(), day = "mail:day:" + t.slice(0, 10), addr = "mail:to:" + (await tag(env, to)) + ":" + t.slice(0, 13);
   const items = [{ name: day, ttl: 2 * 86400, max: mailDay(env) }, { name: addr, ttl: 3600, max: MAIL.perAddressHour }];
+  if (signup) items.push({ name: "mail:signup:" + t.slice(0, 10), ttl: 2 * 86400, max: Math.max(1, Math.floor(mailDay(env) / 2)) });
   try {
     const o = env.STATS.get(env.STATS.idFromName("all"));
     const r = await o.fetch("https://stats/take", { method: "POST", body: JSON.stringify({ items }) });
@@ -84,20 +87,20 @@ const planEn = p => ({ premium: "Pro", ultra: "Ultra", biz: "Business" }[p] || "
 const T = {
   verify: {   // d.add: an email being added to an account that has a 아이디 (add_email), not a sign-up
     ko: d => d.add ? ({ subject: "[SystemBoost] 메일 주소를 확인해 주세요",
-                body: ["SystemBoost 계정에 이 메일 주소를 연결하려면 아래 버튼을 누르고, 열린 페이지에서 '연결 완료'를 누르세요. 연결되면 이 주소로도 로그인하고 비밀번호 재설정 링크를 받을 수 있어요.",
+                body: [`SystemBoost 계정(아이디 ${d.id || "?"})에 이 메일 주소를 연결하려면 아래 버튼을 누르고, 열린 페이지에서 '연결 완료'를 누르세요. 연결되면 이 주소로도 로그인하고 비밀번호 재설정 링크를 받을 수 있고, 이 주소로 산 키가 그 계정에 보여요.`,
                        "링크는 24시간 동안 한 번만 쓸 수 있어요."],
                 button: ["메일 주소 연결하기", d.link],
-                wasnt: "본인이 요청하지 않았다면 이 메일을 무시하세요. 링크를 누르지 않으면 아무 계정에도 연결되지 않고, 24시간 뒤 링크도 사라져요." }) : ({ subject: "[SystemBoost] 메일 주소를 확인해 주세요",
-                body: ["SystemBoost 회원 가입을 마치려면 아래 버튼을 누르세요. 열린 페이지에서 '가입 완료'를 누르면 계정이 만들어지고, 그다음 앱에서 이 메일 주소와 비밀번호로 로그인하면 돼요.",
+                wasnt: "본인이 요청하지 않았거나 그 아이디가 본인 것이 아니라면 링크를 누르지 마세요. 누르지 않으면 아무 계정에도 연결되지 않고, 24시간 뒤 링크도 사라져요." }) : ({ subject: "[SystemBoost] 메일 주소를 확인해 주세요",
+                body: ["SystemBoost 회원 가입을 마치려면 아래 버튼을 누르세요. 열린 페이지에서 앱에서 정한 비밀번호를 넣고 '가입 완료'를 누르면 계정이 만들어지고, 그다음 앱에서 이 메일 주소와 비밀번호로 로그인하면 돼요.",
                        "링크는 24시간 동안 한 번만 쓸 수 있어요."],
                 button: ["가입 완료하기", d.link],
                 wasnt: "본인이 가입하지 않았다면 이 메일을 무시하세요. 링크를 누르지 않으면 계정은 만들어지지 않고, 24시간 뒤 링크도 사라져요." }),
     en: d => d.add ? ({ subject: "[SystemBoost] Please confirm your email address",
-                body: ["To link this email address to your SystemBoost account, press the button below, then 'Finish' on the page that opens. Once linked you can also log in with it and get password reset links at it.",
+                body: [`To link this email address to the SystemBoost account with the ID ${d.id || "?"}, press the button below, then 'Finish' on the page that opens. Once linked you can also log in with it and get password reset links at it, and keys bought with this address show in that account.`,
                        "The link works once, for 24 hours."],
                 button: ["Link this address", d.link],
-                wasnt: "If you did not ask for this, ignore this email. Without the link it is not linked to any account, and the link expires in 24 hours." }) : ({ subject: "[SystemBoost] Please confirm your email address",
-                body: ["To finish signing up for SystemBoost, press the button below. On the page that opens, press 'Finish sign-up' and the account is created; then log in to the app with this email address and your password.",
+                wasnt: "If you did not ask for this, or that ID is not yours, do not press the link. Without it the address is not linked to any account, and the link expires in 24 hours." }) : ({ subject: "[SystemBoost] Please confirm your email address",
+                body: ["To finish signing up for SystemBoost, press the button below. On the page that opens, enter the password you chose in the app and press 'Finish sign-up' and the account is created; then log in to the app with this email address and your password.",
                        "The link works once, for 24 hours."],
                 button: ["Finish sign-up", d.link],
                 wasnt: "If you did not sign up, ignore this email. Without the link no account is created, and the link expires in 24 hours." }),
