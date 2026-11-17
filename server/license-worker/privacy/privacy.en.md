@@ -68,7 +68,7 @@ Effective date: {{EFFECTIVE_DATE}}
 ## Your rights
 
 - You can ask to see, correct or delete your information, to stop its processing, or withdraw consent: through Support in the app, /help, or the email address below. The seller answers within 10 days.
-- Under '◈ Account' you can add an email address, see signed-in devices and sign them out, turn 2-step login on or off, make new backup codes and withdraw the overclocking consent. A forgotten password can be reset by mail (with a confirmed email) or with the recovery code; without either you can ask for account recovery, which is announced by mail when the account has one, can be cancelled for 72 hours, and is then checked by the seller.
+- Under '◈ Account' you can add an email address, see signed-in devices and sign them out, turn 2-step login on or off and make new backup codes. The overclocking consent is withdrawn with 'Withdraw consent' under 'GPU · Overclock'; in an app signed in as a member, the withdrawal is recorded with the account too. A forgotten password can be reset by mail (with a confirmed email) or with the recovery code; without either you can ask for account recovery, which is announced by mail when the account has one, can be cancelled for 72 hours, and is then checked by the seller.
 - You can delete your account under '◈ Account' → 'Delete account', turn off 'Send usage statistics' on the agreement screen or in Settings, close your requests, and remove saved requests on /help ('Remove from list').
 - Sign-up is for people aged 14 or over.
 
