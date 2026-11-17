@@ -8,7 +8,7 @@ S = {}
 S["ko"] = dict(
   title="SystemBoost — 게임 화면을 더 부드럽게",
   desc="화면을 캡처해서 중간 프레임을 만들고, 작은 창 게임을 화면 크기로 키우는 프로그램. 게임에 주입하지 않습니다.",
-  nav_news="새 소식", nav_plans="요금제", nav_license="사용권 계약", nav_discord="공식 디스코드", lang_label="언어",
+  nav_news="새 소식", nav_plans="요금제", nav_license="사용권 계약", nav_discord="공식 디스코드", ocn="오버클럭은 본인 책임으로 사용해요. 자세히 보기", lang_label="언어",
   h1="게임 화면을 <em>더 부드럽게</em>",
   lead="화면을 캡처해서 프레임 사이에 중간 프레임을 만들어 넣고, 작은 창으로 띄운 게임을 화면 크기로 선명하게 키워요. 게임 파일이나 메모리는 건드리지 않아요.",
   dl_win="Windows용 다운로드", dl_winp="Windows 포터블 다운로드",
@@ -57,7 +57,7 @@ S["ko"] = dict(
 S["en"] = dict(
   title="SystemBoost — Smoother game motion",
   desc="Captures your screen to generate in-between frames and scales small windowed games up to full screen. Nothing is injected into games.",
-  nav_news="News", nav_plans="Plans", nav_license="License", nav_discord="Official Discord", lang_label="Language",
+  nav_news="News", nav_plans="Plans", nav_license="License", nav_discord="Official Discord", ocn="Overclocking is at your own risk. Learn more", lang_label="Language",
   h1="Make your games look <em>smoother</em>",
   lead="SystemBoost captures the screen, generates in-between frames, and sharply scales small windowed games up to full screen. It never touches game files or memory.",
   dl_win="Download for Windows", dl_winp="Download Windows portable",
@@ -106,7 +106,7 @@ S["en"] = dict(
 S["ja"] = dict(
   title="SystemBoost — ゲーム画面をもっと滑らかに",
   desc="画面をキャプチャして中間フレームを生成し、小さなウィンドウのゲームを画面サイズに拡大します。ゲームには注入しません。",
-  nav_news="お知らせ", nav_plans="プラン", nav_license="使用許諾契約", nav_discord="公式Discord", lang_label="言語",
+  nav_news="お知らせ", nav_plans="プラン", nav_license="使用許諾契約", nav_discord="公式Discord", ocn="オーバークロックは自己責任でご利用ください。詳しく見る", lang_label="言語",
   h1="ゲーム画面を<em>もっと滑らかに</em>",
   lead="画面をキャプチャしてフレームの間に中間フレームを作り、小さなウィンドウで動くゲームを画面サイズまでくっきり拡大します。ゲームのファイルやメモリには触れません。",
   dl_win="Windows版をダウンロード", dl_winp="Windowsポータブル版をダウンロード",
@@ -155,7 +155,7 @@ S["ja"] = dict(
 S["zh"] = dict(
   title="SystemBoost — 让游戏画面更流畅",
   desc="捕获屏幕生成中间帧，并把小窗口游戏放大到全屏。不注入任何游戏。",
-  nav_news="最新消息", nav_plans="方案", nav_license="许可协议", nav_discord="官方 Discord", lang_label="语言",
+  nav_news="最新消息", nav_plans="方案", nav_license="许可协议", nav_discord="官方 Discord", ocn="超频风险由您自行承担。了解详情", lang_label="语言",
   h1="让游戏画面<em>更流畅</em>",
   lead="SystemBoost 捕获屏幕，在帧与帧之间生成中间帧，并把小窗口运行的游戏清晰地放大到屏幕尺寸。不会触碰游戏文件或内存。",
   dl_win="下载 Windows 版", dl_winp="下载 Windows 便携版",
@@ -204,7 +204,7 @@ S["zh"] = dict(
 S["es"] = dict(
   title="SystemBoost — Movimiento más fluido en tus juegos",
   desc="Captura la pantalla para generar fotogramas intermedios y amplía los juegos en ventana pequeña a pantalla completa. No inyecta nada en los juegos.",
-  nav_news="Novedades", nav_plans="Planes", nav_license="Licencia", nav_discord="Discord oficial", lang_label="Idioma",
+  nav_news="Novedades", nav_plans="Planes", nav_license="Licencia", nav_discord="Discord oficial", ocn="El overclocking es bajo tu propia responsabilidad. Más información", lang_label="Idioma",
   h1="Haz que tus juegos se vean <em>más fluidos</em>",
   lead="SystemBoost captura la pantalla, genera fotogramas intermedios y amplía con nitidez los juegos en ventana pequeña hasta el tamaño de tu pantalla. Nunca toca los archivos ni la memoria del juego.",
   dl_win="Descargar para Windows", dl_winp="Descargar Windows portable",
@@ -253,7 +253,7 @@ S["es"] = dict(
 S["pt"] = dict(
   title="SystemBoost — Movimento mais suave nos seus jogos",
   desc="Captura a tela para gerar quadros intermediários e amplia jogos em janela pequena para tela cheia. Nada é injetado nos jogos.",
-  nav_news="Novidades", nav_plans="Planos", nav_license="Licença", nav_discord="Discord oficial", lang_label="Idioma",
+  nav_news="Novidades", nav_plans="Planos", nav_license="Licença", nav_discord="Discord oficial", ocn="O overclock é por sua conta e risco. Saiba mais", lang_label="Idioma",
   h1="Deixe seus jogos <em>mais suaves</em>",
   lead="O SystemBoost captura a tela, gera quadros intermediários e amplia com nitidez jogos em janela pequena até o tamanho da sua tela. Nunca mexe nos arquivos ou na memória do jogo.",
   dl_win="Baixar para Windows", dl_winp="Baixar Windows portátil",
@@ -302,7 +302,7 @@ S["pt"] = dict(
 S["ru"] = dict(
   title="SystemBoost — более плавная картинка в играх",
   desc="Захватывает экран, создаёт промежуточные кадры и увеличивает игры в маленьком окне до полного экрана. Ничего не внедряет в игры.",
-  nav_news="Новости", nav_plans="Тарифы", nav_license="Лицензия", nav_discord="Официальный Discord", lang_label="Язык",
+  nav_news="Новости", nav_plans="Тарифы", nav_license="Лицензия", nav_discord="Официальный Discord", ocn="Разгон — на ваш собственный риск. Подробнее", lang_label="Язык",
   h1="Сделайте игры <em>плавнее</em>",
   lead="SystemBoost захватывает экран, создаёт промежуточные кадры и чётко увеличивает игры в маленьком окне до размера экрана. Файлы и память игры не затрагиваются.",
   dl_win="Скачать для Windows", dl_winp="Скачать портативную версию для Windows",
@@ -351,7 +351,7 @@ S["ru"] = dict(
 S["de"] = dict(
   title="SystemBoost — flüssigere Bewegung in deinen Spielen",
   desc="Erfasst den Bildschirm, erzeugt Zwischenbilder und skaliert kleine Fensterspiele auf Vollbild. Nichts wird in Spiele injiziert.",
-  nav_news="Neuigkeiten", nav_plans="Tarife", nav_license="Lizenz", nav_discord="Offizieller Discord", lang_label="Sprache",
+  nav_news="Neuigkeiten", nav_plans="Tarife", nav_license="Lizenz", nav_discord="Offizieller Discord", ocn="Übertakten auf eigene Verantwortung. Mehr erfahren", lang_label="Sprache",
   h1="Lass deine Spiele <em>flüssiger</em> aussehen",
   lead="SystemBoost erfasst den Bildschirm, erzeugt Zwischenbilder und skaliert kleine Fensterspiele scharf auf deine Bildschirmgröße. Spieldateien und Speicher bleiben unberührt.",
   dl_win="Für Windows herunterladen", dl_winp="Windows portabel herunterladen",
@@ -400,7 +400,7 @@ S["de"] = dict(
 S["fr"] = dict(
   title="SystemBoost — des jeux plus fluides",
   desc="Capture l’écran pour générer des images intermédiaires et agrandit les jeux en petite fenêtre en plein écran. Rien n’est injecté dans les jeux.",
-  nav_news="Actualités", nav_plans="Offres", nav_license="Licence", nav_discord="Discord officiel", lang_label="Langue",
+  nav_news="Actualités", nav_plans="Offres", nav_license="Licence", nav_discord="Discord officiel", ocn="L'overclocking se fait à vos propres risques. En savoir plus", lang_label="Langue",
   h1="Des jeux <em>plus fluides</em>",
   lead="SystemBoost capture l’écran, génère des images intermédiaires et agrandit avec netteté les jeux en petite fenêtre à la taille de votre écran. Il ne touche jamais aux fichiers ni à la mémoire du jeu.",
   dl_win="Télécharger pour Windows", dl_winp="Télécharger Windows portable",

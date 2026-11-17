@@ -47,7 +47,7 @@ def index_body(L):
 <tr><td>{rows[0]}</td><td>{s["x2"]}</td><td class="p">{s["xp"]}</td><td class="u">{s["xu"]}</td><td class="b">{s["xu"]}</td></tr>
 <tr><td>{rows[1]}</td><td>{s["qf"]}</td><td class="p">{s["qp"]}</td><td class="u">{s["qp"]}</td><td class="b">{s["qp"]}</td></tr>'''
     table += "".join(f"<tr><td>{rows[i]}</td>{dot}{pd}{ud}{bd}</tr>" for i in (2, 3, 4, 5))
-    table += f"<tr><td>{rows[6]}</td>{n}{pd}{ud}{bd}</tr><tr><td>{rows[7]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[8]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[9]} {NV}</td>{n}{n}{ud}{bd}</tr>"
+    table += f"<tr><td>{rows[6]}</td>{n}{pd}{ud}{bd}</tr><tr><td>{rows[7]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[8]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[9]} {NV}<a class='ocn' href='license.html#oc'>{s['ocn']}</a></td>{n}{n}{ud}{bd}</tr>"
     table += "".join(f"<tr><td>{r}</td>{n}{n}{n}{bd}</tr>" for r in s["rb"])
     name = {"premium": ("prem", "p"), "ultra": ("ultra", "u"), "biz": ("biz", "b")}
     won = lambda v: f"₩{v:,}"
@@ -134,39 +134,55 @@ def parse_eula(path):
 # Which revision changed what, as listed in the agreement's own header lines (개정 시행일 ...). Only these marks are
 # added; the agreement text itself is rendered line by line from eula.txt / eula.en.txt as it is.
 R8, R9, R27 = "2026-12-08", "2026-12-09", "2027-01-01"
-# (article index from 0, paragraph) -> revisions
-REVS = {(1, "1"): (R9,),                                                      # Art. 2(1)
-        (2, "2"): (R9, R27), (2, "3"): (R8, R27), (2, "5"): (R9,), (2, "8"): (R9,), (2, "9"): (R9,),
-        (2, "10"): (R27,), (2, "11"): (R27,),                                 # Art. 3
-        (5, "1"): (R9,),                                                      # Art. 6(1)
-        (8, "2"): (R27,), (8, "5"): (R27,),                                   # Art. 9(2), 9(5)
-        (9, "3"): (R27,),                                                     # Art. 10(3)
-        (10, "2"): (R9,)}                                                     # Art. 11(2)
-# whole articles: Art. 1 (sales page, Windows program) and Art. 8 (personal information)
-REV_ARTICLES = {0: (R27,), 7: (R27,)}
+# (article number, paragraph) -> revisions. The article number is "2" for 제2조 / Article 2 and "6-2" for
+# 제6조의2 / Article 6-2, so an inserted article never moves the others' marks or anchors.
+REVS = {("2", "1"): (R9,),                                                    # Art. 2(1)
+        ("3", "2"): (R9, R27), ("3", "3"): (R8, R27), ("3", "5"): (R9,), ("3", "8"): (R9,), ("3", "9"): (R9,),
+        ("3", "10"): (R27,), ("3", "11"): (R27,),                             # Art. 3
+        ("6", "1"): (R9,),                                                    # Art. 6(1)
+        ("9", "2"): (R27,), ("9", "5"): (R27,),                               # Art. 9(2), 9(5)
+        ("10", "3"): (R27,),                                                  # Art. 10(3)
+        ("11", "2"): (R9,)}                                                   # Art. 11(2)
+# whole articles: Art. 1 (sales page, Windows program), Art. 6-2 (overclocking, new), Art. 8 (personal information),
+# Art. 12-2 (AMD components, new)
+REV_ARTICLES = {"1": (R27,), "6-2": (R27,), "8": (R27,), "12-2": (R27,)}
+
+def art_no(title):
+    # "제6조의2 (...)" or "Article 6-2 (...)" -> "6-2"; "제7조 (...)" or "Article 7 (...)" -> "7"
+    m = re.match(r"제(\d+)조(?:의(\d+))?\s|Article (\d+)(?:-(\d+))?\s", title + " ")
+    if not m: raise SystemExit(f"not an article heading: {title}")
+    n, sub = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    return n + ("-" + sub if sub else "")
+
+# Article 6-2 is linked from the plan table and the app as #oc; every other article is #a<number>.
+def art_id(no):
+    return "oc" if no == "6-2" else "a" + no
 
 def eula_html(secs, rev_label):
     out, toc, seen = [], [], set()
-    for k, s in enumerate(secs):
-        toc.append(f'<li><a href="#a{k+1}">{html.escape(s["t"])}</a></li>')
+    nos = [art_no(s["t"]) for s in secs]
+    if len(set(nos)) != len(nos): raise SystemExit(f"article numbers repeat: {nos}")
+    if set(REV_ARTICLES) - set(nos): raise SystemExit(f"revision marks point at missing articles: {sorted(set(REV_ARTICLES) - set(nos))}")
+    for no, s in zip(nos, secs):
+        toc.append(f'<li><a href="#{art_id(no)}">{html.escape(s["t"])}</a></li>')
         body = []
         for ln in s["l"]:
             imp = ln.startswith("! "); t = html.escape((ln[2:] if imp else ln).strip())
             m = re.match(r"(\d+)\.\s+(.*)", t)
-            changed = REVS.get((k, m.group(1))) if m else None
-            if changed: seen.add((k, m.group(1)))
+            changed = REVS.get((no, m.group(1))) if m else None
+            if changed: seen.add((no, m.group(1)))
             if m: t = f'<span class="no">{m.group(1)}.</span> {m.group(2)}'
             if changed: t += "".join(f' <span class="rev">{rev_label[r]}</span>' for r in changed)
             cls = "chg" if changed else ("imp" if imp else ("cont" if not m and body else ""))
             body.append(f'<p class="{cls}">{t}</p>' if cls else f"<p>{t}</p>")
-        marks = "".join(f' <span class="rev">{rev_label[r]}</span>' for r in REV_ARTICLES.get(k, ()))
-        out.append(f'<h2 id="a{k+1}">{html.escape(s["t"])}{marks}</h2>\n' + "\n".join(body))
+        marks = "".join(f' <span class="rev">{rev_label[r]}</span>' for r in REV_ARTICLES.get(no, ()))
+        out.append(f'<h2 id="{art_id(no)}">{html.escape(s["t"])}{marks}</h2>\n' + "\n".join(body))
     if seen != set(REVS): raise SystemExit(f"revision marks point at missing paragraphs: {sorted(set(REVS) - seen)}")
     return toc, "\n".join(out)
 
 LT = {
  "ko": dict(h1="사용권 계약 · 개인정보", sub='앱을 처음 실행할 때 보여 주는 사용권 계약과 같은 내용이에요. 앱의 설정 → "사용권 계약 보기"에서도 볼 수 있어요.',
-   revh="계약 개정 안내", revp='계약이 세 번 바뀌어요. 바뀐 조항에는 개정 날짜가 붙어 있어요.<br>• <b>2026년 12월 8일</b>: 카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요.<br>• <b>2026년 12월 9일</b>: 산업 플랜, 5대 · 10대 묶음 키, 플랜 이름에 맞춰 <a href="#a2">제2조 제1항</a>, <a href="#a3">제3조 제2항 · 제5항 · 제8항 · 제9항</a>, <a href="#a6">제6조 제1항</a>, <a href="#a11">제11조 제2항</a>이 바뀌어요. 프리미엄 플랜은 이름만 프로로 바뀌고 기능과 가격은 그대로예요. 묶음 키는 그날부터 팔아요.<br>• <b>2027년 1월 1일</b>: <a href="#a1">제1조</a>의 판매 페이지와 Windows용 프로그램, <a href="#a3">제3조 제2항 · 제3항의 해지와 환급 · 제10항 · 제11항</a>, <a href="#a8">제8조</a> 개인정보, <a href="#a9">제9조 제2항 · 제5항</a>, <a href="#a10">제10조 제3항</a>이 바뀌어요. 처음에는 꺼져 있는 사용 통계(제8조 제3항)도 여기에 들어 있어요.<br>앱을 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
+   revh="계약 개정 안내", revp='계약이 세 번 바뀌어요. 바뀐 조항에는 개정 날짜가 붙어 있어요.<br>• <b>2026년 12월 8일</b>: 카드 구독 결제를 위해 <a href="#a3">제3조 제3항</a>이 바뀌고, 카드 구독도 그날부터 팔아요. 그 전까지 산 키와 계좌이체 등 직접 결제로 산 키는 자동으로 결제되지 않아요.<br>• <b>2026년 12월 9일</b>: 산업 플랜, 5대 · 10대 묶음 키, 플랜 이름에 맞춰 <a href="#a2">제2조 제1항</a>, <a href="#a3">제3조 제2항 · 제5항 · 제8항 · 제9항</a>, <a href="#a6">제6조 제1항</a>, <a href="#a11">제11조 제2항</a>이 바뀌어요. 프리미엄 플랜은 이름만 프로로 바뀌고 기능과 가격은 그대로예요. 묶음 키는 그날부터 팔아요.<br>• <b>2027년 1월 1일</b>: <a href="#a1">제1조</a>의 판매 페이지와 Windows용 프로그램, <a href="#a3">제3조 제2항 · 제3항의 해지와 환급 · 제10항 · 제11항</a>, <a href="#a8">제8조</a> 개인정보, <a href="#a9">제9조 제2항 · 제5항</a>, <a href="#a10">제10조 제3항</a>이 바뀌고, <a href="#oc">제6조의2</a>(오버클럭 및 하드웨어 조정)와 <a href="#a12-2">제12조의2</a>(AMD 구성 요소)가 새로 생겨요. 처음에는 꺼져 있는 사용 통계(제8조 제3항)도 여기에 들어 있어요.<br>앱을 업데이트하면 바뀐 계약에 한 번 다시 동의해요.',
    rev="2026년 12월 8일 개정", rev9="2026년 12월 9일 개정", rev27="2027년 1월 1일 개정", toc="목차", imp="표시가 있는 조항(주황 테두리)은 꼭 읽어 주세요.",
    priv="개인정보 처리 안내", oss="오픈소스 라이선스", contact="판매자 정보와 문의",
    privsum="사용권 계약 제8조를 표로 정리했어요. 보내는 정보는 아래가 전부예요.",
@@ -186,7 +202,7 @@ LT = {
    own="만든 방법: 코드, 셰이더, 문서는 Anthropic Claude(claude.ai, Claude Code)를 써서 만들었고, 로고는 Anthropic Claude(claude.ai)로 만들었어요. AI 도구로 만든 부분에 저작권이 생기는지, 생긴다면 누구에게 있는지는 확인하지 않았어요. 이 고지로 저작권을 주장하지 않아요.",
    contactp=f'판매자: DOKKU<br>라이선스, 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
  "en": dict(h1="License Agreement · Privacy", sub='This is the same agreement the app shows on first start. You can read it again in the app under Settings → "View license agreement".',
-   revh="Upcoming revisions", revp='The agreement changes three times. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>• <b>January 1, 2027</b>: the sales page and the Windows program in <a href="#a1">Article 1</a>; cancellation and refunds in <a href="#a3">Article 3(3)</a>; <a href="#a3">Article 3(2), (10) and (11)</a>; personal information in <a href="#a8">Article 8</a>; <a href="#a9">Article 9(2) and (5)</a>; and <a href="#a10">Article 10(3)</a> change. This includes usage statistics that start off (Article 8(3)).<br>After updating the app you accept the revised agreement once.',
+   revh="Upcoming revisions", revp='The agreement changes three times. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>• <b>January 1, 2027</b>: the sales page and the Windows program in <a href="#a1">Article 1</a>; cancellation and refunds in <a href="#a3">Article 3(3)</a>; <a href="#a3">Article 3(2), (10) and (11)</a>; personal information in <a href="#a8">Article 8</a>; <a href="#a9">Article 9(2) and (5)</a>; and <a href="#a10">Article 10(3)</a> change, and <a href="#oc">Article 6-2</a> (overclocking and hardware tuning) and <a href="#a12-2">Article 12-2</a> (AMD components) are added. This includes usage statistics that start off (Article 8(3)).<br>After updating the app you accept the revised agreement once.',
    rev="Revised Dec 8, 2026", rev9="Revised Dec 9, 2026", rev27="Revised Jan 1, 2027", toc="Contents", imp="Please read the marked articles (orange border) carefully.",
    priv="Privacy summary", oss="Open-source licenses", contact="Seller and contact",
    privsum="Article 8 of the agreement as a table. This is everything the app sends.",

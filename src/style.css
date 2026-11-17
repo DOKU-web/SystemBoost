@@ -57,6 +57,7 @@ th{color:var(--mut);font-weight:500;font-size:14px}td.p{color:var(--or)}td.n{col
 .tier.ultra{border-color:#4b2f6e;background:linear-gradient(160deg,#1c1626,#141416)}.tier.ultra .tp{color:var(--ul)}
 th.ph{color:var(--or)}th.uh{color:var(--ul)}td.u{color:var(--ul)}
 .w{display:inline-block;font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.ocn{display:block;font-size:12px;margin-top:2px}
 .tbl{overflow-x:auto;padding:6px 16px 4px;margin-top:12px}.tbl table{min-width:560px}
 .fine{color:var(--mut);font-size:14px;margin:14px 0 42px;padding-left:18px}.fine li{margin:4px 0}.fine b{color:var(--txt)}
 /* license page */
