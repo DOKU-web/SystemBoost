@@ -62,7 +62,7 @@ const adm = async (path, body) => {
   return { status: r.status, ...(await r.json()) };
 };
 const device = n => String(n).padStart(32, "0");
-const okUser = (id, extra) => ({ id, password: "password123", agree: true, age14: true, ...extra });
+const okUser = (id, extra) => ({ id, password: "pass-word-123", agree: true, age14: true, ...extra });
 const payload = key => JSON.parse(Buffer.from(key.split(".")[0], "base64url"));
 
 // sign-up: what it refuses
@@ -72,6 +72,10 @@ assert.equal((await send("/account/signup", okUser("admin"))).error, "id");
 assert.equal((await send("/account/signup", { ...okUser("gooduser"), password: "short" })).error, "password");
 assert.equal((await send("/account/signup", { ...okUser("gooduser"), password: "gooduser" })).error, "password");
 assert.equal((await send("/account/signup", { ...okUser("gooduser"), password: "x".repeat(73) })).error, "password");
+// the rule for new passwords since accounts v2: 10 characters at least, not a common one (older 8+ passwords still log in)
+assert.equal((await send("/account/signup", { ...okUser("gooduser"), password: "nine-char" })).error, "password");
+assert.equal((await send("/account/signup", { ...okUser("gooduser"), password: "password123" })).error, "password");
+assert.equal((await send("/account/signup", { ...okUser("gooduser"), password: "QwertyUiop" })).error, "password");
 assert.equal((await send("/account/signup", { ...okUser("gooduser"), agree: false })).error, "consent");
 assert.equal((await send("/account/signup", { ...okUser("gooduser"), age14: undefined })).error, "consent");
 
@@ -85,18 +89,18 @@ assert.equal((await send("/account/signup", okUser("ALICE_1"))).error, "taken");
 
 // what is stored: no password, no recovery code, no token, no IP
 const [row] = await rows("SELECT * FROM public.accounts WHERE id = 'alice_1'");
-assert.ok(!JSON.stringify(row).includes("password123"));
+assert.ok(!JSON.stringify(row).includes("pass-word-123"));
 assert.ok(!JSON.stringify(row).includes(a.recovery));
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_sessions WHERE token = $1", a.token), 0);
 assert.ok(!JSON.stringify(await rows("SELECT * FROM public.account_hits")).includes("10.0.0."));
 assert.match(row.hash, /^\$2[abxy]\$10\$/);   // bcrypt
-for (const call of calls) assert.ok(!call.includes("password123") && !call.includes(a.recovery) && !call.includes("10.0.0."));   // what leaves the Worker
+for (const call of calls) assert.ok(!call.includes("pass-word-123") && !call.includes(a.recovery) && !call.includes("10.0.0."));   // what leaves the Worker
 assert.match(row.consent, /^2026-11-12 /);   // CONSENT: the sign-up text of AccountPage.SignUp
 
 // login and session
 assert.equal((await send("/account/login", { id: "alice_1", password: "nope" })).error, "wrong");
-assert.equal((await send("/account/login", { id: "nobody", password: "password123" })).error, "wrong");
-const l = await send("/account/login", { id: "ALICE_1", password: "password123" });
+assert.equal((await send("/account/login", { id: "nobody", password: "pass-word-123" })).error, "wrong");
+const l = await send("/account/login", { id: "ALICE_1", password: "pass-word-123" });
 assert.equal(l.status, 200);
 assert.equal((await send("/account/me", undefined, l.token)).id, "alice_1");
 assert.equal((await send("/account/me", undefined, "f".repeat(64))).error, "session");
@@ -107,7 +111,7 @@ assert.equal((await send("/account/me", undefined, a.token)).id, "alice_1");   /
 
 // five sessions at most
 const sessions = [];
-for (let i = 0; i < 7; i++) sessions.push((await send("/account/login", { id: "alice_1", password: "password123" })).token);
+for (let i = 0; i < 7; i++) sessions.push((await send("/account/login", { id: "alice_1", password: "pass-word-123" })).token);
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_sessions WHERE account = 'alice_1'"), 5);
 assert.equal((await send("/account/me", undefined, sessions[6])).id, "alice_1");
 assert.equal((await send("/account/me", undefined, a.token)).error, "session");   // the oldest went
@@ -116,14 +120,14 @@ a.token = sessions[6];
 // wrong passwords lock the account, the right one included, for a while
 await send("/account/signup", okUser("bobby"));
 for (let i = 0; i < 5; i++) assert.equal((await send("/account/login", { id: "bobby", password: "wrong-pass" })).error, "wrong");
-assert.equal((await send("/account/login", { id: "bobby", password: "password123" })).error, "locked");
+assert.equal((await send("/account/login", { id: "bobby", password: "pass-word-123" })).error, "locked");
 await run("UPDATE public.accounts SET locked_until = NULL WHERE id = 'bobby'");
-assert.equal((await send("/account/login", { id: "bobby", password: "password123" })).status, 200);
+assert.equal((await send("/account/login", { id: "bobby", password: "pass-word-123" })).status, 200);
 
 // one address: wrong tries, then sign-ups
 const ip = "203.0.113.9";
 for (let i = 0; i < 20; i++) await send("/account/login", { id: "nobody", password: "x" }, null, ip);
-assert.equal((await send("/account/login", { id: "alice_1", password: "password123" }, null, ip)).error, "busy");
+assert.equal((await send("/account/login", { id: "alice_1", password: "pass-word-123" }, null, ip)).error, "busy");
 const ip2 = "203.0.113.10";
 for (let i = 0; i < 5; i++) assert.equal((await send("/account/signup", okUser("many" + i), null, ip2)).status, 200);
 assert.equal((await send("/account/signup", okUser("many9"), null, ip2)).error, "busy");
@@ -175,12 +179,12 @@ assert.equal((await send("/referral", { code: c2, device: device(109) })).error,
 // a new password ends the sessions; the old one and the old recovery code stop working
 const b0 = await send("/account/signup", okUser("carol"));
 assert.equal((await send("/account/password", { password: "wrong-pass", next: "newpassword1" }, b0.token)).error, "wrong");
-assert.equal((await send("/account/password", { password: "password123", next: "x" }, b0.token)).error, "password");
-const b1 = await send("/account/password", { password: "password123", next: "newpassword1" }, b0.token);
+assert.equal((await send("/account/password", { password: "pass-word-123", next: "x" }, b0.token)).error, "password");
+const b1 = await send("/account/password", { password: "pass-word-123", next: "newpassword1" }, b0.token);
 assert.equal(b1.status, 200);
 assert.equal((await send("/account/me", undefined, b0.token)).error, "session");
 assert.equal((await send("/account/me", undefined, b1.token)).id, "carol");
-assert.equal((await send("/account/login", { id: "carol", password: "password123" })).error, "wrong");
+assert.equal((await send("/account/login", { id: "carol", password: "pass-word-123" })).error, "wrong");
 assert.equal((await send("/account/recover", { id: "carol", recovery: b0.recovery, next: "newpassword2" })).error, "wrong");
 
 // recovery
@@ -248,11 +252,11 @@ assert.equal((await send("/account/ticket", { order: "SB-AAAA-AAAA" }, t1.token)
 
 // leaving: the password is needed, the record goes, the one they invited keeps their account
 assert.equal((await send("/account/delete", { password: "wrong-pass" }, a.token)).error, "wrong");
-assert.equal((await send("/account/delete", { password: "password123" }, a.token)).ok, true);
+assert.equal((await send("/account/delete", { password: "pass-word-123" }, a.token)).ok, true);
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.accounts WHERE id = 'alice_1'"), 0);
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_sessions WHERE account = 'alice_1'"), 0);
 assert.equal((await rows("SELECT invited_by FROM public.accounts WHERE id = 'friend1'"))[0].invited_by, null);
-assert.equal((await send("/account/login", { id: "alice_1", password: "password123" })).error, "wrong");
+assert.equal((await send("/account/login", { id: "alice_1", password: "pass-word-123" })).error, "wrong");
 assert.equal((await send("/account/signup", okUser("friend9", { invite: c2, device: device(110) }))).error, "unknown");
 // a left id is not handed to somebody else (privacy L7): only a one-way value of it stays, never the id
 assert.equal((await send("/account/signup", okUser("alice_1"))).error, "taken");
@@ -260,7 +264,7 @@ assert.equal((await send("/account/signup", okUser("ALICE_1 "))).error, "taken",
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_gone"), 1);
 assert.ok(!JSON.stringify(await rows("SELECT * FROM public.account_gone")).includes("alice"));
 // a wrong session still says "session", and nothing is marked gone
-assert.equal((await send("/account/delete", { password: "password123" }, "ef".repeat(32))).error, "session");
+assert.equal((await send("/account/delete", { password: "pass-word-123" }, "ef".repeat(32))).error, "session");
 assert.equal(await count("SELECT COUNT(*) AS n FROM public.account_gone"), 1);
 
 // the dashboard removes a member too, and keeps a log of who did what without a password or code
