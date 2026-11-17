@@ -132,7 +132,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
   var TX = {
     ko: {
       title: "SystemBoost 고객센터", other: "English", lead: "자주 묻는 질문과 환불 안내를 보고, 앱 없이도 문의를 남길 수 있어요.",
-      about: "지원 환경: 현재 윈도우만 지원해요 · 출시일: 2026년 12월 9일",
+      about: "지원 환경: 현재 윈도우만 지원해요",
       // Only the names this page and the default FAQ actually show (a FAQ written on the dashboard may add others).
       trademark: "Windows(윈도우)는 Microsoft 그룹 회사의 상표예요. Cloudflare, Supabase, Lemon Squeezy는 각 소유자의 상표이고, 판매자가 쓰는 서비스를 가리키려고만 써요. SystemBoost는 Microsoft가 만들거나 승인한 제품이 아니에요.",
       faq: "자주 묻는 질문", refund: "환불 · 청약철회", seller: "판매자 정보", ask: "문의하기", mine: "내 문의", loading: "불러오는 중…",
@@ -195,7 +195,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     },
     en: {
       title: "SystemBoost Support", other: "한국어", lead: "Read the FAQ and the refund policy, and send a request without the app.",
-      about: "Supported system: Windows only for now · Release date: December 9, 2026",
+      about: "Supported system: Windows only for now",
       trademark: "Windows is a trademark of the Microsoft group of companies. Cloudflare, Supabase and Lemon Squeezy are trademarks of their owners, named only to identify services the seller uses. SystemBoost is not made or endorsed by Microsoft.",
       faq: "FAQ", refund: "Refunds and withdrawal", seller: "Seller", ask: "Send a request", mine: "My requests", loading: "Loading…",
       privacy: "Privacy policy", privacyMore: "Details are in the privacy policy",

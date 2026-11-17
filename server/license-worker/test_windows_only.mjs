@@ -40,8 +40,8 @@ noMac("announcement templates", tpl[1]);
 assert.ok(tpl[1].includes("🪟 Windows (설치판)") && tpl[1].includes("🪟 Windows (포터블)"));
 
 // 3. /help: Windows only, the release date, the trademark line, in both languages
-for (const s of ["지원 환경: 현재 윈도우만 지원해요 · 출시일: 2026년 12월 9일",
-                 "Supported system: Windows only for now · Release date: December 9, 2026",
+for (const s of ["지원 환경: 현재 윈도우만 지원해요",
+                 "Supported system: Windows only for now",
                  "Windows(윈도우)는 Microsoft 그룹 회사의 상표예요.",
                  "Windows is a trademark of the Microsoft group of companies.",
                  '<p class="m" data-t="about"></p>', '<footer class="m" data-t="trademark"></footer>'])
