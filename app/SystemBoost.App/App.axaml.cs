@@ -41,5 +41,9 @@ public partial class App : Application
         Services.Updater.Start();                     // direct-download builds: check GitHub Releases
         Services.Telemetry.Start(main.UsageNow);      // usage statistics, unless turned off in Settings
         Services.Support.Start();                     // replies to this PC's support tickets, only while one is open
+        // The overclocking consent or withdrawal is also kept on a signed-in member's account (EULA Article 6-2(6)).
+        // Signed out: nothing is sent. The local record in consents.json never waits for this or depends on it.
+        Services.OcConsent.ServerRecord = (kind, version, gpu, app, withdraw) =>
+            Services.Account.RecordConsentAsync(kind, version, gpu, app, withdraw);
     }
 }
