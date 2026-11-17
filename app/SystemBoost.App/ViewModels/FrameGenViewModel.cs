@@ -1,4 +1,5 @@
 using SystemBoost.App.Services;
+using SystemBoost.App.Services.PcCheck;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -109,6 +110,50 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
     private string _capture = "wgc";
     public string Capture { get => _capture; set => Set(ref _capture, value); }
     public bool ShowCaptureOption => Platform.IsWindows;
+
+    // The choice PC 맞춤 추천 applied (data\fg-choice.json): the page starts from it, as far as the plan allows now.
+    // The page's 기본값 goes back to the plan's defaults and forgets it.
+    private static string ChoiceFile => System.IO.Path.Combine(Platform.DataDir, PcCheckStore.FgChoiceFile);
+
+    /// What the plan opens on this page, and its defaults (the page locks the same values).
+    public static FgAllowance Allowance => new(License.Allowed(PremiumFeature.AutoAndHighMultiplier),
+        License.Allowed(PremiumFeature.UltraMultiplier), License.Allowed(PremiumFeature.QualityMode), DefaultMode, DefaultMaxMul);
+
+    public FgChoice CurrentChoice => new(Mode, MaxMul, Quality);
+    /// The saved choice, null when there is none.
+    public static FgChoice? SavedChoice => PcCheckStore.LoadFgChoice(ChoiceFile);
+
+    /// Sets Mode, MaxMul and Quality to the choice as far as the plan allows and saves it, so the page starts from it.
+    /// Returns what was set. Throws when the file could not be written (the values are set anyway).
+    public FgChoice ApplyChoice(FgChoice choice)
+    {
+        var c = SetChoice(choice);
+        PcCheckStore.SaveFgChoice(ChoiceFile, c);
+        return c;
+    }
+
+    /// Undo of ApplyChoice: these values back, and fg-choice.json as it was before (saved null: no file).
+    public void RestoreChoice(FgChoice values, FgChoice? saved)
+    {
+        SetChoice(values);
+        if (saved == null) PcCheckStore.Delete(ChoiceFile);
+        else PcCheckStore.SaveFgChoice(ChoiceFile, FgChoiceRules.Fit(saved, Allowance));
+    }
+
+    /// The page's 기본값: the saved choice is forgotten (the page sets the plan's defaults itself).
+    public void ForgetChoice()
+    {
+        try { PcCheckStore.Delete(ChoiceFile); }
+        catch (Exception) { }   // read-only or locked: the next start still fits it to the plan
+    }
+
+    private FgChoice SetChoice(FgChoice choice)
+    {
+        var c = FgChoiceRules.Fit(choice, Allowance);
+        if (DlssMode) DlssMode = false;   // as 기본값 does: the DLSS switch holds its own values
+        Mode = c.Mode; MaxMul = c.MaxMul; Quality = c.Quality;
+        return c;
+    }
 
     /// Null where the app cannot limit a game (Mac). Set by the main window.
     public static IGameLimiter? Limiter { get; set; }
@@ -392,6 +437,7 @@ public sealed class FrameGenViewModel : ViewModelBase, IDisposable
 
     public FrameGenViewModel()
     {
+        if (SavedChoice is { } saved) (_mode, _maxMul, _quality) = FgChoiceRules.Fit(saved, Allowance);
         if (Platform.IsWindows) _ = RestoreLimitAtStartAsync();
         _engine.Stats += OnStats;
         _engine.Stalled += () => Status = "오류: " + StalledText;
