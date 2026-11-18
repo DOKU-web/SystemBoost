@@ -50,7 +50,8 @@ def header(s, page):
 def index_body(L):
     s = S[L]
     rows = s["r"]
-    NV = '<span class="w">NVIDIA</span>'   # GPU overclock / power limit: NVIDIA cards only
+    if len(rows) != 11: raise SystemExit(f"i18n {L}: the plans table needs 11 rows (r), got {len(rows)}")
+    NV = '<span class="w">NVIDIA · AMD</span>'   # GPU overclock / power limit: NVIDIA and AMD cards (app 0.8.18, ADLX)
     n = '<td class="n">—</td>'
     dot, pd, ud, bd = "<td>●</td>", '<td class="p">●</td>', '<td class="u">●</td>', '<td class="b">●</td>'
     table = f'''<tr><th>{s["th"]}</th><th>{s["free"]}</th><th class="ph">{s["prem"]}</th><th class="uh">{s["ultra"]}</th><th class="bh">{s["biz"]}</th></tr>
@@ -58,6 +59,7 @@ def index_body(L):
 <tr><td>{rows[1]}</td><td>{s["qf"]}</td><td class="p">{s["qp"]}</td><td class="u">{s["qp"]}</td><td class="b">{s["qp"]}</td></tr>'''
     table += "".join(f"<tr><td>{rows[i]}</td>{dot}{pd}{ud}{bd}</tr>" for i in (2, 3, 4, 5))
     table += f"<tr><td>{rows[6]}</td>{n}{pd}{ud}{bd}</tr><tr><td>{rows[7]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[8]}</td>{n}{n}{ud}{bd}</tr><tr><td>{rows[9]} {NV}<a class='ocn' href='license.html#oc'>{s['ocn']}</a></td>{n}{n}{ud}{bd}</tr>"
+    table += f"<tr><td>{rows[10]}</td>{n}{n}{ud}{bd}</tr>"   # PC Recommendations: Ultra and Business (PremiumPage, right after the GPU row)
     table += "".join(f"<tr><td>{r}</td>{n}{n}{n}{bd}</tr>" for r in s["rb"])
     name = {"premium": ("prem", "p"), "ultra": ("ultra", "u"), "biz": ("biz", "b")}
     won = lambda v: f"₩{v:,}"
