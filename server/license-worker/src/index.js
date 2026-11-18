@@ -1,6 +1,7 @@
 import { ADMIN_HTML } from "./admin_page.js";
 import { INVITE_DAYS, accounts } from "./accounts.js";
 import { accountWeb, keysResend } from "./account_web.js";
+import { accountsV2Open } from "./accounts_gate.js";
 import { mailOn } from "./mail.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
@@ -345,7 +346,8 @@ export default {
       if (req.method === "POST" && url.pathname === "/ping") return await ping(req, env);
       if (req.method === "POST" && url.pathname === "/referral") return await referral(req, env);
       if (url.pathname.startsWith("/account/")) return await accountWeb(req, url, env, ctx, ACCOUNT_DEPS);
-      if (req.method === "POST" && url.pathname === "/keys/resend") return await keysResend(req, env, ctx, ACCOUNT_DEPS);
+      // accounts v2 (POST /keys/resend among them) start at ACCOUNTS_V2_FROM; before it this route is not there (404 below)
+      if (req.method === "POST" && url.pathname === "/keys/resend" && accountsV2Open(env)) return await keysResend(req, env, ctx, ACCOUNT_DEPS);
       if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
       if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
       if (req.method === "GET" && url.pathname === "/privacy") return await privacyPage(url, env);

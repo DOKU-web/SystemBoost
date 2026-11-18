@@ -82,6 +82,7 @@ const env = {
     delete: async k => { kv.delete(k); md.delete(k); },
     list: async ({ prefix, limit = 1000 }) => ({ keys: [...kv.keys()].filter(k => k.startsWith(prefix)).sort().slice(0, limit).map(name => ({ name, metadata: md.get(name) })), list_complete: true }),
   },
+  ACCOUNTS_V2_FROM: "2026-01-01T00:00:00+09:00",   // accounts v2 have started (src/accounts_gate.js); test_accounts_gate.mjs tests before
   LICENSE_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }),
   ADMIN_TOKEN: "A".repeat(32),
   SUPABASE_URL: "https://project.supabase.example/",

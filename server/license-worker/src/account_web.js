@@ -5,7 +5,9 @@
 //    shows a page with a button (mail scanners open links); the form's POST does the work. No script, a nonce for the
 //    one style, no referrer, the token in the form body (not the address) once the page is open. Korean or English by
 //    ?lang= or Accept-Language. A token is never logged.
+//  - Before accounts v2 start (ACCOUNTS_V2_FROM, src/accounts_gate.js): legacyWeb(), the /account/* of 2026-11-13.
 import { accounts, cleanEmail } from "./accounts.js";
+import { accountsV2Open } from "./accounts_gate.js";
 import { mailOn, sendMail } from "./mail.js";
 import { ipBucket } from "./support.js";
 
@@ -35,6 +37,7 @@ function fromRequest(req, url, b) {
 /** /account/*. deps (index.js): signup and reward (아이디 sign-up with referral gifts, invite reward key), and the
  *  licence key reads accounts() needs (keyRecord, readKey, emailKeyId, isSellerCode). */
 export async function accountWeb(req, url, env, ctx, deps = {}) {
+  if (!accountsV2Open(env)) return legacyWeb(req, url, env, deps);
   const action = url.pathname.slice("/account/".length);
   if (PAGES.includes(action)) {
     if (req.method === "GET") return page(req, url, env, ctx, deps, action, null);
@@ -51,6 +54,23 @@ export async function accountWeb(req, url, env, ctx, deps = {}) {
           : await accounts(env, action, body, ctx, deps);
   const { status = 200, ...rest } = r;
   for (const k of Object.keys(rest)) if (k.startsWith("_")) delete rest[k];   // the pages' own hints
+  return json(rest, status);
+}
+
+// Before accounts v2 start: /account/* as the server of 2026-11-13 (commit 776dd71) had it. Its nine actions, with only
+// the address and the session taken from the request; anything else (the v2 actions, "features", the pages for mailed
+// links) is its 404 {"error": "not found"}. The app reads that 404 from "features" as an older server: no v2 parts.
+async function legacyWeb(req, url, env, deps) {
+  const action = url.pathname.slice("/account/".length);
+  if (!OLD_ACTIONS.includes(action)) return json({ error: "not found" }, 404);
+  let body = {};
+  if (req.method === "POST") { const b = await req.json().catch(() => null); body = b && typeof b === "object" ? b : {}; }   // as then
+  body.ip = req.headers.get("CF-Connecting-IP") || "unknown";
+  body.token = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
+  const r = action === "signup" && deps.signup ? await deps.signup(env, body)
+          : action === "reward" && deps.reward ? await deps.reward(env, body)
+          : await accounts(env, action, body);
+  const { status = 200, ...rest } = r;
   return json(rest, status);
 }
 
