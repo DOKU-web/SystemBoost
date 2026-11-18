@@ -24,6 +24,8 @@
 -- The rights are stated for every table, old and new: RLS on with no policy, nothing for public/anon/authenticated,
 -- execute for service_role only; the check at the end stops with an error otherwise.
 --
+-- Security-log rows, a session's "last used" time and a wrong password's time (fail_at) are written only when the Worker
+-- asks ("log": "true"), which it does from accounts v2's start (ACCOUNTS_V2_FROM, 2027-01-01 00:00 KST), not before.
 -- Order: this file first, then deploy the Worker. A Worker from before accounts v2 keeps working with this SQL (its
 -- calls send no device, address or identifier hash; those are then left empty). The new Worker with the old SQL
 -- would answer the new actions with "unavailable".
@@ -180,15 +182,18 @@ begin
   perform public.account_session(_id, b->>'session', b);
 end $$;
 
--- A line of the security log. The raw address comes only from a Worker that sends it ("addr").
+-- A line of the security log, only when the Worker asks for one ("log": "true", which it sends from accounts v2's start,
+-- ACCOUNTS_V2_FROM). The raw address comes only from a Worker that sends it ("addr").
 create or replace function public.account_log(_id text, _event text, b jsonb) returns void
 language sql set search_path = '' as $$
   insert into public.account_security_log (account, event, ip, country, device)
-  values (_id, _event, left(coalesce(b->>'addr', ''), 64), left(coalesce(b->>'country', ''), 2), left(coalesce(b->>'dname', ''), 40))
+  select _id, _event, left(coalesce(b->>'addr', ''), 64), left(coalesce(b->>'country', ''), 2), left(coalesce(b->>'dname', ''), 40)
+  where coalesce(b->>'log', '') = 'true'
 $$;
 
 -- A wrong password, recovery code or 2-step code: counted for the address and the account. Five lock the account.
--- Misses more than a day old are forgotten, as for a login name nobody has (account_guard_missed).
+-- Misses more than a day old are forgotten, as for a login name nobody has (account_guard_missed). The time of a miss
+-- (fail_at) is kept only when the Worker asks ("log"); without it the misses add up as they did before accounts v2.
 create or replace function public.account_missed(a public.accounts, b jsonb) returns jsonb
 language plpgsql set search_path = '' as $$
 declare
@@ -196,7 +201,8 @@ declare
   lock boolean := n + 1 >= (b->>'loginTries')::integer;
 begin
   if b->>'ip' is not null then perform public.account_count('fail:' || (b->>'ip')); end if;
-  update public.accounts set fails = case when lock then 0 else n + 1 end, fail_at = now(),
+  update public.accounts set fails = case when lock then 0 else n + 1 end,
+    fail_at = case when coalesce(b->>'log', '') = 'true' then now() else a.fail_at end,
     locked_until = case when lock then now() + make_interval(mins => (b->>'lockMin')::integer) end
     where id = a.id;
   return public.account_fail(401, 'wrong');
@@ -606,7 +612,7 @@ begin
     if action = 'admin/recovery_reject' then
       update account_recovery set status = 'rejected', reason = left(b->>'reason', 200), decided = now() where id = req.id;
       delete from account_tokens where kind = 'cancel' and data->>'request' = req.id;
-      perform account_log(req.account, 'recovery_rejected', '{}'::jsonb);
+      perform account_log(req.account, 'recovery_rejected', '{"log": "true"}'::jsonb);
       return jsonb_build_object('ok', true, 'account', req.account);
     end if;
     if req.due > now() then return account_fail(409, '72시간 대기가 끝나지 않았어요'); end if;
@@ -629,7 +635,7 @@ begin
     end if;
     update account_recovery set status = 'approved', decided = now() where id = req.id;
     delete from account_tokens where kind = 'cancel' and data->>'request' = req.id;
-    perform account_log(a.id, 'recovery_approved', '{}'::jsonb);
+    perform account_log(a.id, 'recovery_approved', '{"log": "true"}'::jsonb);
     return jsonb_build_object('ok', true, 'account', a.id, 'email', a.email, 'lang', req.facts->>'lang');
   end if;
 
@@ -646,7 +652,9 @@ begin
   -- everything below needs a session
   select * into a from account_member(b->>'token');
   if a.id is null then return account_fail(401, 'session'); end if;
-  update account_sessions set last_seen = now() where token = b->>'token' and last_seen < now() - interval '10 minutes';
+  -- the device list's "last used" time, only when the Worker asks ("log", from accounts v2's start)
+  update account_sessions set last_seen = now()
+    where token = b->>'token' and last_seen < now() - interval '10 minutes' and coalesce(b->>'log', '') = 'true';
 
   if action = 'me' then
     return jsonb_build_object('id', a.id, 'created', account_ms(a.created), 'code', a.invite_code, 'invites', a.invites,
