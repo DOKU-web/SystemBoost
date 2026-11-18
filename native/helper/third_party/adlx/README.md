@@ -35,9 +35,10 @@ Downloading, copying or using the SDK counts as accepting it. Points that matter
 - §12: the SDK and information related to it are to be kept confidential.
 - §16: Texas law, courts of Travis County.
 
-The owner accepted the agreement on 2026-11-17. `build.ps1 -Adlx` turns SB_ADLX on; the default stays OFF, and the
-CI build does not pass it yet (0.8.17 ships without ADLX: Article 12-2 below binds earlier users only from
-2027-01-01, and the owner decides when a release includes ADLX). SystemBoost's EULA carries the §3 terms in Article 12-2
+The owner accepted the agreement on 2026-11-17. `build.ps1 -Adlx` turns SB_ADLX on; the local default stays OFF, and
+the CI build passes it from 0.8.18 (owner's decision, 2026-11-18). Article 12-2 below binds earlier users only from
+2027-01-01, so until then the app sends no ADLX command on a PC whose user has not agreed to Article 12-2 separately
+(Services/AmdTerms.cs; the date is not moved earlier). SystemBoost's EULA carries the §3 terms in Article 12-2
 ("AMD 구성 요소"), in force 2027-01-01 for people who agreed to an earlier version (EULA Article 13: 30 days'
 notice). Left out of Article 12-2 because they clash with a Korean consumer agreement: Schedule B's
 confidentiality, the user's indemnity, Texas law and courts, feedback licence and US government clauses.

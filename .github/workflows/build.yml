@@ -117,9 +117,10 @@ jobs:
           VPK_TOKEN: ${{ github.token }}
         run: |
           $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.6.0' }
-          # No -Adlx yet (Radeon driver features, AMD's ADLX licence accepted 2026-11-17): EULA Article 12-2 is in force
-          # only from 2027-01-01 for people who agreed to an earlier version. The owner decides when a release has it.
-          build\windows\build.ps1 -Version $v
+          # -Adlx: the Radeon driver features (AMD's ADLX licence accepted 2026-11-17; the owner chose to ship it from 0.8.18).
+          # EULA Article 12-2 binds earlier users only from 2027-01-01, so until then the app asks a Radeon user to agree
+          # to Article 12-2 before it sends any ADLX command (Services/AmdTerms.cs).
+          build\windows\build.ps1 -Version $v -Adlx
       - uses: actions/upload-artifact@v4
         with: { name: SystemBoost-Windows, path: 'dist/windows/Releases/**' }
       - uses: actions/upload-artifact@v4
