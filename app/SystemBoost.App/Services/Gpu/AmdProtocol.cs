@@ -11,6 +11,8 @@
 //   amd.tuning.keep / amd.tuning.status (active;confirmed;tempC;tripped) / amd.tuning.revert / amd.tuning.reset
 // Error words: no_amd, old_driver, unsupported, range, step, busy, failed, refused; off from a helper built without
 // ADLX (CMake SB_ADLX=OFF, the default while the owner decides on AMD's licence): amd.info answers status "off".
+// The status "terms" never comes from the helper: the app sent nothing because the separate consent to Article 12-2
+// of the licence agreement (AmdTerms) is still missing.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -36,7 +38,7 @@ public sealed record AmdGpuInfo(int Index, string Name, bool Integrated, bool At
                                 AmdSwitch AntiLag, AmdSwitch Chill, AmdSwitch Boost, AmdSwitch Afmf);
 
 /// Status: ok, no_dll, old_driver, no_gpu, failed, off (from the helper; off = built without ADLX);
-/// no_helper and bad_reply (from the app).
+/// no_helper, bad_reply and terms (from the app; terms: nothing was sent, AmdTerms).
 public sealed record AmdInfo(string Status, string Adlx, string Driver, IReadOnlyList<AmdGpuInfo> Gpus, string Detail = "")
 {
     public static AmdInfo Of(string status, string detail = "") => new(status, "", "", Array.Empty<AmdGpuInfo>(), detail);
@@ -91,6 +93,8 @@ public static class AmdProtocol
     public const string Unchanged = " (바뀐 것 없음)";
     /// The helper was built without ADLX: no AMD driver features in this build (not the user's driver).
     public const string OffText = "AMD 드라이버 기능은 아직 준비 중이에요";
+    /// The separate consent to Article 12-2 is missing (AmdTerms): nothing was sent to the helper, nothing changed.
+    public const string TermsText = "AMD 구성 요소 조건(사용권 계약 제12조의2)에 동의하면 라데온 드라이버 기능을 쓸 수 있어요";
 
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static string N(int v) => v.ToString(Inv);
@@ -381,6 +385,7 @@ public static class AmdProtocol
         "no_dll" => "AMD 그래픽 드라이버를 찾지 못했어요. AMD Software(드라이버)를 설치해 주세요",
         "old_driver" => ErrorText("old_driver"),
         "off" => OffText,
+        "terms" => TermsText,
         "no_helper" when info.Detail.Length > 0 => info.Detail.Replace(Unchanged, ""),
         _ => "AMD 드라이버에서 정보를 읽지 못했어요",
     };

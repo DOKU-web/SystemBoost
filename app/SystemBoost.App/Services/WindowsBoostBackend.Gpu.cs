@@ -5,6 +5,9 @@
 //           switch is kept in Enabled and the settings are set when a game starts and put back when it ends.
 // Records go back by their kind whatever card is picked now: oc and nv through the NVIDIA code, amdoc and amd3d
 // through the AMD code.
+// Before 2027-01-01 KST a build with ADLX sends no amd.* command until the consent to Article 12-2 of the licence
+// agreement is on record (AmdTerms, AmdHost.AmdTermsOk). Until then the AMD card is found through the list of graphics
+// adapters instead of ADLX, and every AMD feature shows AmdProtocol.TermsText.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -30,6 +33,7 @@ public sealed partial class WindowsBoostBackend
         TuningPlan = License.PlanOf(PremiumFeature.Overclock),
         Choice = () => _s.AmdGpu,
         Consented = OcConsent.Valid,
+        AmdTermsOk = () => AmdTerms.Ok(DateTime.UtcNow),
         Log = Log,
         Notice = line => Notice?.Invoke(line),
         Changed = Publish,
@@ -48,30 +52,49 @@ public sealed partial class WindowsBoostBackend
     internal static bool AmdDriverPresent => File.Exists(System32("amdadlx64.dll"));
 
     // ------------------------------------------------------------ which card
-    /// Which card the GPU features are for (GpuSelection), decided once per run; again while AMD could not be read.
-    /// On a PC whose NVIDIA card NVML reads, nothing else is looked at.
+    // Whether the consent to Article 12-2 was in order when _gpuPick was decided: the pick is made again when that changes.
+    private bool _gpuPickTermsOk;
+
+    /// Which card the GPU features are for (GpuSelection), decided once per run; again while AMD could not be read, and
+    /// when the consent to Article 12-2 is given or withdrawn (or 2027-01-01 KST comes). On a PC whose NVIDIA card NVML
+    /// reads, nothing else is looked at. Without that consent ADLX is not asked: the list of graphics adapters
+    /// (FrameGenEngine.ListGpusAsync, DXGI) says whether an AMD card is there.
     public async Task<GpuVendor> GpuVendorAsync()
     {
-        if (_gpuPick is { } known) return known.Vendor;
+        bool termsOk = !Amd.WaitsForTerms;
+        if (_gpuPick is { } known && _gpuPickTermsOk == termsOk) return known.Vendor;
         bool nvidiaReads = Nvml.Read() != null;
         bool nvidiaDriver = File.Exists(System32("nvapi64.dll"));
         IReadOnlyList<AmdGpuInfo> amd = Array.Empty<AmdGpuInfo>();
         bool settled = true, amdOff = false;
+        var waiting = AmdSeen.None;
+        List<GpuItem>? adapters = null;
         if (!nvidiaReads && AmdDriverPresent)
         {
-            var info = await Amd.ReadInfoAsync();
-            amd = info.Gpus;
-            amdOff = info.Status == "off";   // a helper built without ADLX
-            settled = info.Status is not ("no_helper" or "bad_reply");
+            if (!termsOk)
+            {
+                adapters = await AdaptersAsync();
+                waiting = GpuSelection.SeenInAdapters(adapters.Select(g => (g.Name, g.Integrated)).ToList());
+            }
+            else
+            {
+                var info = await Amd.ReadInfoAsync();
+                amd = info.Gpus;
+                amdOff = info.Status == "off";   // a helper built without ADLX
+                settled = info.Status is not ("no_helper" or "bad_reply");
+            }
         }
         bool intel = false;
-        if (!nvidiaReads && !nvidiaDriver && amd.Count == 0 && !amdOff)
-            intel = (await FrameGenEngine.ListGpusAsync()).Any(g => g.Value != "same" && g.Name.Contains("Intel", StringComparison.OrdinalIgnoreCase));
-        var pick = GpuSelection.Choose(nvidiaReads, nvidiaDriver, amd, intel, amdOff);
+        if (!nvidiaReads && !nvidiaDriver && amd.Count == 0 && !amdOff && waiting == AmdSeen.None)
+            intel = (adapters ?? await AdaptersAsync()).Any(g => g.Name.Contains("Intel", StringComparison.OrdinalIgnoreCase));
+        var pick = GpuSelection.Choose(nvidiaReads, nvidiaDriver, amd, intel, amdOff, waiting);
         if (pick.Vendor == GpuVendor.Amd) Amd.Select(pick.AmdIndex);
-        if (settled) _gpuPick = pick;
+        if (settled) (_gpuPick, _gpuPickTermsOk) = (pick, termsOk);
         return pick.Vendor;
     }
+
+    // The graphics adapters the frame generation engine lists, without its "화면 GPU (기본)" entry.
+    private static async Task<List<GpuItem>> AdaptersAsync() => (await FrameGenEngine.ListGpusAsync()).Where(g => g.Value != "same").ToList();
 
     private async Task<IGpuVendorBackend> GpuAsync() => await GpuVendorAsync() == GpuVendor.Amd ? Amd : Nvidia;
 
@@ -220,6 +243,59 @@ public sealed partial class WindowsBoostBackend
         else factory = await NvidiaFactoryAsync();
         parts.Add(factory);
         return string.Join(" · ", parts);
+    }
+
+    // ------------------------------------------------------------ AMD, the consent to Article 12-2 (AmdTerms)
+    /// No amd.* command is sent because the consent to Article 12-2 is missing (before 2027-01-01 KST, ADLX builds only).
+    /// Says nothing about the card: the GPU page shows the button only where the AMD card's TermsText shows.
+    public bool AmdWaitsForTerms => Amd.WaitsForTerms;
+
+    /// After the consent to Article 12-2 was recorded: the card is looked at again, now with ADLX, so the GPU page shows
+    /// its features without a restart. A record an earlier run left in boost-state.json, kept while the consent was
+    /// missing, goes back the way the next start puts it back (RecoverTuningAsync, RecoverProfileAsync).
+    public async Task AmdTermsAgreedAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            _gpuPick = null;
+            if (await GpuVendorAsync() == GpuVendor.Amd && !Amd.WaitsForTerms)
+            {
+                await Amd.RecoverTuningAsync();
+                await Amd.RecoverProfileAsync();
+            }
+            Save();
+        }
+        catch (Exception e) { Log("AMD 그래픽카드를 다시 확인하지 못했어요: " + e.Message); }
+        finally { _gate.Release(); Publish(); }
+    }
+
+    /// '동의 철회' of the consent to Article 12-2. What the AMD features have on goes back first, through the switches'
+    /// own paths: gpu.oc through its journal (as turning the switch off does), then the game profile switch
+    /// (GameProfileOffAsync). Only when nothing of theirs is left is the withdrawal recorded (record, which throws when it
+    /// could not be written); from then on no amd.* command is sent. When something could not go back, nothing is
+    /// recorded and the features stay usable. The line to show.
+    public async Task<string> WithdrawAmdTermsAsync(Action record)
+    {
+        var parts = new List<string>();
+        bool Tuned() => _s.Backups.Any(b => b.Kind == AmdProtocol.TuneKind);
+        bool Profile() => _s.Enabled.Contains(GameProfileId) || _s.Backups.Any(b => b.Kind == AmdProtocol.ProfileKind);
+        string Kept() => string.Join(" · ", parts.Append("켜져 있는 AMD 기능을 원래대로 돌리지 못해서 동의를 철회하지 않았어요"));
+        if (Tuned())
+        {
+            parts.Add($"{BoostCatalog.All.First(f => f.Id == "gpu.oc").Title}: " + await RevertAsync("gpu.oc"));
+            if (Tuned()) return Kept();
+        }
+        if (Profile())
+        {
+            parts.Add($"{BoostCatalog.All.First(f => f.Id == GameProfileId).Title}: " + await RevertAsync(GameProfileId));
+            if (Profile()) return Kept();
+        }
+        try { record(); }
+        catch (Exception e) { return string.Join(" · ", parts.Append("철회 기록을 저장하지 못했어요: " + e.Message)); }
+        _gpuPick = null;
+        Publish();
+        return string.Join(" · ", parts.Prepend("AMD 구성 요소 조건 동의를 철회했어요. 라데온 드라이버 기능을 껐어요"));
     }
 
     /// AMD Fluid Motion Frames is on in the driver. SystemBoost never turns it off; frame generation says so instead.
