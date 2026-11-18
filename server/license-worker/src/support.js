@@ -19,7 +19,9 @@
 //   budget, until 00:00 UTC), with Retry-After in seconds.
 //   GET  /help                            the same for people without the app (help_page.js)
 //   GET  /privacy                         the privacy policy (Korean; ?lang=en an English summary): privacy_page.js, made by
-//                                         build_privacy.mjs from privacy/*.md; its four blanks come from config:support
+//                                         build_privacy.mjs from privacy/*.md; its four blanks come from config:support.
+//                                         Before accounts v2 start (ACCOUNTS_V2_FROM): the policy of then (privacy_prev_page.js)
+//                                         with a notice of the change, and ?next=1 the new one dated from that start
 //   /admin/api/support*                   dashboard: list, read, reply, status, refund decisions, delete, config,
 //                                         feed (GET /admin/api/support/feed?after=<seq> -> {events, last, more}: the
 //                                         "새 소식" rows after that seq, at most 100; no after = the newest 20)
@@ -59,8 +61,10 @@
 // and anonymous writes also per /48 (LIMITS.anonPer48). The salt is SHA-256 of a fixed label and the server's
 // LICENSE_PRIVATE_KEY secret, so without that secret nobody can hash every IPv4 address back to the counter names.
 // Without the secret (local tests only) the salt is empty.
+import { accountsV2Day, accountsV2Open } from "./accounts_gate.js";
 import { HELP_HTML } from "./help_page.js";
 import { PRIVACY_HTML } from "./privacy_page.js";
+import { PRIVACY_PREV_HTML } from "./privacy_prev_page.js";
 import { TERMS_HTML } from "./terms_page.js";
 
 const DAY = 86400;
@@ -822,11 +826,47 @@ export function privacyBlanks(c, lang = "ko") {
   const day = !d ? "" : lang === "en" ? MONTHS[Number(d[2]) - 1] + " " + Number(d[3]) + ", " + d[1] : d[1] + "년 " + Number(d[2]) + "월 " + Number(d[3]) + "일";
   return { OWNER_NAME: s.rep || "", OWNER_EMAIL: s.email || "", SUPABASE_REGION: p.dbRegion || "", EFFECTIVE_DATE: day };
 }
+// The policy changes with accounts v2 (ACCOUNTS_V2_FROM, src/accounts_gate.js), announced 30 days ahead as the policy in
+// force promises. Before the start: that policy (privacy_prev_page.js, its blanks filled as always) with a box at the top
+// that links the new one, and ?next=1 the new one dated from the start (the seller's 시행일 does not count yet), saying the
+// policy of now applies until then. From the start: the new one, dated with the seller's 시행일 if it is on or after the
+// start's day, else with that day. Without a valid start there is no date to announce: no box.
+const dayText = (d, lang) => privacyBlanks({ privacy: { effectiveDate: d } }, lang).EFFECTIVE_DATE;
+const PRIVACY_NEXT = {
+  ko: { box: d => "개인정보 처리방침이 " + d + "에 바뀌어요.", link: "바뀌는 처리방침 미리 보기", now: "지금의 처리방침 보기",
+        until: d => d ? "이 처리방침은 " + d + "부터 시행해요. 그때까지는 지금의 개인정보 처리방침이 적용돼요."
+                      : "이 처리방침은 아직 시행하지 않아요. 지금은 지금의 개인정보 처리방침이 적용돼요." },
+  en: { box: d => "The privacy policy changes on " + d + ".", link: "Preview the new policy", now: "Read the current policy",
+        until: d => d ? "This policy takes effect on " + d + ". Until then the current privacy policy applies."
+                      : "This policy is not in effect yet. The current privacy policy applies for now." },
+};
+const privacyHref = (next, lang) => "/privacy" + (next ? "?next=1" + (lang === "en" ? "&amp;lang=en" : "") : lang === "en" ? "?lang=en" : "");
+const withNotice = (page, inner) =>
+  page.replace("</style>", ".notice{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin:18px 0}\n</style>")
+      .replace("<main>\n", '<main>\n<div class="notice"><p>' + inner + "</p></div>\n");
 export async function privacyPage(url, env) {
   const lang = lang2(url.searchParams.get("lang"));
-  const v = privacyBlanks(await supportConfig(env), lang);
+  const c = await supportConfig(env), v = privacyBlanks(c, lang), T = PRIVACY_NEXT[lang];
+  const start = accountsV2Day(env), next = url.searchParams.get("next") === "1";
+  let page;
+  if (accountsV2Open(env)) {
+    const own = /^\d{4}-\d{2}-\d{2}$/.test(c.privacy?.effectiveDate || "") ? c.privacy.effectiveDate : "";
+    v.EFFECTIVE_DATE = dayText(own >= start ? own : start, lang);
+    page = PRIVACY_HTML[lang];
+  } else if (next) {
+    const day = start && dayText(start, lang);
+    v.EFFECTIVE_DATE = day;
+    // the other language's link stays on the new policy
+    const other = lang === "en" ? ['<a href="/privacy" hreflang="ko">', '<a href="/privacy?next=1" hreflang="ko">']
+                                : ['<a href="/privacy?lang=en" hreflang="en">', '<a href="/privacy?next=1&amp;lang=en" hreflang="en">'];
+    page = withNotice(PRIVACY_HTML[lang].replace(other[0], other[1]),
+                      escHtml(T.until(day)) + ' <a href="' + privacyHref(false, lang) + '">' + escHtml(T.now) + "</a>");
+  } else {
+    page = !start ? PRIVACY_PREV_HTML[lang]
+         : withNotice(PRIVACY_PREV_HTML[lang], escHtml(T.box(dayText(start, lang))) + ' <a href="' + privacyHref(true, lang) + '">' + escHtml(T.link) + "</a>");
+  }
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  const html = PRIVACY_HTML[lang].replaceAll("__NONCE__", nonce)
+  const html = page.replaceAll("__NONCE__", nonce)
     .replace(/\{\{(OWNER_NAME|OWNER_EMAIL|SUPABASE_REGION|EFFECTIVE_DATE)\}\}/g,
              (_, k) => v[k] ? escHtml(v[k]) : '<span class="blank">' + PRIVACY_EMPTY[lang] + "</span>");
   return new Response(html, { headers: {

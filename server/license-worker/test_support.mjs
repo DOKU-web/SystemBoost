@@ -1076,8 +1076,10 @@ assert.ok(html.includes('<a id="privacyNav" href="/privacy" data-t="privacy"></a
   assert.ok(p1.html.includes("<h1>SystemBoost 개인정보 처리방침</h1>") && p1.html.includes('<h2 id="s2">제1조 처리하는 개인정보와 목적</h2>') && p1.html.includes('<a href="#s2">'));
   assert.ok(!p1.html.includes("{{"), "every blank is filled");
   const empty = '<span class="blank">' + PRIVACY_EMPTY.ko + "</span>";
-  assert.equal(p1.html.split(empty).length - 1, 5, "name, email, database location and the effective date (twice): 판매자가 아직 입력하지 않았어요");
-  assert.ok(p1.html.includes("개인정보 보호책임자: " + empty) && p1.html.includes("메일: " + empty) && p1.html.includes("<td>" + empty + "</td>") && p1.html.includes("시행일: " + empty));
+  assert.equal(p1.html.split(empty).length - 1, 3, "name, email and database location: 판매자가 아직 입력하지 않았어요");
+  assert.ok(p1.html.includes("개인정보 보호책임자: " + empty) && p1.html.includes("메일: " + empty) && p1.html.includes("<td>" + empty + "</td>"));
+  // no 시행일 in the dashboard: the policy is dated from accounts v2's start (env.ACCOUNTS_V2_FROM), twice (top and Article 13)
+  assert.equal(p1.html.split("시행일: 2026년 1월 1일").length - 1, 2, "the effective date is the start of accounts v2");
   // what the policy says about the code (src/index.js, src/support.js, src/stats.js, supabase/accounts.sql)
   for (const fact of ["마지막으로 틀린 뒤 15분", "보관 기간을 정하지 않았어요 — 판매자가 지울 때까지", "결제와 환불 문의는 3년, 그 밖의 문의는 1년", "마지막 연결 뒤 90일",
                       "마지막 요청 뒤 1시간까지", "<td>판매자 작업 기록</td><td>180일</td>", "주문이 마지막으로 바뀐 날부터 90일", "카드 결제 7일, 직접 결제 30일", "IP 주소를 저장하지 않아요"])
@@ -1105,7 +1107,7 @@ assert.ok(html.includes('<a id="privacyNav" href="/privacy" data-t="privacy"></a
             pe.html.includes("Email: help@example.com") && pe.html.includes("Database location: 대한민국"));
   assert.ok(p1.html.includes('<a href="/privacy?lang=en" hreflang="en">English summary</a>'));
   await adm("/support/config", { ...saved, privacy: { dbRegion: "", effectiveDate: "" } });
-  assert.ok((await page("?lang=en")).html.includes("Effective date: <span class=\"blank\">" + PRIVACY_EMPTY.en + "</span>"));
+  assert.ok((await page("?lang=en")).html.includes("Effective date: January 1, 2026"), "no 시행일: the start of accounts v2");
   assert.equal((await call("/privacy", { method: "POST" })).status, 404, "GET only");
   await adm("/support/config", saved);
 }
