@@ -5,6 +5,10 @@
 //           power limit and max clocks within ADLX's ranges and small raises per apply, auto tuning (Ultra),
 //           factory reset (every plan). Laptops and APUs: tuning shown switched off, desktop graphics cards only.
 //   Intel   no driver features yet.
+// Builds with ADLX, before 2027-01-01 KST: while the consent to Article 12-2 of the licence agreement is missing
+// (AmdTerms), the AMD card and the switches show AmdProtocol.TermsText with 'AMD 구성 요소 조건 보기 · 동의' under it
+// (AmdTermsDialog). Once agreed, the card is filled again with ADLX; '동의 철회' is offered until that date.
+// NVIDIA and Intel PCs, and builds without ADLX, never show any of it.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -33,8 +37,10 @@ internal static class GpuCards
     {
         if (WindowsBoostBackend.ReadGpu() != null) return Ui.Card(nvidia());   // GpuSelection: NVML reads it, so NVIDIA
         var holder = new ContentControl { Content = Ui.Text("그래픽카드를 확인하는 중…", "muted") };
+        bool shownWaiting = false;
         async void Fill()
         {
+            shownWaiting = b.AmdWaitsForTerms;
             var vendor = await b.GpuVendorAsync();
             holder.Content = vendor switch
             {
@@ -44,7 +50,83 @@ internal static class GpuCards
             };
         }
         Fill();
+        if (AmdBuild.DriverFeatures)
+        {
+            // the consent to Article 12-2 given or withdrawn: the card is looked at again (ADLX only once it is given);
+            // the date coming while the page was away shows the next time it is opened
+            AmdTerms.Changed += () => Dispatcher.UIThread.Post(() => { holder.Content = Ui.Text("그래픽카드를 확인하는 중…", "muted"); Fill(); });
+            holder.AttachedToVisualTree += (_, _) => { if (shownWaiting != b.AmdWaitsForTerms) Fill(); };
+        }
         return Ui.Card(holder);
+    }
+
+    // ------------------------------------------------------------ the consent to Article 12-2 (AmdTerms)
+    /// 'AMD 구성 요소 조건 보기 · 동의': Article 12-2 in AmdTermsDialog; agreed, the consent is recorded and the AMD card is
+    /// looked at again with ADLX (the page fills itself again through AmdTerms.Changed). The outcome in status.
+    private static async Task AskAmdTermsAsync(WindowsBoostBackend b, Control from, TextBlock status)
+    {
+        const string what = "AMD 구성 요소 조건";
+        if (TopLevel.GetTopLevel(from) is not Window owner) return;
+        if (!await new AmdTermsDialog(ask: true).ShowDialog<bool>(owner))
+        {
+            status.Text = $"{what}: 취소했어요 (바뀐 것 없음)";
+            return;
+        }
+        try { AmdTerms.RecordAgreement(); }
+        catch (Exception e)
+        {
+            status.Text = $"{what}: 동의 기록을 저장하지 못해서 라데온 드라이버 기능을 켜지 않았어요: {e.Message}";
+            return;
+        }
+        status.Text = $"{what}: 동의했어요. 라데온 드라이버 기능을 확인하는 중…";
+        await b.AmdTermsAgreedAsync();
+        status.Text = $"{what}: 동의했어요. 라데온 드라이버 기능을 쓸 수 있어요";
+    }
+
+    /// The button under every AMD TermsText: the card on the GPU page (primary) and the switches it turns off (a link).
+    private static Button AmdTermsButton(WindowsBoostBackend b, TextBlock status, bool link)
+    {
+        const string text = "AMD 구성 요소 조건 보기 · 동의";
+        var button = link ? Link(text) : Ui.Button(text, "primary");
+        button.HorizontalAlignment = HorizontalAlignment.Left;
+        button.Click += async (_, _) =>
+        {
+            button.IsEnabled = false;
+            try { await AskAmdTermsAsync(b, button, status); }
+            catch (Exception e) { status.Text = "AMD 구성 요소 조건: 실패했어요: " + e.Message; }
+            finally { button.IsEnabled = true; }
+        };
+        return button;
+    }
+
+    /// While a consent to Article 12-2 is in force before 2027-01-01 KST: the line saying so, '조건 보기' (read only)
+    /// and '동의 철회' (AmdTermsWithdrawDialog, then WithdrawAmdTermsAsync puts the AMD features back first).
+    private static Control AmdTermsLine(WindowsBoostBackend b, TextBlock status)
+    {
+        var line = new WrapPanel { Orientation = Orientation.Horizontal };
+        var text = Ui.Text("AMD 구성 요소 조건(사용권 계약 제12조의2)에 동의했어요.", "label");
+        text.VerticalAlignment = VerticalAlignment.Center;
+        text.Margin = new Thickness(0, 0, 8, 0);
+        var view = Link("조건 보기");
+        var withdraw = Link("동의 철회");
+        withdraw.Margin = new Thickness(16, 0, 0, 0);
+        line.Children.Add(text);
+        line.Children.Add(view);
+        line.Children.Add(withdraw);
+        view.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(view) is Window owner) await new AmdTermsDialog(ask: false).ShowDialog(owner);
+        };
+        withdraw.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(withdraw) is not Window owner || !await new AmdTermsWithdrawDialog().ShowDialog<bool>(owner)) return;
+            withdraw.IsEnabled = false;
+            status.Text = "AMD 구성 요소 조건: 처리하는 중…";
+            try { status.Text = "AMD 구성 요소 조건: " + await b.WithdrawAmdTermsAsync(AmdTerms.RecordWithdrawal); }
+            catch (Exception e) { status.Text = "AMD 구성 요소 조건: 실패했어요: " + e.Message; }
+            finally { withdraw.IsEnabled = true; }
+        };
+        return line;
     }
 
     // ------------------------------------------------------------ the overclocking notice (OcConsent)
@@ -141,24 +223,54 @@ internal static class GpuCards
     }
 
     /// The GPU page's switches this card cannot use stay visible, switched off, with the reason under them.
-    /// One that is on stays usable, so it can always be turned back.
-    public static async void GuardSwitches(WindowsBoostBackend b, IReadOnlyDictionary<string, (Border row, ToggleSwitch sw)> rows)
+    /// One that is on stays usable, so it can always be turned back. An AMD card waiting for the consent to Article 12-2
+    /// gets 'AMD 구성 요소 조건 보기 · 동의' under the reason; once it is given or withdrawn, the switches are looked at again.
+    public static void GuardSwitches(WindowsBoostBackend b, IReadOnlyDictionary<string, (Border row, ToggleSwitch sw)> rows, TextBlock status)
     {
-        try
+        var added = new List<(ToggleSwitch sw, StackPanel left, Control note)>();
+        async void Run()
         {
-            var caps = await b.GpuCapabilitiesAsync();
-            await Guard("gpu.driver", caps.GameProfile, caps.GameProfileNote);
-            await Guard("gpu.oc", caps.PowerLimit || caps.CoreClock || caps.MemClock, caps.TuningNote);
+            try
+            {
+                var caps = await b.GpuCapabilitiesAsync();
+                await Guard("gpu.driver", caps.GameProfile, caps.GameProfileNote);
+                await Guard("gpu.oc", caps.PowerLimit || caps.CoreClock || caps.MemClock, caps.TuningNote);
+            }
+            catch (Exception) { }
         }
-        catch (Exception) { }
 
         async Task Guard(string id, bool supported, string? note)
         {
             if (supported || !rows.TryGetValue(id, out var r) || await b.IsAppliedAsync(id)) return;
             r.sw.IsEnabled = false;
             if (r.row.Child is Grid g && g.Children[0] is StackPanel left)
-                left.Children.Add(Ui.Text(note ?? GpuCapabilities.NotOnThisCard, "muted", wrap: true));
+            {
+                var why = note ?? GpuCapabilities.NotOnThisCard;
+                Control shown = Ui.Text(why, "muted", wrap: true);
+                if (why == AmdProtocol.TermsText)
+                {
+                    var both = new StackPanel { Spacing = 2 };
+                    both.Children.Add(shown);
+                    both.Children.Add(AmdTermsButton(b, status, link: true));
+                    shown = both;
+                }
+                left.Children.Add(shown);
+                added.Add((r.sw, left, shown));
+            }
         }
+
+        Run();
+        if (!AmdBuild.DriverFeatures) return;
+        AmdTerms.Changed += () => Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var (sw, left, note) in added)
+            {
+                left.Children.Remove(note);
+                sw.IsEnabled = true;
+            }
+            added.Clear();
+            Run();
+        });
     }
 
     // ------------------------------------------------------------ AMD
@@ -167,9 +279,12 @@ internal static class GpuCards
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Text("오버클럭 / 전력 제한 값", "h2"));
         p.Children.Add(ConsentLine(b, status));
+        bool waiting = b.AmdWaitsForTerms;
+        if (!waiting && AmdTerms.WithdrawableNow) p.Children.Add(AmdTermsLine(b, status));
         if (b.AmdGpu is not { } first)
         {
             p.Children.Add(Ui.Text(b.AmdProblem ?? "AMD 드라이버에서 정보를 읽지 못했어요", "muted", wrap: true));
+            if (waiting) p.Children.Add(AmdTermsButton(b, status, link: false));   // nothing was asked of ADLX yet
             p.Children.Add(Untested());
             return p;
         }
