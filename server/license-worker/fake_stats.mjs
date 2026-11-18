@@ -1,12 +1,13 @@
 // For the tests: the Stats Durable Object (src/stats.js) on node:sqlite, behind a binding like env.STATS.
 // ctl.down = true makes every call fail (the object cannot be reached); ctl.calls counts calls.
 //   import { fakeStats } from "./fake_stats.mjs";  const st = fakeStats();  env.STATS = st.binding;
+// fakeStats(OtherStats): the same around another version's class (test_accounts_gate.mjs runs the server of 776dd71).
 import { DatabaseSync } from "node:sqlite";
 import { Stats } from "./src/stats.js";
 
-export function fakeStats() {
+export function fakeStats(StatsClass = Stats) {
   const db = new DatabaseSync(":memory:");
-  const obj = new Stats({ storage: { sql: { exec(query, ...args) {
+  const obj = new StatsClass({ storage: { sql: { exec(query, ...args) {
     if (!args.length && query.includes(";")) { db.exec(query); return { toArray: () => [], [Symbol.iterator]: () => [][Symbol.iterator]() }; }
     const st = db.prepare(query), rows = /^\s*SELECT/i.test(query) ? st.all(...args) : (st.run(...args), []);
     return { toArray: () => rows, [Symbol.iterator]: () => rows[Symbol.iterator]() };
