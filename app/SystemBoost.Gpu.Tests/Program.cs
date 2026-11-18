@@ -1,5 +1,5 @@
 // The AMD (ADLX) half of the app without a Radeon: AmdGpuBackend and AmdProtocol over a pretend sb_helper (FakeRadeon.cs);
-// the consent to the overclocking notice in ConsentTests.cs.
+// the consent to the overclocking notice in ConsentTests.cs; the consent to Article 12-2 (AmdTerms) in AmdTermsTests.cs.
 // dotnet run --project app/SystemBoost.Gpu.Tests -c Release   ->  exit code 1 when a check fails.
 using System;
 using System.Collections.Generic;
@@ -25,6 +25,8 @@ internal sealed class Rig
     public AmdGpuChoice Choice = new();
     /// Which card names have a consent to the overclocking notice (OcConsent.Valid in the app).
     public Func<string, bool> Consent = _ => true;
+    /// The consent to Article 12-2 is given or not needed (AmdTerms.Ok in the app).
+    public bool Terms = true;
     public bool Dll = true, Laptop, Allowed = true;
     public int Changed;
     public DateTime Now = new(2026, 11, 17, 3, 0, 0, DateTimeKind.Utc);
@@ -43,6 +45,7 @@ internal sealed class Rig
             TuningAllowed = () => Allowed,
             Choice = () => Choice,
             Consented = name => Consent(name),
+            AmdTermsOk = () => Terms,
             Log = Logs.Add,
             Notice = Notices.Add,
             Changed = () => Changed++,
@@ -898,6 +901,7 @@ internal static partial class Program
         });
 
         DefineConsent();   // ConsentTests.cs
+        DefineAmdTerms();   // AmdTermsTests.cs
     }
 
     private static AmdGpuInfo Gpu(int index, bool integrated) => new(index, integrated ? "AMD Radeon(TM) Graphics" : "AMD Radeon RX 7800 XT", integrated, true,

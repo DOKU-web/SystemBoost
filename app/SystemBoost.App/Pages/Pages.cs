@@ -151,7 +151,7 @@ public sealed class BoostPage : UserControl
         if (OperatingSystem.IsWindows() && backend is WindowsBoostBackend win)
         {
             foreach (var c in BoostExtras.For(category, win, status)) root.Children.Add(c);
-            if (category == BoostCategory.Gpu && backend.Connected) GpuCards.GuardSwitches(win, rows);   // what this card cannot do: shown off
+            if (category == BoostCategory.Gpu && backend.Connected) GpuCards.GuardSwitches(win, rows, status);   // what this card cannot do: shown off
             win.Changed += () => Dispatcher.UIThread.Post(() =>
             {
                 foreach (var (sw, id) in toggles) if (sw.IsEnabled) _ = Init(sw, backend, id);

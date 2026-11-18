@@ -9,6 +9,11 @@
 //   Profile  Anti-Lag on and Radeon Chill off while a game runs (ADLX 3D settings are global, not per game).
 // A helper built without ADLX (status "off") changes nothing: every feature shows AmdProtocol.OffText, and a record
 // left by a build with ADLX is kept, never retried with a prompt, and the user is told how to put the card back.
+// Without the separate consent to Article 12-2 of the licence agreement (AmdHost.AmdTermsOk false, AmdTerms) no amd.*
+// command goes to either helper at all, reads included (amd.info starts ADLX too): every feature shows
+// AmdProtocol.TermsText the way the "off" build shows OffText, and a record in boost-state.json is kept until the
+// consent is given (or 2027-01-01 KST), the user told. Only what never needed the helper still happens (a record whose
+// driver is gone, or that cannot be read, is dropped).
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -35,6 +40,9 @@ internal sealed class AmdHost
     /// A consent to the current overclocking notice is on record for the card of this name (OcConsent.Valid).
     /// No consent unless the app or a test says so.
     public Func<string, bool> Consented { get; init; } = _ => false;
+    /// The separate consent to Article 12-2 is given or not needed (AmdTerms.Ok). False: no amd.* command is sent.
+    /// True unless the app or a test says otherwise, so a build without the gate behaves as before.
+    public Func<bool> AmdTermsOk { get; init; } = () => true;
     public Action<string> Log { get; init; } = _ => { };
     public Action<string> Notice { get; init; } = _ => { };
     /// Toggles or the list below them changed.
@@ -44,12 +52,16 @@ internal sealed class AmdHost
 
 /// Dropped: the card or driver is gone, and the tuning with it: only the record was removed.
 /// Unavailable: this helper has no ADLX (status "off"), so the record is kept for a build that has it.
-internal enum AmdPutBack { Nothing, AlreadyBack, Reverted, Failed, Dropped, Unavailable }
+/// WaitsForTerms: the consent to Article 12-2 is missing, so nothing was sent and the record is kept until it is given.
+internal enum AmdPutBack { Nothing, AlreadyBack, Reverted, Failed, Dropped, Unavailable, WaitsForTerms }
 
 internal sealed class AmdGpuBackend : IGpuVendorBackend
 {
     public const int ConfirmSeconds = 25;   // the helper gives up at 30
     public const string Untested = "아직 실제 라데온 PC에서 시험하지 않음";
+    /// A record left by an earlier run while the consent to Article 12-2 is missing: kept, and the user told once at start.
+    public const string TuningWaitsText = "지난번에 바꾼 AMD 그래픽카드 설정(전력·클럭)이 남아 있어요. GPU · 오버클럭 화면에서 AMD 구성 요소 조건(사용권 계약 제12조의2)에 동의하면 원래대로 돌릴 수 있어요. 동의하지 않을 때는 AMD Software의 튜닝 화면에서 초기화해 주세요";
+    public const string ProfileWaitsText = "지난번 게임 중에 바꾼 AMD 3D 설정(Anti-Lag·Radeon Chill)이 남아 있어요. GPU · 오버클럭 화면에서 AMD 구성 요소 조건(사용권 계약 제12조의2)에 동의하면 원래대로 돌릴 수 있어요. 동의하지 않을 때는 AMD Software에서 직접 확인해 주세요";
 
     private readonly IHelperChannel _read, _admin;
     private readonly IGpuJournal _journal;
@@ -69,10 +81,13 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
 
     public GpuVendor Vendor => GpuVendor.Amd;
     public string Name => Gpu?.Name ?? "";
-    /// The last amd.info read, null before the first.
-    public AmdInfo? Info => _info;
-    /// The card the features are for, from the last read.
-    public AmdGpuInfo? Gpu => _info?.Gpus.FirstOrDefault(g => g.Index == _index) ?? (_info is { } i ? AmdProtocol.Pick(i.Gpus) : null);
+    /// The separate consent to Article 12-2 is missing while it is still asked: nothing goes to the helper.
+    public bool WaitsForTerms => !_host.AmdTermsOk();
+    /// The last amd.info read, null before the first; status "terms" while WaitsForTerms (an earlier read is not shown).
+    public AmdInfo? Info => WaitsForTerms ? AmdInfo.Of("terms") : _info;
+    /// The card the features are for, from the last read. Null while WaitsForTerms.
+    public AmdGpuInfo? Gpu => WaitsForTerms ? null
+        : _info?.Gpus.FirstOrDefault(g => g.Index == _index) ?? (_info is { } i ? AmdProtocol.Pick(i.Gpus) : null);
     /// When the 25-second confirm window ends; null when nothing waits for '유지'.
     public DateTime? ConfirmBy { get; private set; }
     public int TempC { get; private set; } = -1;
@@ -106,10 +121,11 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
         return e == null ? (_read, null) : (null, e);
     }
 
-    /// amd.info, fresh. Starts no helper when amdadlx64.dll is not in System32.
+    /// amd.info, fresh. Starts no helper when amdadlx64.dll is not in System32, nor while WaitsForTerms (status "terms").
     public async Task<AmdInfo> ReadInfoAsync()
     {
         if (!_host.DllPresent()) return _info = AmdInfo.Of("no_dll");
+        if (WaitsForTerms) return _info = AmdInfo.Of("terms");
         var (ch, e) = await ReaderAsync();
         if (ch == null) return AmdInfo.Of("no_helper", e ?? "");   // not kept: the next look tries again
         var (ok, data) = await ch.CallAsync(AmdProtocol.Info());
@@ -121,7 +137,7 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
     public GpuCapabilities GetCapabilities()
     {
         if (Gpu is { } g) return AmdProtocol.Capabilities(g, _host.IsLaptop());
-        var why = Off ? AmdProtocol.OffText : GpuCapabilities.NotOnThisCard;
+        var why = WaitsForTerms ? AmdProtocol.TermsText : Off ? AmdProtocol.OffText : GpuCapabilities.NotOnThisCard;
         return new GpuCapabilities { GameProfileNote = why, TuningNote = why };
     }
 
@@ -208,6 +224,7 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
 
     public async Task<string?> RevertGameProfileAsync(BoostBackup record)
     {
+        if (WaitsForTerms) return AmdProtocol.TermsText;   // kept until the consent is given
         if (AmdProtocol.DecodeProfile(record.Value) is not { } plan || !Index(record.Key, out var gpu))
             return "AMD 3D 설정 백업 값이 잘못됐어요";
         var (ok, data) = await _admin.CallAsync(AmdProtocol.ProfileRevert(gpu, plan));
@@ -325,6 +342,8 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
 
     public async Task<string> KeepTuningAsync()
     {
+        // not kept: the helper puts the earlier values back itself when no '유지' comes
+        if (WaitsForTerms) return AmdProtocol.TermsText + AmdProtocol.Unchanged;
         var (ok, _) = await _admin.CallAsync(AmdProtocol.TuningKeep());
         ConfirmBy = null;
         return ok ? "유지할게요. 앱을 끄면 원래대로 돌아가요" : "이미 원래대로 돌아갔어요";
@@ -333,6 +352,7 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
     public async Task<string?> RevertTuningAsync(BoostBackup record)
     {
         ConfirmBy = null;
+        if (WaitsForTerms) return AmdProtocol.TermsText;   // kept until the consent is given
         if (AmdProtocol.DecodeRecord(record.Value) is not { } saved || !Index(record.Target, out var gpu))
             return "GPU 백업 값이 잘못됐어요";
         // an auto tuning from factory values: amd.tuning.reset; otherwise the three values (an undervolt's voltage may stay)
@@ -367,7 +387,8 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
 
     public async Task WatchTuningAsync()
     {
-        if (!Tuned || Off) return;   // off: nothing of this run, and the record waits for a build with ADLX
+        // off: nothing of this run, and the record waits for a build with ADLX; terms: nothing is sent, the record waits
+        if (!Tuned || Off || WaitsForTerms) return;
         var (ok, data) = await _admin.CallAsync(AmdProtocol.TuningStatus());
         var (action, status) = AmdProtocol.Watch(ok, data);
         switch (action)
@@ -402,6 +423,12 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
             ConfirmBy = null;
             _host.Log("이 버전에는 AMD 드라이버 기능이 없어서 GPU 설정을 되돌리지 못했어요. 기록은 남겨 둬요");
             return AmdPutBack.Unavailable;   // no prompt: this helper could not do it anyway
+        }
+        if (info.Status == "terms")
+        {
+            ConfirmBy = null;
+            _host.Log("AMD 구성 요소 조건에 동의하지 않아서 GPU 설정을 되돌리지 못했어요. 기록은 남겨 둬요");
+            return AmdPutBack.WaitsForTerms;   // nothing was sent
         }
         if (CardGone(info))
         {
@@ -452,6 +479,7 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
                 "SystemBoost가 갑자기 꺼져서 AMD 그래픽카드 설정(전력·클럭)을 원래대로 돌렸어요. 다시 쓰려면 GPU 화면에서 직접 다시 적용해 주세요",
             AmdPutBack.Unavailable =>
                 "지난번에 바꾼 AMD 그래픽카드 설정(전력·클럭)을 이 버전에서는 되돌릴 수 없어요. AMD Software의 튜닝 화면에서 초기화해 주세요",
+            AmdPutBack.WaitsForTerms => TuningWaitsText,
             _ => null,
         };
         if (line != null)
@@ -468,7 +496,7 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
     {
         var records = _journal.Backups.Where(b => b.Kind == AmdProtocol.ProfileKind).ToList();
         if (records.Count == 0) return;
-        bool changed = false, left = false, off = false;
+        bool changed = false, left = false, off = false, terms = false;
         bool gone = !_host.DllPresent();
         foreach (var b in records)
         {
@@ -478,6 +506,7 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
                 changed = true;
                 continue;
             }
+            if (WaitsForTerms) { terms = true; continue; }   // nothing is sent: kept until the consent is given
             AmdProfileState? now = null;
             var ch = _admin.Running ? _admin : await _read.EnsureAsync() == null ? _read : null;
             if (ch != null)
@@ -508,6 +537,11 @@ internal sealed class AmdGpuBackend : IGpuVendorBackend
             var line = "지난번 게임 중에 바꾼 AMD 3D 설정(Anti-Lag·Radeon Chill)을 이 버전에서는 되돌릴 수 없어요. AMD Software에서 직접 확인해 주세요";
             _host.Log(line);
             _host.Notice(line);
+        }
+        else if (terms)
+        {
+            _host.Log(ProfileWaitsText);
+            _host.Notice(ProfileWaitsText);
         }
         else if (left)
         {
