@@ -23,7 +23,17 @@ def f(s): return (s.replace("{dc}", DC).replace("{rel_latest}", f"{REL}/latest")
                    .replace("{rel}", f'<a href="{REL}">github.com/{RELEASES_REPO}/releases</a>'))
 def lis(items): return "".join(f"<li>{f(x)}</li>" for x in items)
 
+# Front-page notice of the agreement revision effective 2027-01-01: the license.html anchor of each line of S[..]["ai"],
+# in the order of the agreement's "개정 시행일: 2027년 1월 1일 (...)" header line: Art. 1, 3(2), 3(3), 3(10), 3(11),
+# 6-2 (#oc), 8, 9(2)(5), 10(3), 12-2.
+AGR_ANCHORS = ["a1", "a3", "a3", "a3", "a3", "oc", "a8", "a9", "a10", "a12-2"]
+
 CSS = read(os.path.join(HERE, "style.css"))
+# Rules only the front page uses (the agreement change notice) come from style.index.css and go right after the news
+# box rules, so license.html keeps the shared stylesheet as it is.
+_NEWS_CSS_END = ".nf{color:var(--mut);font-size:13px;margin:14px 0 0}\n"
+if CSS.count(_NEWS_CSS_END) != 1: raise SystemExit("style.css: the .nf rule (end of the news box rules) must appear once")
+CSS_INDEX = CSS.replace(_NEWS_CSS_END, _NEWS_CSS_END + read(os.path.join(HERE, "style.index.css")))
 
 def lang_select(cur_label):
     opts = "".join(f'<option value="{c}">{n}</option>' for c, n in LANGS)
@@ -54,9 +64,13 @@ def index_body(L):
     btable = f'<tr><th></th><th>{s["b5"]}</th><th>{s["b10"]}</th></tr>' + "".join(
         f'<tr><td class="{name[t][1]}">{s[name[t][0]]}</td><td>{won(t5)} <span class="w">{s["each"]} {won(e5)}</span></td>'
         f'<td>{won(t10)} <span class="w">{s["each"]} {won(e10)}</span></td></tr>' for t, t5, e5, t10, e10 in BUNDLES)
-    # The news box has an optional first card (n1t, n1p, n1l); 0.8.14 has only the list of changes (n2t, n2l).
-    n1 = (f'<div class="ni"><h3>{s["n1t"]}</h3><p>{s["n1p"]}</p><ul>{lis(s["n1l"])}</ul></div>\n  '
-          if s.get("n1t") else "")
+    # The news box is a list of cards (nc): (title, paragraph or "", list items or []).
+    cards = "\n  ".join(f'<div class="ni"><h3>{t}</h3>' + (f"<p>{f(p)}</p>" if p else "") + (f"<ul>{lis(l)}</ul>" if l else "")
+                        + "</div>" for t, p, l in s["nc"])
+    # The agreement change notice (Article 13: posted on the sales page 30 days before the change takes effect):
+    # one line per changed article (ai), each linking to its anchor in license.html.
+    if len(s["ai"]) != len(AGR_ANCHORS): raise SystemExit(f"{L}: the agreement notice needs {len(AGR_ANCHORS)} lines")
+    agr = "".join(f'<li><a href="license.html#{a}">{lab}</a>{f(txt)}</li>' for a, (lab, txt) in zip(AGR_ANCHORS, s["ai"]))
     return f'''{header(s, "index")}
 <section class="hero" id="top">
   <img src="icon.png" alt="SystemBoost">
@@ -73,8 +87,14 @@ def index_body(L):
 <section id="news" class="news">
   <div class="nh"><span class="badge">{s["nb"]}</span><h2>{s["nt"]}</h2></div>
   <p class="nd">{s["nd"]}</p>
-  <div class="ng">{n1}<div class="ni"><h3>{s["n2t"]}</h3><ul>{lis(s["n2l"])}</ul></div></div>
+  <div class="ng">{cards}</div>
   <p class="nf">{f(s["nf"])}</p>
+</section>
+<section id="agreement" class="agr">
+  <div class="nh"><span class="badge">{s["ab"]}</span><h2>{s["ah"]}</h2></div>
+  <p>{f(s["ap1"])}</p>
+  <ul>{agr}</ul>
+  <p>{f(s["ap2"])}</p>
 </section>
 <h2 id="plans">{s["ph"]}</h2>
 <p class="pl">{s["pl"]}</p>
@@ -101,7 +121,7 @@ def index_body(L):
 # ft4 in all languages together. Full Korean wording with every brand we have used:
 #   NVIDIA, GeForce, DLSS는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의,
 #   Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.
-TM_NAMES = ["NVIDIA", "AMD", "Intel", "Windows"]
+TM_NAMES = ["NVIDIA", "AMD", "Radeon", "Intel", "Windows"]
 TM_WORDS = {"NVIDIA": ["NVIDIA"], "GeForce": ["GeForce"], "DLSS": ["DLSS"], "AMD": ["AMD"], "Radeon": ["Radeon", "라데온"],
             "Intel": ["Intel", "인텔"], "Windows": ["Windows", "윈도우"]}
 
@@ -303,7 +323,7 @@ function afterShow(lang) {
 }
 </script>'''
 
-def page(kind, bodies, meta, extra=""):
+def page(kind, bodies, meta, extra="", css=CSS):
     temps = "\n".join(f'<template id="t-{c}">{b}</template>' for c, b in bodies.items())
     return f'''<!DOCTYPE html>
 <html lang="en">
@@ -313,7 +333,7 @@ def page(kind, bodies, meta, extra=""):
 <title>{html.escape(meta["en"]["title"])}</title>
 <meta name="description" content="{html.escape(meta["en"]["desc"])}">
 <link rel="icon" type="image/png" href="favicon.png">
-<style>{CSS}</style>
+<style>{css}</style>
 </head>
 <body class="{kind}">
 <div class="wrap" id="root"></div>
@@ -332,9 +352,12 @@ if __name__ == "__main__":
     dlkey = {c: {"win": S[c]["dl_win"], "only": S[c]["dl_only"]} for c, _ in LANGS}
     bodies = {c: index_body(c) for c, _ in LANGS}
     check_trademarks(bodies)
-    idx = page("index", bodies, meta, DLJS % (RELEASES_REPO, json.dumps(dlkey, ensure_ascii=False)))
+    idx = page("index", bodies, meta, DLJS % (RELEASES_REPO, json.dumps(dlkey, ensure_ascii=False)), CSS_INDEX)
     lmeta = {c: {"title": ("SystemBoost 사용권 계약 · 개인정보" if c == "ko" else "SystemBoost License Agreement · Privacy"), "desc": S[c]["desc"]} for c, _ in LANGS}
     lic = page("license", {c: license_body(c, eulas) for c, _ in LANGS}, lmeta)
+    links = set(re.findall(r"license\.html#([\w-]+)", idx))
+    missing = sorted(a for a in links if f'id="{a}"' not in lic)
+    if missing: raise SystemExit(f"index.html links to license.html anchors that do not exist: {missing}")
     for name, text in (("index.html", idx), ("license.html", lic)):
         with open(os.path.join(ROOT, name), "w", encoding="utf-8", newline="\n") as out: out.write(text)
     print("index", len(idx), "license", len(lic))

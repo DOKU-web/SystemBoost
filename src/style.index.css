@@ -1,0 +1,5 @@
+.agr{background:var(--card);border:1px solid #4a2c10;border-left:4px solid var(--or);border-radius:16px;padding:20px 24px;margin:-24px 0 44px}
+.agr .nh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}.agr h2{margin:0}
+.agr p{margin:6px 0;color:var(--mut);font-size:15px}.agr p b{color:var(--txt)}
+.agr ul{margin:8px 0 10px;padding-left:20px;color:var(--mut);font-size:14px}.agr li{margin:6px 0}
+.agr a{color:var(--or)}

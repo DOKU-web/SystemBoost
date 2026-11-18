@@ -1,6 +1,6 @@
 # Plans since 0.8.10: Premium is renamed Pro, Business (산업) is added, 5/10-PC yearly bundles from 2026-12-09.
 # 0.8.14 is sold and released for Windows only, so the "Windows only" tags and the Mac remarks are gone, and the
-# news box (0.8.14) lives in i18n.py.
+# news box lives in i18n.py.
 # Applied on top of i18n.S. The app is in Korean and English only, so other languages name the app screen in English.
 
 BUNDLES = [("premium", 84_500, 16_900, 149_000, 14_900), ("ultra", 254_500, 50_900, 449_000, 44_900),
