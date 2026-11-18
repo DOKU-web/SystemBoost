@@ -81,13 +81,22 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
 - 할인 티켓: 가입할 때 초대 코드를 쓴 회원은 10% 티켓을 받습니다(30일, 1회). 직접 결제 링크는 금액이 고정이라, 대시보드의 '할인 티켓' 링크(정가의 90%)로 보냅니다. 주문을 승인하면 쓴 것으로 처리하고, 거절하거나 지우면 돌려줍니다. 카드 결제에는 쓸 수 없습니다.
 - 대시보드 '회원'에서 찾기, 차단, 복구 코드 재발급, 삭제를 합니다. '복구 요청'에서 계정 복구 요청을 승인하거나 거절합니다.
 - 무료 플랜은 활동이 없으면 프로젝트가 일시 중지되고 백업이 없습니다. 매시간 작업이 Supabase를 한 번 부르지만, 어떤 활동을 인정하는지는 공개되어 있지 않습니다. 중지되면 Supabase 화면에서 복구합니다. 그동안 회원 기능만 멈추고 키 확인은 그대로 됩니다.
-- 테스트: `npm i --no-save @electric-sql/pglite` 후 `node test_accounts.mjs`, `node test_accounts_security.mjs`, `node test_accounts_email.mjs`.
+- 테스트: `npm i --no-save @electric-sql/pglite` 후 `node test_accounts.mjs`, `node test_accounts_security.mjs`, `node test_accounts_email.mjs`, `node test_accounts_gate.mjs`.
   손으로 하는 공격 시험은 `node docs/account_attacks.mjs 40`이고 결과는 `docs/ACCOUNT_SECURITY_TEST.md`에 있습니다.
 
 ### 계정 v2: 메일, 2단계 인증, 기기, 키, 계정 복구 (`src/account_web.js`, `src/mail.js`, `src/totp.js`)
+- **시작 시각 `ACCOUNTS_V2_FROM`** (`wrangler.toml` [vars], `src/accounts_gate.js`): `"2027-01-01T00:00:00+09:00"`, 2027년 1월 1일 0시(한국 시간). 지금 시행 중인 개인정보 처리방침이
+  새로 처리하는 항목은 30일 전에 알리기로 했고, 사용권 계약 제8조가 2027년 1월 1일부터 시행되기 때문입니다. 시각이 되면 다시 배포하지 않아도 저절로 시작합니다.
+  값이 없거나 이 꼴(초까지, 시간대 포함)이 아니면 시작하지 않습니다(닫힌 쪽으로 실패). 테스트는 지난 시각을 넣고, `test_accounts_gate.mjs`가 시작 전을 봅니다.
+- 시작 전에는 앱이 보기에 2026-11-13에 배포한 서버(커밋 776dd71)와 같습니다(`src/accounts.js`의 `legacy()`, `src/account_web.js`의 `legacyWeb()`).
+  `features`, 아래의 v2 동작, 메일 링크 페이지, `POST /keys/resend`는 없는 주소의 404 `{"error":"not found"}`입니다(앱은 404를 'v2 없음'으로 압니다).
+  아이디 가입 · 로그인 · 세션 · 비밀번호 변경 · 복구 코드 · 탈퇴 · 초대 · 보상 · 티켓은 그때의 규칙(비밀번호 8자 이상)과 답 그대로 새 SQL에서 돕니다. `me`에는 `email` · `twofa` · `backupLeft`가 없습니다.
+- 시작 전에는 DB에 기기 이름 · 기기 해시 · IP 그대로 · 국가 · 로그인 이름 해시를 보내지 않습니다. `account_security_log` · `account_devices` · `account_guard` · `account_consents` · 메일 링크(`account_tokens`)는 비어 있고,
+  세션의 '마지막 사용' 시각과 틀린 비밀번호의 시각(`fail_at`)도 남기지 않습니다(틀린 횟수는 그때처럼 잠글 때까지 쌓입니다). Worker가 시작 시각부터 DB 호출에 `log: "true"`를 붙이고,
+  SQL은 그것이 있을 때만 이 셋을 씁니다. 대시보드의 복구 요청 승인 · 거절은 SQL 안에서 `log`를 붙입니다(요청은 시작부터만 생깁니다). 대시보드 '복구 요청'은 그 전에는 비어 있습니다.
 - 메일 가입: `signup_email` → 확인 메일 → `/account/verify` 페이지에서 버튼을 눌러 가입을 마칩니다(GET은 보여 주기만, POST가 처리). 메일로 가입한 회원의 아이디는 서버가 만든 `m`+11자입니다.
   아이디 회원은 `add_email`로 메일을 더합니다. 이미 있는 메일로 가입하면 같은 답을 주고, 그 메일로 '이미 가입됨' 메일만 보냅니다.
-- 새 비밀번호: 10~72자, 아이디 · 메일 · 메일의 @ 앞부분과 같으면 안 되고 `src/common_passwords.js`(SecLists, MIT, 출처는 파일 머리)에 없어야 합니다. 예전에 만든 8자 이상 비밀번호는 그대로 로그인됩니다.
+- 새 비밀번호(시작부터): 10~72자, 아이디 · 메일 · 메일의 @ 앞부분과 같으면 안 되고 `src/common_passwords.js`(SecLists, MIT, 출처는 파일 머리)에 없어야 합니다. 예전에 만든 8자 이상 비밀번호는 그대로 로그인됩니다.
 - 로그인은 아이디나 메일로 합니다. 2단계 인증(TOTP, 백업 코드 10개)을 켠 회원은 `{twofa, pending}`을 받고 `login2`로 마칩니다(5분, 5번까지). 옛 앱은 2단계 인증을 켠 회원으로 로그인을 마칠 수 없습니다.
 - 잠금: 같은 아이디나 메일로(없는 것도) 5번 틀리면 15분, 같은 IP에서 한 시간에 20번 틀리면 그 시간 동안 `busy`. 2단계 코드와 백업 코드도 같이 셉니다.
 - 비밀번호 찾기: 확인한 메일이 있으면 `forgot` → 재설정 링크(30분) → `/account/reset` 페이지. 복구 코드(`recover`)도 그대로 됩니다. 재설정하면 모든 세션이 끝납니다.
@@ -102,6 +111,7 @@ Cloudflare Workers + KV (무료 플랜으로 충분). 결제는 판매자가 직
   둘 중 하나라도 없으면 메일이 필요한 동작은 503 `mail_off`이고 `features`는 `email: false`입니다. 메일은 답을 보낸 뒤(`ctx.waitUntil`) 보내고, 주소마다 한 시간 5통까지입니다. 메일의 링크는 `PUBLIC_URL`(없으면 요청 주소)의 `/account/...`입니다.
   Resend에서 보내는 도메인을 확인(DNS)해야 하고, 열람 · 클릭 추적은 켜지 마세요(개인정보 처리방침에 쓰지 않는다고 적었습니다).
 - 배포 순서: 소유자가 승인하면 `supabase/migrations/20261118_email_accounts.sql`을 Supabase SQL Editor에서 먼저 실행하고(두 번 실행해도 같습니다), 그다음 Worker를 배포합니다.
+  2027년 1월 1일 전에 배포해도 됩니다. 그때까지는 위처럼 옛 서버와 같고, 계정 v2는 `ACCOUNTS_V2_FROM`에 저절로 시작합니다. SQL을 먼저 실행해도 지금(776dd71) Worker는 `log`를 보내지 않으니 새 기록이 생기지 않습니다.
   SQL 없이 새 Worker만 올리면 새 동작은 503 `unavailable`이고 옛 동작은 그대로입니다. 새 판을 처음 설치할 때는 `supabase/accounts.sql` 하나로 됩니다.
 - KV 쓰기는 늘지 않습니다(`test_kv_writes.mjs`). 한도는 Supabase(`account_hits`, `account_guard`)와 Stats Durable Object 카운터에 있습니다.
 
@@ -291,6 +301,10 @@ Lemon Squeezy는 2027년 3월 31일에 결제를 멈추므로 작게 만들었�
 - 원문은 `privacy/privacy.ko.md`, `privacy/privacy.en.md`입니다. 고쳤다면 `node build_privacy.mjs`로 `src/privacy_page.js`를 다시 만듭니다. 서버는 Markdown을 읽지 않고 만든 HTML만 씁니다. `test_support.mjs`가 두 파일이 맞는지 봅니다.
 - 빈칸 네 개는 요청마다 `config:support`에서 채웁니다: 보호책임자(판매자 정보의 대표자, 없으면 상호), 메일(판매자 정보의 메일), 회원 DB 위치, 시행일. 마지막 두 개는 대시보드 '고객센터' → 설정의 '개인정보 처리방침' 칸입니다(회원 DB 위치는 Supabase 프로젝트의 지역). 비어 있으면 페이지에 '판매자가 아직 입력하지 않았어요'가 나오고, 대시보드 설정에 경고가 뜹니다.
 - 값은 모두 HTML로 이스케이프하고, 페이지는 /help처럼 요청마다 nonce를 쓰는 CSP로 보내며 스크립트와 외부 자원이 없습니다.
+- 계정 v2 시작(`ACCOUNTS_V2_FROM`) 전에는 지금 시행 중인 방침(`src/privacy_prev_page.js`, 커밋 776dd71의 페이지 그대로이니 고치지 마세요)을 보여 주고, 맨 위에
+  '개인정보 처리방침이 2027년 1월 1일에 바뀌어요. 바뀌는 처리방침 미리 보기'(영어도) 상자를 붙입니다. 링크 `/privacy?next=1`(언어 유지)은 새 방침을 시행일 2027년 1월 1일로,
+  '그때까지는 지금의 개인정보 처리방침이 적용돼요'와 함께 보여 줍니다. 시작부터는 새 방침만 나오고, 시행일은 대시보드의 시행일이 시작 날짜 이후면 그 날짜, 아니면 시작 날짜입니다.
+  시작 전에는 대시보드의 시행일이 지금 방침의 시행일(2026-11-13)로 나오니 바꾸지 마세요. 시작 뒤에는 `src/privacy_prev_page.js`를 지워도 됩니다.
 - 방침의 내용은 코드를 읽고 쓴 것입니다. 저장하는 항목, 보관 기간, 국외 이전을 바꾸면 방침과 사용권 계약 제8조를 함께 고치고 `Eula.Version`을 올립니다.
 - 제12조(EU · EEA · 영국 이용자)는 처리의 법적 근거, 권리, 감독기관 민원, 국외 이전만 적습니다. EU 대리인, 개인정보 보호 담당관(DPO),
   인증은 정해진 것이 없어 적지 않았습니다. EU 대리인을 둘지는 소유자가 정합니다 [사용자 필요].
@@ -334,6 +348,7 @@ Lemon Squeezy는 2027년 3월 31일에 결제를 멈추므로 작게 만들었�
   결제창 주소 위조, 플랜 변경, 알 수 없는 상품, 해지, 환불 차단, 판매 모드), 그리고 계좌이체 주문 → 결제 확인 요청 → 승인/거절
 - `node test_announce.mjs`, `node test_referral.mjs`, `node test_accounts.mjs`, `node test_stats.mjs`, `node test_bundle.mjs`, `node test_support.mjs`
 - `node test_accounts_security.mjs` (실제 Postgres에서 회원 보안 점검, 마이그레이션), `node test_accounts_email.mjs` (메일 가입, 2단계 인증, 기기, 키, 계정 복구, 메일 상한; 메일은 기록만 하고 보내지 않음)
+- `node test_accounts_gate.mjs` (계정 v2 시작 전: git에서 꺼낸 776dd71 서버와 같은 요청을 보내 답과 DB로 가는 값이 같은지, DB에 v2 기록이 없는지, /privacy 안내와 미리 보기; 시작 시각과 그 뒤. git 기록에 776dd71이 있어야 합니다)
 - `node test_kv_public.mjs` (공개 저장 몫이 차도 키 확인 · 갱신 · 웹훅 · 승인은 됨, `PUBLIC_KV_DAY`), `node test_kv_writes.mjs` (동작마다 KV 쓰기 수, `docs/KV_BUDGET.md`)
 - `node test_seller_gate.mjs` (판매자 정보가 비면 실판매 막기), `node test_deposit.mjs` (입금 확인), `node test_alert.mjs` (판매자 디스코드 알림), `node test_windows_only.mjs` (윈도우 전용 문구, 상표 안내), `node test_price.mjs` (가격 변경 동의)
 
