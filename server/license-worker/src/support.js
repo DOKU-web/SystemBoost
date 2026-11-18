@@ -19,7 +19,9 @@
 //   budget, until 00:00 UTC), with Retry-After in seconds.
 //   GET  /help                            the same for people without the app (help_page.js)
 //   GET  /privacy                         the privacy policy (Korean; ?lang=en an English summary): privacy_page.js, made by
-//                                         build_privacy.mjs from privacy/*.md; its four blanks come from config:support
+//                                         build_privacy.mjs from privacy/*.md; its four blanks come from config:support.
+//                                         Before accounts v2 start (ACCOUNTS_V2_FROM): the policy of then (privacy_prev_page.js)
+//                                         with a notice of the change, and ?next=1 the new one dated from that start
 //   /admin/api/support*                   dashboard: list, read, reply, status, refund decisions, delete, config,
 //                                         feed (GET /admin/api/support/feed?after=<seq> -> {events, last, more}: the
 //                                         "새 소식" rows after that seq, at most 100; no after = the newest 20)
@@ -59,8 +61,10 @@
 // and anonymous writes also per /48 (LIMITS.anonPer48). The salt is SHA-256 of a fixed label and the server's
 // LICENSE_PRIVATE_KEY secret, so without that secret nobody can hash every IPv4 address back to the counter names.
 // Without the secret (local tests only) the salt is empty.
+import { accountsV2Day, accountsV2Open } from "./accounts_gate.js";
 import { HELP_HTML } from "./help_page.js";
 import { PRIVACY_HTML } from "./privacy_page.js";
+import { PRIVACY_PREV_HTML } from "./privacy_prev_page.js";
 import { TERMS_HTML } from "./terms_page.js";
 
 const DAY = 86400;
@@ -159,7 +163,7 @@ export const DEFAULT_FAQ = {
     { q: "사용 통계는 무엇을 보내고, 어떻게 끄나요?",
       a: "앱이 켜져 있는 동안 무작위로 만든 설치 번호, 앱 버전, 운영체제, 플랜, 프레임 생성 배수, 원클릭 게임 부스트 사용 여부를 보내요. 키, 메일, 게임 이름, 하드웨어 정보는 보내지 않아요(제8조 제2항). 앱의 '설정'에서 '사용 통계 보내기'를 끄면 돼요." },
     { q: "회원 비밀번호를 잊었어요.",
-      a: "메일 주소를 확인한 회원은 앱의 '◈ 계정' 화면에서 '비밀번호 찾기'를 누르고 메일 주소를 적으면 재설정 링크를 메일로 받아요(30분 동안 쓸 수 있어요). 아이디로 가입한 회원은 가입할 때 받은 복구 코드로 비밀번호를 바꿀 수 있어요. 둘 다 없다면 앱에서 계정 복구를 요청하세요. 72시간 뒤 판매자가 결제 기록 등으로 확인해요." },
+      a: "2027년 1월 1일부터 메일 주소를 확인한 회원은 앱의 '◈ 계정' 화면에서 '비밀번호 찾기'를 누르고 메일 주소를 적으면 재설정 링크를 메일로 받아요(30분 동안 쓸 수 있어요). 아이디로 가입한 회원은 가입할 때 받은 복구 코드로 비밀번호를 바꿀 수 있어요. 둘 다 없다면 2027년 1월 1일부터 앱에서 계정 복구를 요청하세요(그 전에는 문의 종류 '기타'로 문의해 주세요). 72시간 뒤 판매자가 결제 기록 등으로 확인해요." },
     { q: "문의 내용은 얼마나 보관하나요?",
       a: "문의 종류, 제목, 내용과 답변, 적은 연락처, 주문 코드와 키 식별 번호, '앱 정보 함께 보내기'를 고른 경우 그 앱 정보를 답변과 기록을 위해 보관해요. 회원으로 로그인한 앱에서 보내면 아이디도 함께 남아요. 환불 요청이면 서버가 가진 주문·키 정보(플랜, 받은 날, 입금자명 등)도 붙어요. 키 전체를 보내도 키는 주인 확인에만 쓰고 저장하지 않아요. 결제·환불 문의는 마지막으로 바뀐 날부터 3년, 그 밖의 문의는 1년이 지나면 지워져요. IP 주소는 문의에 남기지 않아요. 너무 많은 요청을 막으려고 IP 주소로 만든 해시값을 판매자 서버에 1시간까지 둬요." },
   ],
@@ -183,7 +187,7 @@ export const DEFAULT_FAQ = {
     { q: "What do usage statistics send, and how do I turn them off?",
       a: "While it is on, the app sends a randomly created install number, the app version, operating system, plan, frame generation multiplier, and whether one-click game boost is in use. Keys, email addresses, game names and hardware information are not sent (Article 8, Paragraph 2). Turn off 'Send usage statistics' in the app's 'Settings'." },
     { q: "I forgot my member password.",
-      a: "Members with a confirmed email address can open '◈ Account' in the app, press 'Forgot password' and enter the email address to get a reset link by mail (it works for 30 minutes). Members who signed up with an ID can change the password with the recovery code from sign-up. Without either, ask for account recovery in the app; after 72 hours the seller checks it against payment records." },
+      a: "From January 1, 2027, members with a confirmed email address can open '◈ Account' in the app, press 'Forgot password' and enter the email address to get a reset link by mail (it works for 30 minutes). Members who signed up with an ID can change the password with the recovery code from sign-up. Without either, ask for account recovery in the app from January 1, 2027 (until then, send a request with the category 'Other'); after 72 hours the seller checks it against payment records." },
     { q: "How long are support requests kept?",
       a: "The category, subject, message and replies, the contact you wrote, the order code and key ID, and, if you chose to send it, the app information are kept to answer you and keep a record. Sent from an app signed in as a member, the member ID is kept too. For a refund request the server also attaches the order and key details it holds (plan, date issued, payer name and more). If you send the full key, it is used only to check that it is yours and is not stored. Payment and refund requests are deleted 3 years after they last changed, other requests after 1 year. Your IP address is not kept with the request. To stop too many requests, a hash made from your IP address stays on the seller's server for up to 1 hour." },
   ],
@@ -822,11 +826,47 @@ export function privacyBlanks(c, lang = "ko") {
   const day = !d ? "" : lang === "en" ? MONTHS[Number(d[2]) - 1] + " " + Number(d[3]) + ", " + d[1] : d[1] + "년 " + Number(d[2]) + "월 " + Number(d[3]) + "일";
   return { OWNER_NAME: s.rep || "", OWNER_EMAIL: s.email || "", SUPABASE_REGION: p.dbRegion || "", EFFECTIVE_DATE: day };
 }
+// The policy changes with accounts v2 (ACCOUNTS_V2_FROM, src/accounts_gate.js), announced 30 days ahead as the policy in
+// force promises. Before the start: that policy (privacy_prev_page.js, its blanks filled as always) with a box at the top
+// that links the new one, and ?next=1 the new one dated from the start (the seller's 시행일 does not count yet), saying the
+// policy of now applies until then. From the start: the new one, dated with the seller's 시행일 if it is on or after the
+// start's day, else with that day. Without a valid start there is no date to announce: no box.
+const dayText = (d, lang) => privacyBlanks({ privacy: { effectiveDate: d } }, lang).EFFECTIVE_DATE;
+const PRIVACY_NEXT = {
+  ko: { box: d => "개인정보 처리방침이 " + d + "에 바뀌어요.", link: "바뀌는 처리방침 미리 보기", now: "지금의 처리방침 보기",
+        until: d => d ? "이 처리방침은 " + d + "부터 시행해요. 그때까지는 지금의 개인정보 처리방침이 적용돼요."
+                      : "이 처리방침은 아직 시행하지 않아요. 지금은 지금의 개인정보 처리방침이 적용돼요." },
+  en: { box: d => "The privacy policy changes on " + d + ".", link: "Preview the new policy", now: "Read the current policy",
+        until: d => d ? "This policy takes effect on " + d + ". Until then the current privacy policy applies."
+                      : "This policy is not in effect yet. The current privacy policy applies for now." },
+};
+const privacyHref = (next, lang) => "/privacy" + (next ? "?next=1" + (lang === "en" ? "&amp;lang=en" : "") : lang === "en" ? "?lang=en" : "");
+const withNotice = (page, inner) =>
+  page.replace("</style>", ".notice{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin:18px 0}\n</style>")
+      .replace("<main>\n", '<main>\n<div class="notice"><p>' + inner + "</p></div>\n");
 export async function privacyPage(url, env) {
   const lang = lang2(url.searchParams.get("lang"));
-  const v = privacyBlanks(await supportConfig(env), lang);
+  const c = await supportConfig(env), v = privacyBlanks(c, lang), T = PRIVACY_NEXT[lang];
+  const start = accountsV2Day(env), next = url.searchParams.get("next") === "1";
+  let page;
+  if (accountsV2Open(env)) {
+    const own = /^\d{4}-\d{2}-\d{2}$/.test(c.privacy?.effectiveDate || "") ? c.privacy.effectiveDate : "";
+    v.EFFECTIVE_DATE = dayText(own >= start ? own : start, lang);
+    page = PRIVACY_HTML[lang];
+  } else if (next) {
+    const day = start && dayText(start, lang);
+    v.EFFECTIVE_DATE = day;
+    // the other language's link stays on the new policy
+    const other = lang === "en" ? ['<a href="/privacy" hreflang="ko">', '<a href="/privacy?next=1" hreflang="ko">']
+                                : ['<a href="/privacy?lang=en" hreflang="en">', '<a href="/privacy?next=1&amp;lang=en" hreflang="en">'];
+    page = withNotice(PRIVACY_HTML[lang].replace(other[0], other[1]),
+                      escHtml(T.until(day)) + ' <a href="' + privacyHref(false, lang) + '">' + escHtml(T.now) + "</a>");
+  } else {
+    page = !start ? PRIVACY_PREV_HTML[lang]
+         : withNotice(PRIVACY_PREV_HTML[lang], escHtml(T.box(dayText(start, lang))) + ' <a href="' + privacyHref(true, lang) + '">' + escHtml(T.link) + "</a>");
+  }
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  const html = PRIVACY_HTML[lang].replaceAll("__NONCE__", nonce)
+  const html = page.replaceAll("__NONCE__", nonce)
     .replace(/\{\{(OWNER_NAME|OWNER_EMAIL|SUPABASE_REGION|EFFECTIVE_DATE)\}\}/g,
              (_, k) => v[k] ? escHtml(v[k]) : '<span class="blank">' + PRIVACY_EMPTY[lang] + "</span>");
   return new Response(html, { headers: {

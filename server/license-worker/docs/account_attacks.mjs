@@ -29,6 +29,7 @@ const env = {
   LICENSES: { get: async k => kv.get(k) ?? null, getWithMetadata: async k => ({ value: kv.get(k) ?? null, metadata: md.get(k) ?? null }),
               put: async (k, v, o) => { kv.set(k, v); md.set(k, o?.metadata ?? null); }, delete: async k => { kv.delete(k); md.delete(k); },
               list: async () => ({ keys: [], list_complete: true }) },
+  ACCOUNTS_V2_FROM: "2026-01-01T00:00:00+09:00",   // accounts v2 have started (src/accounts_gate.js); test_accounts_gate.mjs tests before
   LICENSE_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }), ADMIN_TOKEN: "T".repeat(32),
   SUPABASE_URL: "https://project.supabase.example", SUPABASE_SECRET_KEY: "made-up", PUBLIC_URL: "https://lic.example",
   RESEND_API_KEY: "made-up-mail-key", MAIL_FROM: "SystemBoost <no-reply@mail.example.com>", STATS: fakeStats().binding,

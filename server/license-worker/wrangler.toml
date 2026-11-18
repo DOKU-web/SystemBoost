@@ -27,6 +27,11 @@ crons = ["7 * * * *"]
 # live = only real orders get keys
 SALES_MODE = "off"
 PUBLIC_URL = "https://systemboost-license.euning97.workers.dev"
+# Accounts v2 (email accounts, 2-step login, devices, linked keys, consents, the security log, recovery requests,
+# POST /keys/resend) and the privacy policy for them start at this instant (licence agreement Article 8, 30 days' notice).
+# Before it the Worker does for accounts what the server of 2026-11-13 did and /privacy shows the policy of then with the
+# new one as a preview (src/accounts_gate.js). Missing or not a valid instant: not yet.
+ACCOUNTS_V2_FROM = "2027-01-01T00:00:00+09:00"
 LS_STORE_ID = "REPLACE"
 LS_VARIANT_MONTHLY = "REPLACE"
 LS_VARIANT_YEARLY = "REPLACE"

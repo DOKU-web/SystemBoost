@@ -11,6 +11,9 @@
 // 2-step login (TOTP, src/totp.js) with backup codes, logged-in devices, licence keys linked to the account, consents
 // given in the app, and recovery requests the seller decides. Mail goes through src/mail.js after the reply.
 // Everything an older app sends and gets back stays as it was.
+// Accounts v2 start at ACCOUNTS_V2_FROM (src/accounts_gate.js, 2027-01-01 00:00 KST). Before it, legacy() below does what
+// the server of 2026-11-13 (commit 776dd71) did, and the database is never asked to log ("log" below).
+import { accountsV2Open } from "./accounts_gate.js";
 import { isCommonPassword } from "./common_passwords.js";
 import { mailOn, sendMail } from "./mail.js";
 import { ipBucket } from "./support.js";
@@ -116,13 +119,15 @@ function deviceOf(b) {
 
 // One call, one transaction. Whatever goes wrong on the way, the caller gets "unavailable": a paused
 // Supabase project must not take anything but accounts down with it.
+// "log": the database writes security-log lines, a session's "last used" time and the time of a wrong password only when
+// asked, and it is asked only from accounts v2's start (supabase/accounts.sql account_log, account_missed).
 async function db(env, action, b) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return fail(503, "unavailable");
   try {
     const res = await fetch(env.SUPABASE_URL.trim().replace(/\/+$/, "") + "/rest/v1/rpc/account_call", {
       method: "POST",
       headers: { apikey: env.SUPABASE_SECRET_KEY.trim(), "Content-Type": "application/json" },
-      body: JSON.stringify({ action, b: { ...LIMITS, ...b } }),
+      body: JSON.stringify({ action, b: { ...LIMITS, ...b, ...(accountsV2Open(env) ? { log: "true" } : {}) } }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (res.ok) return await res.json();
@@ -173,6 +178,7 @@ function link(env, b, path, t, lang) {
  */
 export async function accounts(env, action, b = {}, ctx, deps = {}) {
   if (NEEDS_PEPPER.includes(action) && !hasPepper(env)) return fail(503, "unavailable");
+  if (!accountsV2Open(env) && !RECOVERY_ADMIN.includes(action)) return legacy(env, action, b);
   const r = await run(env, action, b, ctx, deps);
   return PUBLIC_V2.includes(action) && r?.error === "session" ? fail(503, "unavailable") : r;
 }
@@ -294,6 +300,99 @@ async function run(env, action, b, ctx, deps) {
 async function early(env, token, r) {
   const me = await db(env, "me", { token });
   return me.error ? me : r;
+}
+
+// ---------------------------------------------------------------- before accounts v2 (ACCOUNTS_V2_FROM)
+// Until the start, the 아이디 accounts of the server of 2026-11-13 (commit 776dd71), action for action: its checks, its
+// password rule (8 to 72 characters, not the id), its replies, and the same values to the database (an IP address only
+// as the one-way value of then). No device, raw address, country or login-name hash goes there, and no "log", so the
+// SQL keeps no security-log line, device, lock for a name nobody has, "last used" time or time of a wrong password.
+// One difference: the sign-up text an app says it showed ("consent", 2026-11-18 from app 0.8.18) is what is recorded;
+// without one (or a malformed one) it is 2026-11-12, as then. The dashboard's 복구 요청 (none can be made before the
+// start) runs as after it.
+const RECOVERY_ADMIN = ["admin/recovery_list", "admin/recovery_approve", "admin/recovery_reject"];
+const oldPasswordOk = (p, id) => p.length >= 8 && p.length <= 72 && p !== id;
+const V2_ME = ["email", "emailVerified", "twofa", "backupLeft"];   // what "me" holds since accounts v2
+
+async function legacy(env, action, b) {
+  const s = await secrets(env);
+  const ip = async v => (await sha(s.pepper + "|ip|" + v)).slice(0, 32);   // the address as it comes, as then
+  switch (action) {
+    case "ping": return db(env, "ping", {});
+    case "code": return CODE_RE.test(b.code || "") ? db(env, "code", { code: b.code }) : { member: false };
+    case "signup": {
+      const id = cleanId(b.id), password = String(b.password || "");
+      if (!ID_RE.test(id) || RESERVED.includes(id)) return fail(400, "id");
+      if (!oldPasswordOk(password, id)) return fail(400, "password");
+      if (b.agree !== true || b.age14 !== true) return fail(400, "consent");
+      const token = newToken(), recovery = newRecovery();
+      const r = await db(env, "signup", { id, pw: await s.password(password), proof: await s.proof(recovery), session: await sha(token),
+                                          invite: String(b.invite || ""), ticket: !!b.ticket, ip: await ip(b.ip),
+                                          consent: consentOf(b) || CONSENT_OLD + " " + new Date().toISOString(), gone: await s.gone(id) });
+      return r.error ? r : { id, token, recovery };
+    }
+    case "login": {
+      const id = cleanId(b.id), token = newToken();
+      const r = await db(env, "login", { id, pw: await s.password(String(b.password || "").slice(0, 100)), ip: await ip(b.ip), session: await sha(token) });
+      return r.error ? r : { id, token };
+    }
+    case "recover": {
+      const id = cleanId(b.id), next = String(b.next || "");
+      if (!oldPasswordOk(next, id)) return fail(400, "password");
+      const token = newToken(), recovery = newRecovery();
+      const r = await db(env, "recover", { id, ip: await ip(b.ip), proof: await s.proof(b.recovery || ""), next: await s.password(next),
+                                           nextProof: await s.proof(recovery), session: await sha(token) });
+      return r.error ? r : { id, token, recovery };
+    }
+    case "ticket/used":
+    case "ticket/release": return db(env, action, { order: b.order });
+    case "admin/recovery": {
+      const recovery = newRecovery(), id = cleanId(b.id);
+      const r = await db(env, action, { id, proof: await s.proof(recovery) });
+      return r.error ? r : { recovery };
+    }
+  }
+  if (action === "admin/delete") {
+    const id = cleanId(b.id);
+    return db(env, action, { id, ...(hasPepper(env) ? { gone: await s.gone(id) } : {}) });
+  }
+  if (ADMIN.includes(action)) return db(env, action, { id: cleanId(b.id), on: !!b.on, q: b.q });
+
+  if (!TOKEN_RE.test(b.token || "")) return fail(401, "session");
+  const token = await sha(b.token);
+  switch (action) {
+    case "me": {
+      const r = await db(env, "me", { token });
+      if (r.error) return r;
+      for (const k of V2_ME) delete r[k];
+      return { ...r, rewardCap: LIMITS.rewardCap, rewardEach: LIMITS.rewardDays, inviteDays: INVITE_DAYS, inviteTicket: LIMITS.ticketPercent };
+    }
+    case "invite":
+      for (let i = 0; i < 5; i++) {
+        const r = await db(env, "invite", { token, code: code(8) });
+        if (r.error !== "retry") return r;
+      }
+      return fail(503, "unavailable");
+    case "reward":
+    case "logout": return db(env, action, { token });
+    case "ticket": return db(env, "ticket", { token, order: b.order });
+    case "password": {
+      const me = await db(env, "me", { token });
+      if (me.error) return me;
+      const next = String(b.next || "");
+      if (!oldPasswordOk(next, me.id)) return fail(400, "password");
+      const session = newToken(), recovery = newRecovery();
+      const r = await db(env, "password", { token, pw: await s.password(String(b.password || "").slice(0, 100)), next: await s.password(next),
+                                            nextProof: await s.proof(recovery), session: await sha(session), ip: await ip(b.ip) });
+      return r.error ? r : { id: me.id, token: session, recovery };
+    }
+    case "delete": {
+      const me = await db(env, "me", { token });
+      if (me.error) return me;
+      return db(env, "delete", { token, pw: await s.password(String(b.password || "").slice(0, 100)), ip: await ip(b.ip), gone: await s.gone(me.id) });
+    }
+  }
+  return fail(404, "not found");
 }
 
 // ---------------------------------------------------------------- 아이디 accounts (as before, plus the new password rule)
