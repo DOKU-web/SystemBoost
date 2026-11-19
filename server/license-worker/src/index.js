@@ -341,7 +341,7 @@ export default {
       if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
       if (req.method === "POST" && url.pathname === "/sub/price") return await subPrice(req, env);
       if (req.method === "POST" && url.pathname === "/sub/price/choose") return await subPriceChoose(req, env);
-      if (url.pathname === "/preorder") return await preorderPublic(req, env, { stats, overIp, json, readJson });
+      if (url.pathname === "/preorder") return await preorderPublic(req, env, { stats, overIp, json });
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);

@@ -239,11 +239,11 @@ export class Stats {
   }
 
   async tick() {
+    this.prePurge();   // first: the dated deletion of the pre-registration rows must not wait on GitHub
     await this.askGitHub();
     this.sql.exec("DELETE FROM installs WHERE last_seen < ?", Date.now() - KEEP_DAYS * DAY);
     this.pruneFeed();
     this.pruneGuard();
-    this.prePurge();
   }
 
   // ---- pre-registration (src/preorder.js): one row per email, every row deleted at PRE.deleteAt
