@@ -6,7 +6,9 @@
 // per-address limit is iplimit.js's hashed hourly counter.
 //
 //   GET  /preorder   {open, until}   — the site shows the popup only while open is true
-//   POST /preorder   {email, plan, lang, consent: true} -> {ok} | {ok, already} | {error: consent|email|closed|busy|body}
+//   POST /preorder   {email, plan, lang, consent: true} -> {ok} | {error: consent|email|closed|busy|body}
+//                    {ok} also when the address had signed up already: the answer must not tell anyone whether an
+//                    address is on the list (the notice promises it is given to nobody else).
 //   admin (index.js): GET /preorders (counts and recent rows without emails), POST /preorders/seen,
 //                     POST /preorders/export (every email, as CSV text; logged), POST /preorders/delete {email}
 // env PREORDER = "off" (any case) closes sign-ups early; env PREORDER_UNTIL (ISO time) moves the deadline.
@@ -95,7 +97,7 @@ export async function preorderPublic(req, env, deps) {
   catch { return deps.json({ error: "busy" }, 503); }
   if (r?.error === "full") return deps.json({ error: "busy" }, 429);
   if (!r?.ok) return deps.json({ error: "busy" }, 503);
-  return deps.json(r.already ? { ok: true, already: true } : { ok: true });
+  return deps.json({ ok: true });   // the same whether it is new or was there (see the top)
 }
 
 // Quotes alone do not stop Excel or Sheets from running a cell that starts with = + - @ (or a tab or CR) as a formula,

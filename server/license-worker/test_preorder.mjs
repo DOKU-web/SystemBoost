@@ -52,11 +52,13 @@ assert.deepEqual([(await pre({ email: "not-mail", consent: true })).error], ["em
 assert.deepEqual([(await pre({ email: "a".repeat(250) + "@b.com", consent: true })).error], ["email"]);
 assert.equal(rows().length, 0);
 
-// a sign-up; the same address in other case is "already" and writes nothing; no KV write at all
+// a sign-up; the same address in other case writes nothing; no KV write at all
 r = await pre({ email: "  Fan@Example.com ", plan: "ultra", lang: "ko", consent: true });
 assert.deepEqual([r.http, r.ok, r.already, r.cors], [200, true, undefined, "*"]);
+const fresh1 = r;
 r = await pre({ email: "fan@example.COM", plan: "free", lang: "en", consent: true });
-assert.deepEqual([r.ok, r.already], [true, true]);
+// the same answer as a new sign-up: nobody can ask the server whether an address is on the list
+assert.deepEqual(r, fresh1, "an address already there gets the same answer as a new one");
 assert.equal(rows().length, 1);
 assert.deepEqual([rows()[0].email, rows()[0].plan, rows()[0].lang], ["fan@example.com", "ultra", "ko"]);
 assert.equal(kvWrites, 0, "pre-registration writes no KV");
@@ -96,6 +98,18 @@ assert.deepEqual([r.http, r.error], [429, "busy"]);
 // per day cap (Stats /pre/add max): full -> busy
 const cap = await st.obj.fetch(new Request("https://stats/pre/add", { method: "POST", body: JSON.stringify({ id: "f".repeat(32), email: "cap@example.com", plan: "free", lang: "en", max: 1 }) }));
 assert.equal((await cap.json()).error, "full");
+// on a full day an address on the list gets the same answer as a new one (the cap is checked first)
+const capOld = await st.obj.fetch(new Request("https://stats/pre/add", { method: "POST", body: JSON.stringify({ id: await preId("fan@example.com"), email: "fan@example.com", plan: "free", lang: "en", max: 1 }) }));
+assert.equal((await capOld.json()).error, "full");
+const fill = st.db.prepare("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)");
+st.db.exec("BEGIN");
+for (let i = rows().length; i < PRE.perDay; i++) fill.run(("0000" + i).slice(-5).padStart(32, "e"), "filler" + i + "@example.com", "free", "en", Date.now());
+st.db.exec("COMMIT");
+const onList = await pre({ email: "fan@example.com", consent: true }), notOnList = await pre({ email: "new@example.com", consent: true });
+assert.deepEqual([onList.http, onList.error], [429, "busy"]);
+assert.deepEqual(onList, notOnList, "a full day does not tell who is on the list");
+st.db.exec("DELETE FROM preorders WHERE email LIKE 'filler%'");
+assert.equal(rows().length, 7);
 
 // the object down: busy, never a 500
 st.down = true;

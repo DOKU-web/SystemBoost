@@ -254,10 +254,11 @@ export class Stats {
       if (!/^[0-9a-f]{32}$/.test(b.id) || typeof b.email !== "string" || b.email.length > 254 || !PRE.plans.includes(b.plan) || !PRE.langs.includes(b.lang))
         return { error: "bad" };
       if (t >= Date.parse(PRE.deleteAt)) return { error: "full" };
-      if (this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id)) return { ok: true, already: true };
+      // the day's cap before "already": on a full day an address on the list gets the same "full" as a new one
       const since = Date.parse(koreanDay(t) + "T00:00:00+09:00");
       const max = Number.isInteger(b.max) && b.max > 0 ? b.max : PRE.perDay;
       if (this.one("SELECT COUNT(*) AS n FROM preorders WHERE at >= ?", since).n >= max) return { error: "full" };
+      if (this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id)) return { ok: true, already: true };
       this.sql.exec("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)", b.id, b.email, b.plan, b.lang, t);
       return { ok: true };
     }
