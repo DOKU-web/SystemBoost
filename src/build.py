@@ -9,6 +9,7 @@ sys.path.insert(0, HERE)
 from i18n import LANGS, S, LIC_NOTE
 from i18n_plans import apply as apply_plans, BUNDLES
 apply_plans(S)
+from i18n_pre import PRE, PREJS, PRECSS, PRE_API, PRE_UNTIL, PLAN_IDS
 
 def read(path): return open(path, encoding="utf-8").read()
 
@@ -323,6 +324,8 @@ function afterShow(lang) {
   if (isWin) { m.href = url("win-setup"); m.textContent = DLKEY[lang].win; return; }
   m.removeAttribute("href"); m.classList.add("off"); m.setAttribute("role", "status"); m.textContent = DLKEY[lang].only;
 }
+const _dlAfter = afterShow;
+afterShow = function (lang) { _dlAfter(lang); if (typeof preAfter === "function") preAfter(lang); };
 </script>'''
 
 def page(kind, bodies, meta, extra="", css=CSS):
@@ -350,11 +353,17 @@ if __name__ == "__main__":
     eulas["en"] = (eulas["en"][0][1:], eulas["en"][1])  # first line is the "reference translation" note, kept below
     en_note = read(sys.argv[2]).splitlines()[0]
     LT["en"]["sub"] = html.escape(en_note) + " " + LT["en"]["sub"]
+    LT["ko"]["rows"].append(PRE["ko"]["prow"]); LT["en"]["rows"].append(PRE["en"]["prow"])   # pre-registration (사전예약)
     meta = {c: {"title": S[c]["title"], "desc": S[c]["desc"]} for c, _ in LANGS}
     dlkey = {c: {"win": S[c]["dl_win"], "only": S[c]["dl_only"]} for c, _ in LANGS}
     bodies = {c: index_body(c) for c, _ in LANGS}
     check_trademarks(bodies)
-    idx = page("index", bodies, meta, DLJS % (RELEASES_REPO, json.dumps(dlkey, ensure_ascii=False)), CSS_INDEX)
+    for c, _ in LANGS:
+        if c not in PRE or len(PRE[c]["plans"]) != len(PLAN_IDS): raise SystemExit(f"i18n_pre {c}: missing or wrong plan list")
+    pre = {c: {k: v for k, v in PRE[c].items() if k != "prow"} for c, _ in LANGS}
+    prejs = '<div id="pre" hidden></div>' + PREJS % {"api": json.dumps(PRE_API), "until": json.dumps(PRE_UNTIL),
+                                                      "pre": json.dumps(pre, ensure_ascii=False), "plans": json.dumps(PLAN_IDS)}
+    idx = page("index", bodies, meta, DLJS % (RELEASES_REPO, json.dumps(dlkey, ensure_ascii=False)) + prejs, CSS_INDEX + PRECSS)
     lmeta = {c: {"title": ("SystemBoost 사용권 계약 · 개인정보" if c == "ko" else "SystemBoost License Agreement · Privacy"), "desc": S[c]["desc"]} for c, _ in LANGS}
     lic = page("license", {c: license_body(c, eulas) for c, _ in LANGS}, lmeta)
     links = set(re.findall(r"license\.html#([\w-]+)", idx))
