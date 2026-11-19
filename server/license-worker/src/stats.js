@@ -26,7 +26,7 @@
 import { PRE } from "./preorder.js";
 
 const REPO = "DOKU-web/SystemBoost";
-const MINUTE = 60e3, DAY = 864e5;
+const MINUTE = 60e3, HOUR = 36e5, DAY = 864e5;
 const KEEP_DAYS = 90;          // an install silent this long is deleted; the daily totals stay
 const QUIET_MS = 20e3;         // a ping this soon after the last one writes nothing
 const MAX_NEW_A_DAY = 3000;    // cheap cap on made-up installs
@@ -77,6 +77,7 @@ CREATE INDEX IF NOT EXISTS admin_access_at ON admin_access(at);
 CREATE TABLE IF NOT EXISTS preorders (
   id TEXT PRIMARY KEY, email TEXT NOT NULL, plan TEXT NOT NULL, lang TEXT NOT NULL, at INTEGER NOT NULL
 ) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS preorders_at ON preorders(at);
 `;
 
 const koreanDay = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
@@ -149,7 +150,7 @@ export class Stats {
     if (path === "/audit/read") return reply(this.auditRead());
     if (path === "/access") { const r = this.access(body, Date.now()); return reply(r, r.error ? 400 : 200); }
     if (path === "/access/read") return reply(this.accessRead(body));
-    if (path.startsWith("/pre/")) { const r = this.pre(path, body || {}); return reply(r, r.error && r.error !== "full" ? 400 : 200); }
+    if (path.startsWith("/pre/")) { const r = this.pre(path, body || {}); return reply(r, r.error && r.error !== "full" && r.error !== "ip" ? 400 : 200); }
     return reply({ error: "not found" }, 404);
   }
 
@@ -239,51 +240,114 @@ export class Stats {
   }
 
   async tick() {
-    await this.askGitHub();
+    // the local deletions first: the dated ones (pre-registration rows, an hour's address hashes) must not wait on GitHub
+    this.prePurge();
     this.sql.exec("DELETE FROM installs WHERE last_seen < ?", Date.now() - KEEP_DAYS * DAY);
     this.pruneFeed();
     this.pruneGuard();
-    this.prePurge();
+    await this.askGitHub();
   }
 
-  // ---- pre-registration (src/preorder.js): one row per email, every row deleted at PRE.deleteAt
-  prePurge(t = Date.now()) { if (t >= Date.parse(PRE.deleteAt)) { this.sql.exec("DELETE FROM preorders"); this.sql.exec("DELETE FROM meta WHERE k = 'pre_seen'"); } }
+  // ---- pre-registration (src/preorder.js): one row per email, every row deleted at PRE.deleteAt.
+  // The free plan reads 5 million rows a day (rows written: 100,000; an index entry counts as a row), and the dashboard
+  // reads /pre/read every 60 s while it is open, so neither that nor a sign-up walks the table: the totals (all, by plan,
+  // by language, today's in Korean time, new since 확인) are one meta row, pre_totals, changed with every insert and
+  // delete, and "recent" and "new" go through the index on at. When pre_totals is missing (the first call after this
+  // version on a table that has rows, or after the purge) it is counted again from the table once; an export, which
+  // reads every row anyway, counts it again too (so a rollback to a version without it cannot leave it wrong for long).
+  // The per-address counts run in hour windows that end at minute 7, when the hourly cron (wrangler.toml "7 * * * *")
+  // runs the tick, whose pruneGuard deletes them: a hash is kept about an hour after the last sign-up, as /privacy says.
+  prePurge(t = Date.now()) {
+    if (t < Date.parse(PRE.deleteAt)) return;
+    this.sql.exec("DELETE FROM preorders");
+    this.sql.exec("DELETE FROM meta WHERE k IN ('pre_seen', 'pre_totals')");
+  }
+  preSeen() { return Number(this.one("SELECT v FROM meta WHERE k = 'pre_seen'")?.v || 0); }
+  /** Count one row {plan, lang, at} into the totals s (by 1) or out of them (by -1). */
+  preTally(s, r, by, t, seen) {
+    const add = (o, k) => { o[k] = (o[k] || 0) + by; if (o[k] <= 0) delete o[k]; };
+    s.n = Math.max(0, s.n + by);
+    add(s.plan, r.plan);
+    add(s.lang, r.lang);
+    if (r.at >= Date.parse(s.day + "T00:00:00+09:00")) s.today = Math.max(0, s.today + by);
+    if (r.at > seen) s.fresh = Math.max(0, s.fresh + by);
+  }
+  preCount(rows, t, seen = this.preSeen()) {
+    const s = { n: 0, plan: {}, lang: {}, day: koreanDay(t), today: 0, fresh: 0 };
+    for (const r of rows) this.preTally(s, r, 1, t, seen);
+    return s;
+  }
+  preSave(s) { this.sql.exec("INSERT INTO meta (k, v) VALUES ('pre_totals', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", JSON.stringify(s)); }
+  preTotals(t) {
+    let s = null;
+    try { s = JSON.parse(this.one("SELECT v FROM meta WHERE k = 'pre_totals'")?.v || "null"); } catch { /* counted again below */ }
+    const whole = o => o && typeof o === "object" && !Array.isArray(o);
+    if (!(whole(s) && Number.isInteger(s.n) && Number.isInteger(s.today) && Number.isInteger(s.fresh) && whole(s.plan) && whole(s.lang)
+          && typeof s.day === "string")) {
+      s = this.preCount(this.sql.exec("SELECT plan, lang, at FROM preorders").toArray(), t);   // the one full pass
+      this.preSave(s);
+    } else if (s.day !== koreanDay(t)) {   // a new day in Korea: today's rows through the index (none just after midnight)
+      s.day = koreanDay(t);
+      s.today = this.one("SELECT COUNT(*) AS n FROM preorders WHERE at >= ?", Date.parse(s.day + "T00:00:00+09:00")).n;
+      this.preSave(s);
+    }
+    return s;
+  }
   pre(path, b, t = Date.now()) {
     this.prePurge(t);
     if (path === "/pre/add") {
-      if (!/^[0-9a-f]{32}$/.test(b.id) || typeof b.email !== "string" || b.email.length > 254 || !PRE.plans.includes(b.plan) || !PRE.langs.includes(b.lang))
+      if (!/^[0-9a-f]{32}$/.test(b.id) || typeof b.email !== "string" || b.email.length > 254 || !PRE.plans.includes(b.plan) || !PRE.langs.includes(b.lang)
+          || !/^[0-9a-f]{16}$/.test(b.ip) || !/^[0-9a-f]{16}$/.test(b.net))
         return { error: "bad" };
       if (t >= Date.parse(PRE.deleteAt)) return { error: "full" };
+      // the day's cap before "already": on a full day an address on the list gets the same "full" as a new one
+      const s = this.preTotals(t), max = Number.isInteger(b.max) && b.max > 0 ? b.max : PRE.perDay;
+      if (s.today >= max) return { error: "full" };
+      // then this address (IPv4, IPv6 /64) and its network (IPv4 /24, IPv6 /48) for the hour, counted in this same step:
+      // salted hashes from the Worker, never an address. Counted for an address on the list too.
+      this.sql.exec("DELETE FROM counters WHERE exp <= ? AND name LIKE 'pre:%'", t);
+      const start = Math.floor((t - 7 * MINUTE) / HOUR) * HOUR + 7 * MINUTE, ttl = Math.max(1, Math.ceil((start + HOUR - t) / 1000));
+      const w = new Date(start).toISOString().slice(0, 16);
+      const lim = this.take({ items: [{ name: `pre:ip:${b.ip}:${w}`, ttl, max: PRE.perIpHour }, { name: `pre:net:${b.net}:${w}`, ttl, max: PRE.perNetHour }] });
+      if (lim.ok !== true) return { error: "ip" };
       if (this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id)) return { ok: true, already: true };
-      const since = Date.parse(koreanDay(t) + "T00:00:00+09:00");
-      const max = Number.isInteger(b.max) && b.max > 0 ? b.max : PRE.perDay;
-      if (this.one("SELECT COUNT(*) AS n FROM preorders WHERE at >= ?", since).n >= max) return { error: "full" };
       this.sql.exec("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)", b.id, b.email, b.plan, b.lang, t);
+      this.preTally(s, { plan: b.plan, lang: b.lang, at: t }, 1, t, this.preSeen());
+      this.preSave(s);
       return { ok: true };
     }
     if (path === "/pre/read") {
-      const seen = Number(this.one("SELECT v FROM meta WHERE k = 'pre_seen'")?.v || 0);
-      const count = this.one("SELECT COUNT(*) AS n FROM preorders").n;
-      const fresh = this.one("SELECT COUNT(*) AS n FROM preorders WHERE at > ?", seen).n;
-      const group = col => Object.fromEntries(this.sql.exec(`SELECT ${col} AS k, COUNT(*) AS n FROM preorders GROUP BY ${col}`).toArray().map(r => [r.k, r.n]));
-      const since = Date.parse(koreanDay(t) + "T00:00:00+09:00");
-      const today = this.one("SELECT COUNT(*) AS n FROM preorders WHERE at >= ?", since).n;
+      const seen = this.preSeen(), s = this.preTotals(t);
       const n = Math.min(Math.max(Number(b.recent) || 0, 0), 500);
       const recent = this.sql.exec("SELECT plan, lang, at FROM preorders ORDER BY at DESC LIMIT ?", n).toArray()
         .map(r => ({ plan: r.plan, lang: r.lang, at: new Date(r.at).toISOString(), fresh: r.at > seen }));
-      return { count, fresh, today, byPlan: group("plan"), byLang: group("lang"), recent };
+      return { count: s.n, fresh: s.fresh, today: s.today, byPlan: { ...s.plan }, byLang: { ...s.lang }, recent };
     }
     if (path === "/pre/seen") {
-      const last = this.one("SELECT MAX(at) AS m FROM preorders").m || t;
-      this.sql.exec("INSERT INTO meta (k, v) VALUES ('pre_seen', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", String(last));
+      // up to the newest row the dashboard showed (upTo, when given), so a sign-up that came after its last refresh
+      // stays new; never earlier than a 확인 already stored (another, older tab)
+      const s = this.preTotals(t), newest = this.one("SELECT MAX(at) AS m FROM preorders").m || t;
+      const seen = Math.max(this.preSeen(), Math.min(newest, Number.isFinite(b.upTo) ? b.upTo : Infinity));
+      this.sql.exec("INSERT INTO meta (k, v) VALUES ('pre_seen', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", String(seen));
+      s.fresh = this.one("SELECT COUNT(*) AS n FROM preorders WHERE at > ?", seen).n;   // through the index: the newer rows only
+      this.preSave(s);
       return { ok: true };
     }
-    if (path === "/pre/export") return { rows: this.sql.exec("SELECT email, plan, lang, at FROM preorders ORDER BY at").toArray() };
+    if (path === "/pre/export") {
+      const rows = this.sql.exec("SELECT email, plan, lang, at FROM preorders ORDER BY at").toArray();
+      this.preSave(this.preCount(rows, t));
+      return { rows };
+    }
     if (path === "/pre/delete") {
       if (!/^[0-9a-f]{32}$/.test(b.id)) return { error: "bad" };
-      const had = !!this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id);
-      this.sql.exec("DELETE FROM preorders WHERE id = ?", b.id);
-      return { ok: true, deleted: had };
+      const r = this.one("SELECT plan, lang, at FROM preorders WHERE id = ?", b.id);
+      if (r) {
+        const s = this.preTotals(t);   // before the delete: counted again, it still holds the row
+        this.sql.exec("DELETE FROM preorders WHERE id = ?", b.id);
+        this.preTally(s, r, -1, t, this.preSeen());
+        this.preSave(s);
+      }
+      return { ok: true, deleted: !!r };
     }
     return { error: "bad" };
   }
