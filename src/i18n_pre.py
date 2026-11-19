@@ -3,7 +3,7 @@
 # publish before the server route is deployed: until then nothing shows. PRE_UNTIL also closes it in the browser.
 PRE_API = "https://systemboost-license.euning97.workers.dev/preorder"
 PRE_UNTIL = "2026-11-27T14:59:59Z"   # 2026-11-27 23:59:59 KST
-PRE_KEEP = "2027-02-28"              # the server deletes the entries on this day (KV expiration)
+PRE_KEEP = "2027-02-28"              # the server deletes the entries on this day (src/preorder.js PRE.deleteAt, the Stats object's SQLite)
 
 # plan values sent to the server, in this order: undecided, free, premium (Pro), ultra, biz
 PLAN_IDS = ["undecided", "free", "premium", "ultra", "biz"]
@@ -17,7 +17,7 @@ PRE["ko"] = dict(
   free="결제는 하지 않아요. 사전예약은 출시 알림 신청이에요.",
   email="메일 주소", plan="관심 있는 플랜",
   plans=["아직 모르겠어요", "무료", "프로", "울트라", "산업"],
-  consent="<b>개인정보 수집 · 이용에 동의해요 (필수)</b><br>메일 주소와 관심 플랜을 받아 출시 알림을 보내는 데만 써요. 2027년 2월 28일에 모두 지워요. 동의하지 않으면 신청할 수 없어요. 만 14세 이상만 신청할 수 있어요.",
+  consent="<b>개인정보 수집 · 이용에 동의해요 (필수)</b><br>메일 주소, 관심 플랜, 사이트 언어, 신청 시각을 받아 정식 출시 알림 메일을 한 번 보내는 데만 써요. 2027년 2월 28일에 모두 지워요. 동의하지 않을 수 있지만, 그러면 사전예약을 할 수 없어요(앱 이용에는 영향 없음). 만 14세 이상만 신청할 수 있어요. <a href=\"https://systemboost-license.euning97.workers.dev/privacy#preorder\" target=\"_blank\" rel=\"noopener\">자세한 안내</a>",
   send="사전예약 신청", later="다음에 할게요", close="닫기",
   done="신청됐어요. 출시되면 메일로 알려 드릴게요.", already="이미 신청된 메일이에요. 출시되면 알려 드릴게요.",
   e_mail="메일 주소를 확인해 주세요.", e_consent="개인정보 수집 · 이용에 동의해야 신청할 수 있어요.",
@@ -34,7 +34,7 @@ PRE["en"] = dict(
   free="No payment. Pre-registering only signs you up for the launch email.",
   email="Email address", plan="Plan you're interested in",
   plans=["Not sure yet", "Free", "Pro", "Ultra", "Business"],
-  consent="<b>I agree to the collection and use of my personal information (required)</b><br>Your email and plan choice are used only to send the launch email, and are all deleted on February 28, 2027. You can't pre-register without agreeing. You must be 14 or older.",
+  consent="<b>I agree to the collection and use of my personal information (required)</b><br>Your email address, plan of interest, site language and sign-up time are used only to send one launch email, and are all deleted on February 28, 2027. You may refuse, but then you can't pre-register (the app is not affected). You must be 14 or older. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Details</a>",
   send="Pre-register", later="Maybe later", close="Close",
   done="You're signed up. We'll email you at launch.", already="This email is already signed up. We'll email you at launch.",
   e_mail="Please check your email address.", e_consent="Please agree to the collection and use of your information to pre-register.",
@@ -51,7 +51,7 @@ PRE["ja"] = dict(
   free="お支払いはありません。事前登録はリリースのお知らせの申し込みです。",
   email="メールアドレス", plan="気になるプラン",
   plans=["まだ決めていない", "無料", "プロ", "ウルトラ", "ビジネス"],
-  consent="<b>個人情報の収集・利用に同意します（必須）</b><br>メールアドレスと気になるプランは、リリースのお知らせを送るためだけに使い、2027年2月28日にすべて削除します。同意しない場合は登録できません。14歳以上の方のみ登録できます。",
+  consent="<b>個人情報の収集・利用に同意します（必須）</b><br>メールアドレス、気になるプラン、サイトの言語、登録日時は、リリースのお知らせを1回送るためだけに使い、2027年2月28日にすべて削除します。同意しないこともできますが、その場合は登録できません（アプリの利用には影響しません）。14歳以上の方のみ登録できます。<a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">詳しい案内（英語）</a>",
   send="事前登録する", later="あとで", close="閉じる",
   done="登録しました。リリースしたらメールでお知らせします。", already="このメールはすでに登録されています。リリースしたらお知らせします。",
   e_mail="メールアドレスを確認してください。", e_consent="登録するには個人情報の収集・利用への同意が必要です。",
@@ -67,7 +67,7 @@ PRE["zh"] = dict(
   free="无需付款。预约只是登记发布通知。",
   email="邮箱地址", plan="感兴趣的套餐",
   plans=["还没想好", "免费", "专业版", "至尊版", "商业版"],
-  consent="<b>我同意收集和使用我的个人信息（必选）</b><br>邮箱地址和所选套餐仅用于发送发布通知，并将在 2027 年 2 月 28 日全部删除。不同意则无法预约。须年满 14 岁。",
+  consent="<b>我同意收集和使用我的个人信息（必选）</b><br>邮箱地址、所选套餐、网站语言和预约时间仅用于发送一次发布通知，并将在 2027 年 2 月 28 日全部删除。你可以不同意，但那样就无法预约（不影响使用应用）。须年满 14 岁。<a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">详细说明（英文）</a>",
   send="提交预约", later="以后再说", close="关闭",
   done="预约成功。发布时我们会发邮件通知你。", already="这个邮箱已经预约过了。发布时会通知你。",
   e_mail="请检查邮箱地址。", e_consent="需要同意收集和使用个人信息才能预约。",
@@ -83,7 +83,7 @@ PRE["es"] = dict(
   free="No se paga nada. El prerregistro solo te apunta al aviso de lanzamiento.",
   email="Correo electrónico", plan="Plan que te interesa",
   plans=["Aún no lo sé", "Gratis", "Pro", "Ultra", "Business"],
-  consent="<b>Acepto la recogida y el uso de mis datos personales (obligatorio)</b><br>Tu correo y el plan elegido solo se usan para enviar el aviso de lanzamiento y se borran todos el 28 de febrero de 2027. Sin aceptar no puedes registrarte. Debes tener 14 años o más.",
+  consent="<b>Acepto la recogida y el uso de mis datos personales (obligatorio)</b><br>Tu correo, el plan que te interesa, el idioma del sitio y la hora del registro solo se usan para enviar un único aviso de lanzamiento y se borran todos el 28 de febrero de 2027. Puedes no aceptar, pero entonces no podrás registrarte (la app no se ve afectada). Debes tener 14 años o más. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Más información (en inglés)</a>",
   send="Registrarme", later="Más tarde", close="Cerrar",
   done="¡Listo! Te avisaremos por correo en el lanzamiento.", already="Este correo ya está registrado. Te avisaremos en el lanzamiento.",
   e_mail="Revisa tu correo electrónico.", e_consent="Para registrarte debes aceptar la recogida y el uso de tus datos.",
@@ -99,7 +99,7 @@ PRE["pt"] = dict(
   free="Nada é cobrado. O pré-cadastro só inscreve você no aviso de lançamento.",
   email="E-mail", plan="Plano de interesse",
   plans=["Ainda não sei", "Grátis", "Pro", "Ultra", "Business"],
-  consent="<b>Concordo com a coleta e o uso dos meus dados pessoais (obrigatório)</b><br>Seu e-mail e o plano escolhido são usados só para enviar o aviso de lançamento e são todos apagados em 28 de fevereiro de 2027. Sem concordar, não é possível se cadastrar. É preciso ter 14 anos ou mais.",
+  consent="<b>Concordo com a coleta e o uso dos meus dados pessoais (obrigatório)</b><br>Seu e-mail, o plano de interesse, o idioma do site e a hora do cadastro são usados só para enviar um único aviso de lançamento e são todos apagados em 28 de fevereiro de 2027. Você pode não concordar, mas aí não poderá se cadastrar (o app não é afetado). É preciso ter 14 anos ou mais. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Mais detalhes (em inglês)</a>",
   send="Fazer pré-cadastro", later="Depois", close="Fechar",
   done="Pronto! Avisaremos por e-mail no lançamento.", already="Este e-mail já está cadastrado. Avisaremos no lançamento.",
   e_mail="Confira o seu e-mail.", e_consent="Para se cadastrar, é preciso concordar com a coleta e o uso dos dados.",
@@ -115,7 +115,7 @@ PRE["ru"] = dict(
   free="Ничего платить не нужно. Предрегистрация — это только подписка на письмо о выходе.",
   email="Электронная почта", plan="Интересующий тариф",
   plans=["Пока не знаю", "Бесплатно", "Pro", "Ultra", "Business"],
-  consent="<b>Я согласен на сбор и использование моих персональных данных (обязательно)</b><br>Почта и выбранный тариф используются только для письма о выходе и будут удалены 28 февраля 2027 года. Без согласия зарегистрироваться нельзя. Только для лиц от 14 лет.",
+  consent="<b>Я согласен на сбор и использование моих персональных данных (обязательно)</b><br>Почта, выбранный тариф, язык сайта и время регистрации используются только для одного письма о выходе и будут удалены 28 февраля 2027 года. Можно не соглашаться, но тогда зарегистрироваться нельзя (на работу приложения это не влияет). Только для лиц от 14 лет. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Подробнее (на английском)</a>",
   send="Зарегистрироваться", later="Позже", close="Закрыть",
   done="Готово! Мы напишем вам в день выхода.", already="Эта почта уже зарегистрирована. Мы напишем вам в день выхода.",
   e_mail="Проверьте адрес почты.", e_consent="Чтобы зарегистрироваться, нужно согласие на сбор и использование данных.",
@@ -131,7 +131,7 @@ PRE["de"] = dict(
   free="Es wird nichts bezahlt. Die Vorregistrierung ist nur die Anmeldung für die Start-E-Mail.",
   email="E-Mail-Adresse", plan="Plan, der dich interessiert",
   plans=["Weiß ich noch nicht", "Kostenlos", "Pro", "Ultra", "Business"],
-  consent="<b>Ich willige in die Erhebung und Nutzung meiner personenbezogenen Daten ein (erforderlich)</b><br>E-Mail-Adresse und gewählter Plan werden nur für die Start-E-Mail verwendet und am 28. Februar 2027 vollständig gelöscht. Ohne Einwilligung ist keine Registrierung möglich. Nur ab 14 Jahren.",
+  consent="<b>Ich willige in die Erhebung und Nutzung meiner personenbezogenen Daten ein (erforderlich)</b><br>E-Mail-Adresse, gewählter Plan, Sprache der Website und Zeitpunkt der Anmeldung werden nur für eine einzige Start-E-Mail verwendet und am 28. Februar 2027 vollständig gelöscht. Du kannst ablehnen, kannst dich dann aber nicht vorab registrieren (die App ist davon nicht betroffen). Nur ab 14 Jahren. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Mehr dazu (auf Englisch)</a>",
   send="Vorregistrieren", later="Später", close="Schließen",
   done="Fertig! Wir schreiben dir zum Start.", already="Diese E-Mail ist schon registriert. Wir schreiben dir zum Start.",
   e_mail="Bitte prüfe deine E-Mail-Adresse.", e_consent="Für die Registrierung ist die Einwilligung in die Datennutzung nötig.",
@@ -147,7 +147,7 @@ PRE["fr"] = dict(
   free="Aucun paiement. La pré-inscription vous inscrit seulement à l’e-mail de sortie.",
   email="Adresse e-mail", plan="Offre qui vous intéresse",
   plans=["Je ne sais pas encore", "Gratuit", "Pro", "Ultra", "Business"],
-  consent="<b>J’accepte la collecte et l’utilisation de mes données personnelles (obligatoire)</b><br>Votre e-mail et l’offre choisie servent uniquement à envoyer l’e-mail de sortie et seront tous supprimés le 28 février 2027. Sans accord, la pré-inscription est impossible. Réservé aux 14 ans et plus.",
+  consent="<b>J’accepte la collecte et l’utilisation de mes données personnelles (obligatoire)</b><br>Votre e-mail, l’offre qui vous intéresse, la langue du site et l’heure de l’inscription servent uniquement à envoyer un seul e-mail de sortie et seront tous supprimés le 28 février 2027. Vous pouvez refuser, mais la pré-inscription sera alors impossible (l’app n’est pas concernée). Réservé aux 14 ans et plus. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">En savoir plus (en anglais)</a>",
   send="Me pré-inscrire", later="Plus tard", close="Fermer",
   done="C’est fait ! Nous vous écrirons à la sortie.", already="Cet e-mail est déjà inscrit. Nous vous écrirons à la sortie.",
   e_mail="Vérifiez votre adresse e-mail.", e_consent="Pour vous pré-inscrire, vous devez accepter la collecte et l’utilisation de vos données.",
