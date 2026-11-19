@@ -581,41 +581,58 @@ async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadK
 let preNow = null;
 const PRE_PLAN = { undecided: "아직 모름", free: "무료", premium: "프로", ultra: "울트라", biz: "산업" };
 const PRE_LANG = { en: "영어", ko: "한국어", ja: "일본어", zh: "중국어", es: "스페인어", pt: "포르투갈어", ru: "러시아어", de: "독일어", fr: "프랑스어" };
+// Time left on this PC's clock: minutes in the last hour, never below zero (the server's `open` says when it is over).
+function preLeft(until) {
+  const m = Math.floor((Date.parse(until) - Date.now()) / 6e4), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60);
+  return !(m > 0) ? "곧 마감돼요" : (d ? d + "일 " : "") + (d || h ? h + "시간" : m + "분") + " 남음";
+}
+function preSay(t, cls) { $("preMsg").textContent = t; $("preMsg").className = cls || "mut"; }
 async function loadPre() {
   let r; try { r = await api("/preorders"); } catch (e) { if (e.message !== "401") $("preNote").textContent = "불러오지 못했어요: " + e.message; return; }
   preNow = r;
   $("goPre").classList.toggle("hide", !r.shown);
+  if (!r.shown && tabNow === "pre") showTab("home", true);   // the rows are gone (2027-02-28) and the tab with them
   $("preBadge").textContent = num(r.fresh); $("preBadge").classList.toggle("hide", !r.fresh);
   $("goPre").title = r.fresh ? "사전예약 새 신청 " + num(r.fresh) + "건" : "";
-  const left = Date.parse(r.until) - Date.now(), d = Math.floor(left / 864e5), h = Math.floor(left % 864e5 / 36e5);
-  $("preNote").textContent = r.open ? `받는 중 · 마감 ${when(r.until)} (${d > 0 ? d + "일 " : ""}${h}시간 남음)` : "마감됐어요. 신청을 더 받지 않아요.";
+  $("preNote").textContent = r.open ? `받는 중 · 마감 ${when(r.until)} (${preLeft(r.until)})` : "마감됐어요. 신청을 더 받지 않아요.";
   const byPlan = Object.keys(PRE_PLAN).map(k => [PRE_PLAN[k], num(r.byPlan[k] || 0)]);
   const langs = Object.entries(r.byLang || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => (PRE_LANG[k] || k) + " " + num(n)).join(" · ");
   $("preStats").innerHTML = tiles([["전체 신청", num(r.count), langs], ["새 신청", num(r.fresh)], ["오늘(한국 시간)", num(r.today)], ...byPlan]);
-  $("preList").innerHTML = r.recent.length ? r.recent.map(x => `<tr${x.fresh ? ' style="color:var(--or)"' : ""}><td>${esc(when(x.at))}</td><td>${esc(PRE_PLAN[x.plan] || x.plan)}</td><td>${esc(PRE_LANG[x.lang] || x.lang)}</td></tr>`).join("")
+  // a new sign-up is orange and says 새 (not by colour alone)
+  $("preList").innerHTML = r.recent.length ? r.recent.map(x => `<tr${x.fresh ? ' style="color:var(--or)"' : ""}><td>${esc(when(x.at))}${x.fresh ? " <b>새</b>" : ""}</td><td>${esc(PRE_PLAN[x.plan] || x.plan)}</td><td>${esc(PRE_LANG[x.lang] || x.lang)}</td></tr>`).join("")
                                          : `<tr><td colspan="3" class="mut">아직 신청이 없어요</td></tr>`;
   $("preSeen").disabled = !r.fresh;
+  $("preCsv").disabled = !r.count;   // an empty file would still be logged as an export of personal data
   if (sumCounts) renderTodo(sumCounts);
 }
-$("preSeen").onclick = async () => { try { await api("/preorders/seen", {}); await loadPre(); toast("확인했어요"); } catch (e) { $("preMsg").textContent = e.message; } };
+$("preSeen").onclick = async () => {
+  try { await api("/preorders/seen", {}); preSay(""); await loadPre(); toast("확인했어요"); }
+  catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
+};
 $("preCsv").onclick = async () => {
   if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 2027년 2월 28일 뒤에는 지워 주세요.", "내려받기"))) return;
   try {
     const r = await api("/preorders/export", {});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + r.csv], { type: "text/csv;charset=utf-8" }));
-    a.download = "systemboost-preorders-" + new Date().toISOString().slice(0, 10) + ".csv"; a.click();
+    // the date in Korea (toISOString alone is UTC: before 9 a.m. it named the file after yesterday)
+    a.download = "systemboost-preorders-" + new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10) + ".csv"; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    $("preMsg").textContent = num(r.count) + "건을 내려받았어요";
-  } catch (e) { $("preMsg").textContent = e.message; }
+    preSay(num(r.count) + "건을 내려받았어요");
+  } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
 $("preDelGo").onclick = async () => {
-  const email = $("preDel").value.trim(); if (!email) return;
-  if (!(await ask("사전예약 지우기", esc(email) + " 의 신청을 지울까요? 되돌릴 수 없어요.", "지우기"))) return;
-  try { const r = await api("/preorders/delete", { email }); $("preMsg").textContent = r.deleted ? "지웠어요" : "그 메일로 된 신청이 없어요"; $("preDel").value = ""; loadPre(); }
-  catch (e) { $("preMsg").textContent = e.message; }
+  const email = $("preDel").value.trim();
+  if (!email) { preSay("지울 메일 주소를 적어 주세요", "err"); $("preDel").focus(); return; }
+  if (!(await ask("사전예약 지우기", esc(email) + " 의 신청을 지울까요? 되돌릴 수 없어요.", "지우기"))) return;   // ask() sets innerHTML
+  try {
+    const r = await api("/preorders/delete", { email });
+    if (r.deleted) { preSay("지웠어요"); $("preDel").value = ""; loadPre(); }
+    else preSay("그 메일로 된 신청이 없어요. 주소를 확인해 주세요", "err");   // the address stays in the box, to fix a typo
+  } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
-setInterval(() => { if (token && !document.hidden && !$("app").classList.contains("hide") && preNow && preNow.shown) loadPre(); }, 60e3);
+// every minute while the page is in front; also after a first load that failed (preNow null), so the tab still turns up
+setInterval(() => { if (token && !document.hidden && !$("app").classList.contains("hide") && (!preNow || preNow.shown)) loadPre(); }, 60e3);
 const CARD_PLANS = ["monthly", "yearly", "ultra_monthly", "ultra_yearly", "biz_monthly", "biz_yearly"];
 function showCard(c) {
   const mark = (id, on) => { $(id).textContent = on ? "등록됨" : "없음"; $(id).className = on ? "yes" : "no"; };
@@ -2004,15 +2021,23 @@ function demoApi(path, b) {
   const [p, qs] = path.split("?"); const q = new URLSearchParams(qs || "");
   const R = v => Promise.resolve(JSON.parse(JSON.stringify(v)));
   if (p.startsWith("/preorders")) {
-    if (!demo.pre) { const m = n => new Date(Date.now() - n * 36e5).toISOString(); const P = ["ultra", "premium", "undecided", "biz", "ultra", "free", "premium", "ultra"], G = ["ko", "ko", "en", "ko", "ja", "en", "ko", "zh"];
-      demo.pre = { seen: 3, rows: P.map((plan, i) => ({ plan, lang: G[i], at: m(i * 5 + 0.3), email: "fan" + (i + 1) + "@example.com" })) }; }
-    const rows = demo.pre.rows, fresh = Math.max(0, rows.length - demo.pre.seen);
+    // like src/preorder.js and stats.js: open until `until`, every row gone at `deleteAt`, 새 = after the last 확인 (a time),
+    // 오늘 = since midnight in Korea, a malformed address is refused
+    const until = "2026-11-27T14:59:59Z", deleteAt = "2027-02-27T15:00:00Z", t = Date.now();
+    if (!demo.pre) { const m = n => new Date(Math.min(t, Date.parse(until)) - n * 36e5).toISOString(); const P = ["ultra", "premium", "undecided", "biz", "ultra", "free", "premium", "ultra"], G = ["ko", "ko", "en", "ko", "ja", "en", "ko", "zh"];
+      demo.pre = { rows: P.map((plan, i) => ({ plan, lang: G[i], at: m(i * 5 + 0.3), email: "fan" + (i + 1) + "@example.com" })) };
+      demo.pre.seenAt = Date.parse(demo.pre.rows[5].at); }   // the newest five are new
+    if (t >= Date.parse(deleteAt)) demo.pre.rows = [];
+    const rows = demo.pre.rows, isNew = x => Date.parse(x.at) > demo.pre.seenAt;
     const cnt = k => rows.reduce((o, x) => (o[x[k]] = (o[x[k]] || 0) + 1, o), {});
-    if (p === "/preorders/seen") { demo.pre.seen = rows.length; return R({ ok: true }); }
+    if (p === "/preorders/seen") { demo.pre.seenAt = rows.length ? Math.max(...rows.map(x => Date.parse(x.at))) : t; return R({ ok: true }); }
     if (p === "/preorders/export") { L("사전예약 내보내기", rows.length + "건"); return R({ count: rows.length, csv: "email,plan,lang,at\r\n" + rows.map(x => [x.email, x.plan, x.lang, x.at].join(",")).join("\r\n") }); }
-    if (p === "/preorders/delete") { const i = rows.findIndex(x => x.email === String(b.email || "").trim().toLowerCase()); if (i >= 0) { rows.splice(i, 1); L("사전예약 삭제", "1건"); } return R({ ok: true, deleted: i >= 0 }); }
-    return R({ count: rows.length, fresh, today: rows.filter(x => Date.now() - Date.parse(x.at) < 864e5).length, byPlan: cnt("plan"), byLang: cnt("lang"),
-               recent: rows.map((x, i) => ({ plan: x.plan, lang: x.lang, at: x.at, fresh: i < fresh })), open: true, until: "2026-11-27T14:59:59Z", deleteAt: "2027-02-27T15:00:00Z", shown: true });
+    if (p === "/preorders/delete") { const e = String(b.email || "").trim().toLowerCase();
+      if (!(e.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e))) return Promise.reject(new Error("메일 주소를 확인해 주세요"));
+      const i = rows.findIndex(x => x.email === e); if (i >= 0) { rows.splice(i, 1); L("사전예약 삭제", "1건"); } return R({ ok: true, deleted: i >= 0 }); }
+    const since = Date.parse(new Date(t + 9 * 36e5).toISOString().slice(0, 10) + "T00:00:00+09:00");
+    return R({ count: rows.length, fresh: rows.filter(isNew).length, today: rows.filter(x => Date.parse(x.at) >= since).length, byPlan: cnt("plan"), byLang: cnt("lang"),
+               recent: rows.map(x => ({ plan: x.plan, lang: x.lang, at: x.at, fresh: isNew(x) })), open: t <= Date.parse(until) && t < Date.parse(deleteAt), until, deleteAt, shown: t < Date.parse(deleteAt) });
   }
   if (p === "/stats") {
     const dayAgo = n => new Date(Date.now() - n * 864e5 + 9 * 36e5).toISOString().slice(0, 10);
