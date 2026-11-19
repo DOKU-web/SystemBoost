@@ -360,6 +360,8 @@ if __name__ == "__main__":
     check_trademarks(bodies)
     for c, _ in LANGS:
         if c not in PRE or len(PRE[c]["plans"]) != len(PLAN_IDS): raise SystemExit(f"i18n_pre {c}: missing or wrong plan list")
+        gap = (set(PRE["en"]) ^ set(PRE[c])) - {"prow"}   # prow: the license.html row, ko and en only
+        if gap: raise SystemExit(f"i18n_pre {c}: keys differ from en: {sorted(gap)}")
     pre = {c: {k: v for k, v in PRE[c].items() if k != "prow"} for c, _ in LANGS}
     prejs = '<div id="pre" hidden></div>' + PREJS % {"api": json.dumps(PRE_API), "until": json.dumps(PRE_UNTIL),
                                                       "pre": json.dumps(pre, ensure_ascii=False), "plans": json.dumps(PLAN_IDS)}

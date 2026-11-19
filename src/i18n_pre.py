@@ -23,7 +23,7 @@ PRE["ko"] = dict(
   e_mail="메일 주소를 확인해 주세요.", e_consent="개인정보 수집 · 이용에 동의해야 신청할 수 있어요.",
   e_closed="사전예약이 마감됐어요.", e_busy="신청이 몰려 지금은 받지 못했어요. 잠시 뒤 다시 시도해 주세요.",
   e_net="지금 신청을 받지 못했어요. 잠시 뒤 다시 시도하거나 공식 디스코드 #help에 남겨 주세요.",
-  left="{d}일 남음", today="오늘 마감",
+  left="{d}일 남음", left1="1일 남음", today="오늘 마감",
   prow=["사전예약 (2026년 11월 27일까지)", "판매자 서버", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각. 출시 알림을 한 번 보내는 데만 써요.", "2027년 2월 28일에 삭제"],
 )
 PRE["en"] = dict(
@@ -40,7 +40,7 @@ PRE["en"] = dict(
   e_mail="Please check your email address.", e_consent="Please agree to the collection and use of your information to pre-register.",
   e_closed="Pre-registration has closed.", e_busy="Too many sign-ups right now. Please try again a little later.",
   e_net="We couldn't take your sign-up right now. Try again later, or post in #help on the official Discord.",
-  left="{d} days left", today="Closes today",
+  left="{d} days left", left1="1 day left", today="Closes today",
   prow=["Pre-registration (until Nov 27, 2026)", "Seller's server", "Email address, plan of interest, site language, time of sign-up. Used only to send one launch email.", "Deleted on Feb 28, 2027"],
 )
 PRE["ja"] = dict(
@@ -57,7 +57,7 @@ PRE["ja"] = dict(
   e_mail="メールアドレスを確認してください。", e_consent="登録するには個人情報の収集・利用への同意が必要です。",
   e_closed="事前登録は締め切りました。", e_busy="申し込みが集中しています。少し時間をおいてもう一度お試しください。",
   e_net="今は登録できませんでした。しばらくしてからもう一度お試しいただくか、公式Discordの#helpにご連絡ください。",
-  left="残り{d}日", today="本日締め切り",
+  left="残り{d}日", left1="残り1日", today="本日締め切り",
 )
 PRE["zh"] = dict(
   bar='预约登记进行中 · 截至 11 月 27 日 23:59（韩国时间）· 发布时邮件通知你', go='立即预约',
@@ -73,7 +73,7 @@ PRE["zh"] = dict(
   e_mail="请检查邮箱地址。", e_consent="需要同意收集和使用个人信息才能预约。",
   e_closed="预约已截止。", e_busy="当前预约人数过多，请稍后再试。",
   e_net="暂时无法提交预约。请稍后再试，或在官方 Discord 的 #help 留言。",
-  left="还剩 {d} 天", today="今天截止",
+  left="还剩 {d} 天", left1="还剩 1 天", today="今天截止",
 )
 PRE["es"] = dict(
   bar='Prerregistro abierto hasta el 27 de noviembre, 23:59 KST · te avisamos por correo en el lanzamiento', go='Registrarme',
@@ -89,7 +89,7 @@ PRE["es"] = dict(
   e_mail="Revisa tu correo electrónico.", e_consent="Para registrarte debes aceptar la recogida y el uso de tus datos.",
   e_closed="El prerregistro ha cerrado.", e_busy="Hay muchos registros ahora mismo. Inténtalo de nuevo en un rato.",
   e_net="No pudimos registrarte ahora. Inténtalo más tarde o escribe en #help del Discord oficial.",
-  left="Quedan {d} días", today="Cierra hoy",
+  left="Quedan {d} días", left1="Queda 1 día", today="Cierra hoy",
 )
 PRE["pt"] = dict(
   bar='Pré-cadastro aberto até 27 de novembro, 23:59 KST · avisamos por e-mail no lançamento', go='Cadastrar',
@@ -105,7 +105,7 @@ PRE["pt"] = dict(
   e_mail="Confira o seu e-mail.", e_consent="Para se cadastrar, é preciso concordar com a coleta e o uso dos dados.",
   e_closed="O pré-cadastro foi encerrado.", e_busy="Muitos cadastros agora. Tente de novo daqui a pouco.",
   e_net="Não foi possível fazer o cadastro agora. Tente mais tarde ou escreva em #help no Discord oficial.",
-  left="Faltam {d} dias", today="Encerra hoje",
+  left="Faltam {d} dias", left1="Falta 1 dia", today="Encerra hoje",
 )
 PRE["ru"] = dict(
   bar='Предрегистрация открыта до 27 ноября, 23:59 KST · напишем вам в день выхода', go='Записаться',
@@ -121,7 +121,7 @@ PRE["ru"] = dict(
   e_mail="Проверьте адрес почты.", e_consent="Чтобы зарегистрироваться, нужно согласие на сбор и использование данных.",
   e_closed="Предрегистрация закрыта.", e_busy="Сейчас слишком много заявок. Попробуйте чуть позже.",
   e_net="Сейчас не удалось принять заявку. Попробуйте позже или напишите в #help на официальном Discord.",
-  left="Осталось дней: {d}", today="Последний день",
+  left="Осталось дней: {d}", left1="Остался 1 день", today="Последний день",
 )
 PRE["de"] = dict(
   bar='Vorregistrierung offen bis 27. November, 23:59 KST · wir schreiben dir zum Start', go='Anmelden',
@@ -137,7 +137,7 @@ PRE["de"] = dict(
   e_mail="Bitte prüfe deine E-Mail-Adresse.", e_consent="Für die Registrierung ist die Einwilligung in die Datennutzung nötig.",
   e_closed="Die Vorregistrierung ist beendet.", e_busy="Gerade gibt es zu viele Anmeldungen. Bitte versuche es gleich noch einmal.",
   e_net="Die Anmeldung hat gerade nicht geklappt. Versuche es später noch einmal oder schreib in #help auf dem offiziellen Discord.",
-  left="Noch {d} Tage", today="Endet heute",
+  left="Noch {d} Tage", left1="Noch 1 Tag", today="Endet heute",
 )
 PRE["fr"] = dict(
   bar='Pré-inscription ouverte jusqu’au 27 novembre, 23:59 KST · nous vous écrirons à la sortie', go='M’inscrire',
@@ -153,14 +153,20 @@ PRE["fr"] = dict(
   e_mail="Vérifiez votre adresse e-mail.", e_consent="Pour vous pré-inscrire, vous devez accepter la collecte et l’utilisation de vos données.",
   e_closed="La pré-inscription est close.", e_busy="Trop d’inscriptions en ce moment. Réessayez dans un instant.",
   e_net="Impossible d’enregistrer votre inscription pour le moment. Réessayez plus tard ou écrivez dans #help sur le Discord officiel.",
-  left="Encore {d} jours", today="Dernier jour",
+  left="Encore {d} jours", left1="Encore 1 jour", today="Dernier jour",
 )
 
 PREJS = r'''<script>
 const PRE_API = %(api)s, PRE_UNTIL = Date.parse(%(until)s), PRE = %(pre)s, PRE_PLANS = %(plans)s;
-let preOpen = false, preLang = "en";
-const preEl = document.getElementById("pre");
+let preOpen = false, preLang = "en", preRet = null;
+const preEl = document.getElementById("pre"), preRoot = document.getElementById("root");
 function preLeft() { const ms = PRE_UNTIL - Date.now(); return ms <= 0 ? -1 : Math.floor(ms / 86400000); }
+// A page left open past the deadline: the bar and the nav link go instead of offering a popup that says "-1 days left".
+function preLive() {
+  if (preOpen && preLeft() < 0) { preOpen = false; document.querySelectorAll(".prebar,.prenav").forEach(x => x.remove()); }
+  return preOpen;
+}
+function preSeen() { try { return !!(localStorage.getItem("sbPreSeen") || localStorage.getItem("sbPreDone")); } catch (e) { return false; } }
 function preNav(t) {
   const nav = document.querySelector("header nav"); if (!nav || nav.querySelector(".prenav")) return;
   const a = document.createElement("a"); a.href = "#"; a.className = "prenav"; a.textContent = t.nav;
@@ -168,18 +174,25 @@ function preNav(t) {
 }
 function preRender(t) {
   const d = preLeft();
+  // method="post" without action: should this script's submit handler ever fail, the browser must not put the email
+  // into the address bar with a GET (GitHub Pages refuses the POST).
   preEl.innerHTML = `<div class="pbox" role="dialog" aria-modal="true" aria-labelledby="pt">
   <button class="px" type="button" aria-label="${t.close}">×</button>
-  <span class="badge">${t.badge}</span> <span class="pd">${d === 0 ? t.today : t.left.replace("{d}", d)}</span>
+  <span class="badge">${t.badge}</span> <span class="pd">${d === 0 ? t.today : d === 1 ? t.left1 : t.left.replace("{d}", d)}</span>
   <h2 id="pt">${t.title}</h2><p>${t.lead}</p><p class="pu">${t.until}<br>${t.free}</p>
-  <form novalidate><label>${t.email}<input type="email" name="email" autocomplete="email" maxlength="254" required></label>
+  <form method="post" novalidate><label>${t.email}<input type="email" name="email" autocomplete="email" maxlength="254" required></label>
   <label>${t.plan}<select name="plan">${PRE_PLANS.map((p, i) => `<option value="${p}">${t.plans[i]}</option>`).join("")}</select></label>
   <label class="pc"><input type="checkbox" name="consent"><span>${t.consent}</span></label>
   <div class="pm" role="status" aria-live="polite"></div>
   <div class="pb"><button class="btn" type="submit">${t.send}</button><button class="pl2" type="button">${t.later}</button></div></form></div>`;
-  const hide = () => { preEl.hidden = true; try { localStorage.setItem("sbPreSeen", "1"); } catch (e) {} };
+  // Closing gives the page back (inert off) and returns focus to whatever opened the popup.
+  const hide = () => { preEl.hidden = true; preRoot.inert = false; try { localStorage.setItem("sbPreSeen", "1"); } catch (e) {}
+    if (preRet && preRet.isConnected) preRet.focus(); preRet = null; };
   preEl.querySelector(".px").onclick = hide; preEl.querySelector(".pl2").onclick = hide;
-  preEl.onclick = e => { if (e.target === preEl) hide(); };
+  // Only a click that starts on the backdrop closes it, not a text selection dragged out of the email field.
+  let downOut = false;
+  preEl.onpointerdown = e => { downOut = e.target === preEl; };
+  preEl.onclick = e => { if (e.target === preEl && downOut) hide(); };
   const form = preEl.querySelector("form"), msg = preEl.querySelector(".pm"), btn = form.querySelector("button[type=submit]");
   const say = (s, ok) => { msg.textContent = s; msg.className = "pm" + (ok ? " ok" : " bad"); };
   form.onsubmit = async e => {
@@ -194,11 +207,13 @@ function preRender(t) {
         body: JSON.stringify({ email, plan: form.plan.value, lang: preLang, consent: true }) });
       const j = await r.json().catch(() => ({}));
       if (j.ok) { say(j.already ? t.already : t.done, true); form.querySelectorAll("input,select").forEach(x => x.disabled = true);
-                  btn.hidden = true; preEl.querySelector(".pl2").textContent = t.close; try { localStorage.setItem("sbPreDone", "1"); } catch (e) {} return; }
+                  btn.hidden = true; const c = preEl.querySelector(".pl2"); c.textContent = t.close; c.focus();
+                  try { localStorage.setItem("sbPreDone", "1"); } catch (e) {} return; }
       say(j.error === "email" ? t.e_mail : j.error === "consent" ? t.e_consent : j.error === "closed" ? t.e_closed
           : r.status === 429 || j.error === "busy" ? t.e_busy : t.e_net);
     } catch (err) { say(t.e_net); }
     btn.disabled = false;
+    if (!preEl.contains(document.activeElement)) btn.focus();   // disabling the focused button had dropped focus to the page
   };
 }
 function preBar(t) {
@@ -209,14 +224,16 @@ function preBar(t) {
   hero.parentNode.insertBefore(d, hero);
 }
 function preShow(force) {
-  if (!preOpen) return;
+  if (!preLive()) return;
+  if (preEl.hidden) preRet = document.activeElement;
   preRender(PRE[preLang] || PRE.en);
-  preEl.hidden = false; const i = preEl.querySelector("input[type=email]"); if (i) i.focus();
+  // Modal: the page behind is inert, so Tab stays in the popup and the page cannot be clicked or read meanwhile.
+  preEl.hidden = false; preRoot.inert = true; const i = preEl.querySelector("input[type=email]"); if (i) i.focus();
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !preEl.hidden) preEl.querySelector(".px").click(); });
 function preAfter(lang) {
   preLang = lang;
-  if (!preOpen) return;
+  if (!preLive()) return;
   preNav(PRE[lang] || PRE.en); preBar(PRE[lang] || PRE.en);
   if (!preEl.hidden) preShow(true);
 }
@@ -224,8 +241,8 @@ if (preLeft() >= 0 && document.body.classList.contains("index")) {
   fetch(PRE_API, { cache: "no-store" }).then(r => r.ok ? r.json() : {}).then(j => {
     if (!j || j.open !== true) return;
     preOpen = true; preAfter(preLang);
-    let seen = false; try { seen = !!(localStorage.getItem("sbPreSeen") || localStorage.getItem("sbPreDone")); } catch (e) {}
-    if (!seen) setTimeout(() => preShow(), 1200);
+    // Auto-open once per browser, but not over a popup already opened from the bar or the nav link (it would wipe the form).
+    if (!preSeen()) setTimeout(() => { if (preEl.hidden && !preSeen()) preShow(); }, 1200);
   }).catch(() => {});
 }
 </script>'''
@@ -251,4 +268,6 @@ PRECSS = '''
 .prebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card);border:1px solid #4a2c10;border-left:4px solid var(--or);border-radius:14px;padding:12px 16px;margin:8px 0 0}
 .prebar .pt{flex:1;min-width:200px;font-size:15px}.prebar .btn{padding:9px 18px;font-size:15px;border:0;cursor:pointer}
 header nav a.prenav{color:var(--or);font-weight:700}
+/* below the content width the extra link pushed the language menu (ru, de, fr, en, zh) to a second line; the bar's button stays */
+@media(max-width:880px){header nav a.prenav{display:none}}
 '''
