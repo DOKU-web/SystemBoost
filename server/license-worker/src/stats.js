@@ -23,6 +23,8 @@
 //                 action, target (a key id, ticket number or member id; "검색" for a search, never the search text),
 //                 kept GUARD.accessDays (one year and a day).
 
+import { PRE } from "./preorder.js";
+
 const REPO = "DOKU-web/SystemBoost";
 const MINUTE = 60e3, DAY = 864e5;
 const KEEP_DAYS = 90;          // an install silent this long is deleted; the daily totals stay
@@ -72,6 +74,9 @@ CREATE TABLE IF NOT EXISTS admin_access (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, ip TEXT NOT NULL, route TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS admin_access_at ON admin_access(at);
+CREATE TABLE IF NOT EXISTS preorders (
+  id TEXT PRIMARY KEY, email TEXT NOT NULL, plan TEXT NOT NULL, lang TEXT NOT NULL, at INTEGER NOT NULL
+) WITHOUT ROWID;
 `;
 
 const koreanDay = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
@@ -144,6 +149,7 @@ export class Stats {
     if (path === "/audit/read") return reply(this.auditRead());
     if (path === "/access") { const r = this.access(body, Date.now()); return reply(r, r.error ? 400 : 200); }
     if (path === "/access/read") return reply(this.accessRead(body));
+    if (path.startsWith("/pre/")) { const r = this.pre(path, body || {}); return reply(r, r.error && r.error !== "full" ? 400 : 200); }
     return reply({ error: "not found" }, 404);
   }
 
@@ -237,6 +243,49 @@ export class Stats {
     this.sql.exec("DELETE FROM installs WHERE last_seen < ?", Date.now() - KEEP_DAYS * DAY);
     this.pruneFeed();
     this.pruneGuard();
+    this.prePurge();
+  }
+
+  // ---- pre-registration (src/preorder.js): one row per email, every row deleted at PRE.deleteAt
+  prePurge(t = Date.now()) { if (t >= Date.parse(PRE.deleteAt)) { this.sql.exec("DELETE FROM preorders"); this.sql.exec("DELETE FROM meta WHERE k = 'pre_seen'"); } }
+  pre(path, b, t = Date.now()) {
+    this.prePurge(t);
+    if (path === "/pre/add") {
+      if (!/^[0-9a-f]{32}$/.test(b.id) || typeof b.email !== "string" || b.email.length > 254 || !PRE.plans.includes(b.plan) || !PRE.langs.includes(b.lang))
+        return { error: "bad" };
+      if (t >= Date.parse(PRE.deleteAt)) return { error: "full" };
+      if (this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id)) return { ok: true, already: true };
+      const since = Date.parse(koreanDay(t) + "T00:00:00+09:00");
+      const max = Number.isInteger(b.max) && b.max > 0 ? b.max : PRE.perDay;
+      if (this.one("SELECT COUNT(*) AS n FROM preorders WHERE at >= ?", since).n >= max) return { error: "full" };
+      this.sql.exec("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)", b.id, b.email, b.plan, b.lang, t);
+      return { ok: true };
+    }
+    if (path === "/pre/read") {
+      const seen = Number(this.one("SELECT v FROM meta WHERE k = 'pre_seen'")?.v || 0);
+      const count = this.one("SELECT COUNT(*) AS n FROM preorders").n;
+      const fresh = this.one("SELECT COUNT(*) AS n FROM preorders WHERE at > ?", seen).n;
+      const group = col => Object.fromEntries(this.sql.exec(`SELECT ${col} AS k, COUNT(*) AS n FROM preorders GROUP BY ${col}`).toArray().map(r => [r.k, r.n]));
+      const since = Date.parse(koreanDay(t) + "T00:00:00+09:00");
+      const today = this.one("SELECT COUNT(*) AS n FROM preorders WHERE at >= ?", since).n;
+      const n = Math.min(Math.max(Number(b.recent) || 0, 0), 500);
+      const recent = this.sql.exec("SELECT plan, lang, at FROM preorders ORDER BY at DESC LIMIT ?", n).toArray()
+        .map(r => ({ plan: r.plan, lang: r.lang, at: new Date(r.at).toISOString(), fresh: r.at > seen }));
+      return { count, fresh, today, byPlan: group("plan"), byLang: group("lang"), recent };
+    }
+    if (path === "/pre/seen") {
+      const last = this.one("SELECT MAX(at) AS m FROM preorders").m || t;
+      this.sql.exec("INSERT INTO meta (k, v) VALUES ('pre_seen', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", String(last));
+      return { ok: true };
+    }
+    if (path === "/pre/export") return { rows: this.sql.exec("SELECT email, plan, lang, at FROM preorders ORDER BY at").toArray() };
+    if (path === "/pre/delete") {
+      if (!/^[0-9a-f]{32}$/.test(b.id)) return { error: "bad" };
+      const had = !!this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id);
+      this.sql.exec("DELETE FROM preorders WHERE id = ?", b.id);
+      return { ok: true, deleted: had };
+    }
+    return { error: "bad" };
   }
   pruneGuard(t = Date.now()) {
     this.sql.exec("DELETE FROM counters WHERE exp <= ?", t);

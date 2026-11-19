@@ -7,6 +7,7 @@ import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
 import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
 import { overIp } from "./iplimit.js";
+import { preorderAdmin, preorderPublic } from "./preorder.js";
 import { purchaseNote } from "./purchase_note.js";
 import { alertOn, dueForReminder, paidText, reminderText, sellerAlert } from "./seller_alert.js";
 export { Stats } from "./stats.js";
@@ -340,6 +341,7 @@ export default {
       if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
       if (req.method === "POST" && url.pathname === "/sub/price") return await subPrice(req, env);
       if (req.method === "POST" && url.pathname === "/sub/price/choose") return await subPriceChoose(req, env);
+      if (url.pathname === "/preorder") return await preorderPublic(req, env, { stats, overIp, json, readJson });
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);
@@ -1075,6 +1077,7 @@ const ADMIN_VIEWS = {
   "GET /members": "회원 목록", "POST /members": "회원 검색", "GET /support": "문의 목록", "POST /support": "문의 검색",
   "GET /support/ticket": "문의 열람", "GET /log": "작업 기록", "GET /price": "가격 변경 동의",
   "GET /recovery": "복구 요청 목록", "POST /recovery": "복구 요청 목록",
+  "POST /preorders/export": "사전예약 메일 내보내기",
 };
 function viewOf(route, url, body) {
   const action = ADMIN_VIEWS[route];
@@ -1127,6 +1130,10 @@ async function admin(req, url, env, ctx) {
   // searches go in a POST body: words in an address end up in logs and browser history
   if (req.method === "GET" && url.searchParams.get("q") && ["GET /keys", "GET /members", "GET /support"].includes(route))
     return json({ error: "검색어는 POST 본문으로 보내요" }, 400, false);
+  if (route === "GET /preorders" || route.startsWith("POST /preorders/")) {
+    const { status = 200, ...r } = await preorderAdmin(env, route, body, { stats, audit: (action, detail) => audit(env, "admin", action, detail) });
+    return json(r, status, false);
+  }
   if (route === "GET /announce" || route.startsWith("POST /announce/")) {
     const r = await announce(env, route, body, (action, detail) => audit(env, "admin", action, detail));
     return json(r, r.status || 200, false);
