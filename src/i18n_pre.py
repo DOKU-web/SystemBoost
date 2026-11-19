@@ -10,6 +10,7 @@ PLAN_IDS = ["undecided", "free", "premium", "ultra", "biz"]
 
 PRE = {}
 PRE["ko"] = dict(
+  bar='사전예약 받는 중 · 11월 27일(금) 23:59까지 · 출시되면 메일로 알려 드려요', go='신청하기',
   nav="사전예약", badge="사전예약", title="SystemBoost 사전예약",
   lead="2027년 1월 정식 출시 전에 사전예약을 받아요. 출시되면 적어 주신 메일로 한 번 알려 드려요.",
   until="신청 마감: 2026년 11월 27일(금) 23:59 (한국 시간)",
@@ -26,6 +27,7 @@ PRE["ko"] = dict(
   prow=["사전예약 (2026년 11월 27일까지)", "판매자 서버", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각. 출시 알림을 한 번 보내는 데만 써요.", "2027년 2월 28일에 삭제"],
 )
 PRE["en"] = dict(
+  bar="Pre-registration is open until Nov 27, 23:59 KST · we'll email you at launch", go='Sign up',
   nav="Pre-register", badge="Pre-register", title="Pre-register for SystemBoost",
   lead="SystemBoost launches in January 2027. Pre-register and we'll email you once when it's out.",
   until="Closes: November 27, 2026, 23:59 KST (UTC+9)",
@@ -42,6 +44,7 @@ PRE["en"] = dict(
   prow=["Pre-registration (until Nov 27, 2026)", "Seller's server", "Email address, plan of interest, site language, time of sign-up. Used only to send one launch email.", "Deleted on Feb 28, 2027"],
 )
 PRE["ja"] = dict(
+  bar='事前登録受付中 · 11月27日（金）23:59まで · リリース時にメールでお知らせします', go='登録する',
   nav="事前登録", badge="事前登録", title="SystemBoost 事前登録",
   lead="2027年1月の正式リリース前に事前登録を受け付けています。リリースしたら、入力したメールに一度だけお知らせします。",
   until="締め切り：2026年11月27日（金）23:59（日本時間・韓国時間）",
@@ -57,6 +60,7 @@ PRE["ja"] = dict(
   left="残り{d}日", today="本日締め切り",
 )
 PRE["zh"] = dict(
+  bar='预约登记进行中 · 截至 11 月 27 日 23:59（韩国时间）· 发布时邮件通知你', go='立即预约',
   nav="预约", badge="预约", title="SystemBoost 预约登记",
   lead="SystemBoost 将于 2027 年 1 月正式发布，现在开放预约。发布时我们会给你填写的邮箱发一次通知。",
   until="截止：2026 年 11 月 27 日（周五）23:59（韩国时间，UTC+9）",
@@ -72,6 +76,7 @@ PRE["zh"] = dict(
   left="还剩 {d} 天", today="今天截止",
 )
 PRE["es"] = dict(
+  bar='Prerregistro abierto hasta el 27 de noviembre, 23:59 KST · te avisamos por correo en el lanzamiento', go='Registrarme',
   nav="Prerregistro", badge="Prerregistro", title="Prerregistro de SystemBoost",
   lead="SystemBoost sale en enero de 2027. Regístrate antes y te avisaremos una vez por correo cuando esté disponible.",
   until="Cierra: 27 de noviembre de 2026, 23:59 KST (UTC+9)",
@@ -87,6 +92,7 @@ PRE["es"] = dict(
   left="Quedan {d} días", today="Cierra hoy",
 )
 PRE["pt"] = dict(
+  bar='Pré-cadastro aberto até 27 de novembro, 23:59 KST · avisamos por e-mail no lançamento', go='Cadastrar',
   nav="Pré-cadastro", badge="Pré-cadastro", title="Pré-cadastro do SystemBoost",
   lead="O SystemBoost será lançado em janeiro de 2027. Faça o pré-cadastro e avisaremos uma vez por e-mail no lançamento.",
   until="Encerra: 27 de novembro de 2026, 23:59 KST (UTC+9)",
@@ -102,6 +108,7 @@ PRE["pt"] = dict(
   left="Faltam {d} dias", today="Encerra hoje",
 )
 PRE["ru"] = dict(
+  bar='Предрегистрация открыта до 27 ноября, 23:59 KST · напишем вам в день выхода', go='Записаться',
   nav="Предрегистрация", badge="Предрегистрация", title="Предрегистрация SystemBoost",
   lead="SystemBoost выходит в январе 2027 года. Зарегистрируйтесь заранее, и мы один раз напишем вам на почту в день выхода.",
   until="Приём до: 27 ноября 2026 г., 23:59 KST (UTC+9)",
@@ -117,6 +124,7 @@ PRE["ru"] = dict(
   left="Осталось дней: {d}", today="Последний день",
 )
 PRE["de"] = dict(
+  bar='Vorregistrierung offen bis 27. November, 23:59 KST · wir schreiben dir zum Start', go='Anmelden',
   nav="Vorregistrierung", badge="Vorregistrierung", title="Vorregistrierung für SystemBoost",
   lead="SystemBoost erscheint im Januar 2027. Registriere dich vorab, dann schreiben wir dir zum Start einmal eine E-Mail.",
   until="Schluss: 27. November 2026, 23:59 KST (UTC+9)",
@@ -132,6 +140,7 @@ PRE["de"] = dict(
   left="Noch {d} Tage", today="Endet heute",
 )
 PRE["fr"] = dict(
+  bar='Pré-inscription ouverte jusqu’au 27 novembre, 23:59 KST · nous vous écrirons à la sortie', go='M’inscrire',
   nav="Pré-inscription", badge="Pré-inscription", title="Pré-inscription à SystemBoost",
   lead="SystemBoost sort en janvier 2027. Pré-inscrivez-vous et nous vous enverrons un seul e-mail à la sortie.",
   until="Clôture : 27 novembre 2026, 23:59 KST (UTC+9)",
@@ -192,6 +201,13 @@ function preRender(t) {
     btn.disabled = false;
   };
 }
+function preBar(t) {
+  const hero = document.querySelector(".hero"); if (!hero || document.querySelector(".prebar")) return;
+  const d = document.createElement("div"); d.className = "prebar";
+  d.innerHTML = `<span class="badge">${t.badge}</span><span class="pt">${t.bar}</span><button type="button" class="btn">${t.go}</button>`;
+  d.querySelector("button").onclick = () => preShow(true);
+  hero.parentNode.insertBefore(d, hero);
+}
 function preShow(force) {
   if (!preOpen) return;
   preRender(PRE[preLang] || PRE.en);
@@ -201,7 +217,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && !preEl.hid
 function preAfter(lang) {
   preLang = lang;
   if (!preOpen) return;
-  preNav(PRE[lang] || PRE.en);
+  preNav(PRE[lang] || PRE.en); preBar(PRE[lang] || PRE.en);
   if (!preEl.hidden) preShow(true);
 }
 if (preLeft() >= 0 && document.body.classList.contains("index")) {
@@ -232,5 +248,7 @@ PRECSS = '''
 .pbox .btn:disabled{opacity:.6;cursor:default}
 .pbox .pl2{background:none;border:0;color:var(--mut);cursor:pointer;font-size:14px;text-decoration:underline}
 #pre .pbox [hidden]{display:none}
+.prebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card);border:1px solid #4a2c10;border-left:4px solid var(--or);border-radius:14px;padding:12px 16px;margin:8px 0 0}
+.prebar .pt{flex:1;min-width:200px;font-size:15px}.prebar .btn{padding:9px 18px;font-size:15px;border:0;cursor:pointer}
 header nav a.prenav{color:var(--or);font-weight:700}
 '''
