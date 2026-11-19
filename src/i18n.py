@@ -70,7 +70,7 @@ S["ko"] = dict(
   ft1="사용권 계약 · 개인정보",
   ft2="공식 다운로드는 이 사이트와 GitHub Releases({rel})뿐이에요. 다른 곳에 올라온 파일은 받지 마세요.",
   ft3="운영진은 디스코드 DM으로 먼저 연락하지 않고, 앱의 프리미엄 화면이 열어 주는 결제 페이지 말고 다른 곳에서 결제를 요구하지 않아요.",
-  ft4="NVIDIA는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의, Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.",
+  ft4="NVIDIA는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의, Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요. 그 밖에 나오는 회사명과 제품명(Anti-Lag, Radeon Chill, Discord 등)도 각 소유자의 상표이고, 호환 대상이나 쓰는 서비스를 가리키려고만 써요.",
 )
 
 S["en"] = dict(
@@ -138,7 +138,7 @@ S["en"] = dict(
   ft1="License agreement · Privacy",
   ft2="The only official downloads are this site and GitHub Releases ({rel}). Don't download SystemBoost anywhere else.",
   ft3="Staff never DM you first, and never ask you to pay anywhere other than the payment page opened from the app's Premium screen.",
-  ft4="NVIDIA is a trademark of NVIDIA Corporation; AMD and Radeon of Advanced Micro Devices, Inc.; Intel of Intel Corporation; Windows of Microsoft Corporation. SystemBoost is not affiliated with or endorsed by these companies.",
+  ft4="NVIDIA is a trademark of NVIDIA Corporation; AMD and Radeon of Advanced Micro Devices, Inc.; Intel of Intel Corporation; Windows of Microsoft Corporation. SystemBoost is not affiliated with or endorsed by these companies. Other company and product names (such as Anti-Lag, Radeon Chill and Discord) are trademarks of their owners and are used only to name compatible products or services we use.",
 )
 
 S["ja"] = dict(
@@ -206,7 +206,7 @@ S["ja"] = dict(
   ft1="使用許諾契約 · 個人情報",
   ft2="公式のダウンロード先はこのサイトと GitHub Releases ({rel}) だけです。ほかの場所のファイルはダウンロードしないでください。",
   ft3="運営からDMで先に連絡することはなく、アプリのプレミアム画面から開く決済ページ以外で支払いを求めることはありません。",
-  ft4="NVIDIAはNVIDIA Corporationの、AMD、RadeonはAdvanced Micro Devices, Inc.の、IntelはIntel Corporationの、WindowsはMicrosoft Corporationの商標です。SystemBoostはこれらの企業と提携しておらず、承認も受けていません。",
+  ft4="NVIDIAはNVIDIA Corporationの、AMD、RadeonはAdvanced Micro Devices, Inc.の、IntelはIntel Corporationの、WindowsはMicrosoft Corporationの商標です。SystemBoostはこれらの企業と提携しておらず、承認も受けていません。 その他の会社名・製品名（Anti-Lag、Radeon Chill、Discord など）も各所有者の商標で、対応製品や利用しているサービスを示すためにだけ使っています。",
 )
 
 S["zh"] = dict(
@@ -274,7 +274,7 @@ S["zh"] = dict(
   ft1="许可协议 · 隐私",
   ft2="官方下载渠道只有本网站和 GitHub Releases ({rel})。请勿从其他地方下载。",
   ft3="工作人员不会主动私信你，也不会要求你在应用高级版页面打开的付款页面以外付款。",
-  ft4="NVIDIA 是 NVIDIA Corporation 的商标，AMD 和 Radeon 是 Advanced Micro Devices, Inc. 的商标，Intel 是 Intel Corporation 的商标，Windows 是 Microsoft Corporation 的商标。SystemBoost 与这些公司没有合作关系，也未获得其认可。",
+  ft4="NVIDIA 是 NVIDIA Corporation 的商标，AMD 和 Radeon 是 Advanced Micro Devices, Inc. 的商标，Intel 是 Intel Corporation 的商标，Windows 是 Microsoft Corporation 的商标。SystemBoost 与这些公司没有合作关系，也未获得其认可。 其他公司名称和产品名称（如 Anti-Lag、Radeon Chill、Discord）也是其各自所有者的商标，仅用于指明兼容的产品或我们使用的服务。",
 )
 
 S["es"] = dict(
@@ -342,7 +342,7 @@ S["es"] = dict(
   ft1="Contrato de licencia · Privacidad",
   ft2="Las únicas descargas oficiales son este sitio y GitHub Releases ({rel}). No descargues SystemBoost de ningún otro lugar.",
   ft3="El equipo nunca te escribe primero por mensaje privado ni te pide pagar fuera de la página de pago que abre la pantalla Premium de la app.",
-  ft4="NVIDIA es una marca de NVIDIA Corporation; AMD y Radeon, de Advanced Micro Devices, Inc.; Intel, de Intel Corporation; y Windows, de Microsoft Corporation. SystemBoost no está afiliado a estas empresas ni cuenta con su aprobación.",
+  ft4="NVIDIA es una marca de NVIDIA Corporation; AMD y Radeon, de Advanced Micro Devices, Inc.; Intel, de Intel Corporation; y Windows, de Microsoft Corporation. SystemBoost no está afiliado a estas empresas ni cuenta con su aprobación. Los demás nombres de empresas y productos (como Anti-Lag, Radeon Chill y Discord) son marcas de sus propietarios y solo se usan para indicar productos compatibles o servicios que utilizamos.",
 )
 
 S["pt"] = dict(
@@ -410,7 +410,7 @@ S["pt"] = dict(
   ft1="Contrato de licença · Privacidade",
   ft2="Os únicos downloads oficiais são este site e o GitHub Releases ({rel}). Não baixe o SystemBoost de outros lugares.",
   ft3="A equipe nunca chama você primeiro por mensagem privada nem pede pagamento fora da página aberta pela tela Premium do app.",
-  ft4="NVIDIA é marca da NVIDIA Corporation; AMD e Radeon, da Advanced Micro Devices, Inc.; Intel, da Intel Corporation; e Windows, da Microsoft Corporation. O SystemBoost não é afiliado a essas empresas nem aprovado por elas.",
+  ft4="NVIDIA é marca da NVIDIA Corporation; AMD e Radeon, da Advanced Micro Devices, Inc.; Intel, da Intel Corporation; e Windows, da Microsoft Corporation. O SystemBoost não é afiliado a essas empresas nem aprovado por elas. Os demais nomes de empresas e produtos (como Anti-Lag, Radeon Chill e Discord) são marcas de seus proprietários e são usados apenas para indicar produtos compatíveis ou serviços que usamos.",
 )
 
 S["ru"] = dict(
@@ -478,7 +478,7 @@ S["ru"] = dict(
   ft1="Лицензионное соглашение · Конфиденциальность",
   ft2="Официально скачать SystemBoost можно только с этого сайта и из GitHub Releases ({rel}). Не скачивайте его из других мест.",
   ft3="Команда никогда не пишет первой в личные сообщения и не просит оплачивать где-либо, кроме страницы оплаты, открытой с экрана Premium в приложении.",
-  ft4="NVIDIA — товарный знак NVIDIA Corporation, AMD и Radeon — Advanced Micro Devices, Inc., Intel — Intel Corporation, Windows — Microsoft Corporation. SystemBoost не связан с этими компаниями и не одобрен ими.",
+  ft4="NVIDIA — товарный знак NVIDIA Corporation, AMD и Radeon — Advanced Micro Devices, Inc., Intel — Intel Corporation, Windows — Microsoft Corporation. SystemBoost не связан с этими компаниями и не одобрен ими. Другие названия компаний и продуктов (например, Anti-Lag, Radeon Chill и Discord) — товарные знаки их владельцев; они указаны только для обозначения совместимых продуктов или сервисов, которыми мы пользуемся.",
 )
 
 S["de"] = dict(
@@ -546,7 +546,7 @@ S["de"] = dict(
   ft1="Lizenzvereinbarung · Datenschutz",
   ft2="Offizielle Downloads gibt es nur auf dieser Seite und bei GitHub Releases ({rel}). Lade SystemBoost nirgendwo sonst herunter.",
   ft3="Das Team schreibt dich nie zuerst per DM an und verlangt keine Zahlung außerhalb der Zahlungsseite, die der Premium-Bildschirm der App öffnet.",
-  ft4="NVIDIA ist eine Marke der NVIDIA Corporation, AMD und Radeon der Advanced Micro Devices, Inc., Intel der Intel Corporation und Windows der Microsoft Corporation. SystemBoost ist mit diesen Unternehmen nicht verbunden und nicht von ihnen genehmigt.",
+  ft4="NVIDIA ist eine Marke der NVIDIA Corporation, AMD und Radeon der Advanced Micro Devices, Inc., Intel der Intel Corporation und Windows der Microsoft Corporation. SystemBoost ist mit diesen Unternehmen nicht verbunden und nicht von ihnen genehmigt. Andere Firmen- und Produktnamen (etwa Anti-Lag, Radeon Chill und Discord) sind Marken ihrer Inhaber und werden nur genannt, um kompatible Produkte oder von uns genutzte Dienste zu bezeichnen.",
 )
 
 S["fr"] = dict(
@@ -614,7 +614,7 @@ S["fr"] = dict(
   ft1="Contrat de licence · Confidentialité",
   ft2="Les seuls téléchargements officiels sont ce site et GitHub Releases ({rel}). Ne téléchargez SystemBoost nulle part ailleurs.",
   ft3="L’équipe ne vous contacte jamais en premier par message privé et ne demande jamais de payer ailleurs que sur la page de paiement ouverte depuis l’écran Premium de l’app.",
-  ft4="NVIDIA est une marque de NVIDIA Corporation, AMD et Radeon d’Advanced Micro Devices, Inc., Intel d’Intel Corporation et Windows de Microsoft Corporation. SystemBoost n’est ni affilié à ces sociétés ni approuvé par elles.",
+  ft4="NVIDIA est une marque de NVIDIA Corporation, AMD et Radeon d’Advanced Micro Devices, Inc., Intel d’Intel Corporation et Windows de Microsoft Corporation. SystemBoost n’est ni affilié à ces sociétés ni approuvé par elles. Les autres noms de sociétés et de produits (comme Anti-Lag, Radeon Chill et Discord) sont des marques de leurs propriétaires et ne servent qu’à désigner des produits compatibles ou des services que nous utilisons.",
 )
 
 # license page labels

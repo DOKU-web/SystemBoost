@@ -222,9 +222,12 @@ LT = {
          ["가입·로그인·메일 요청 남용 방지", "판매자 서버", "접속 IP를 되돌릴 수 없게 바꾼 값", "1시간"],
          ["업데이트 확인", "GitHub", "없음 (최신 버전 목록만 받아요)", "—"]],
    privfoot=f'정보를 지우거나 확인하고 싶으면 <a href="{DC}">공식 디스코드</a> #help로 요청해 주세요. 회원 정보는 앱의 계정 메뉴에서 탈퇴하면 바로 지워져요.',
-   ossp="SystemBoost가 쓰는 다른 사람의 소프트웨어와 그 라이선스예요. 앱 설정 화면의 \"라이선스 전문 보기\"에서 전문을 볼 수 있어요.",
+   ossp="SystemBoost가 쓰는 다른 사람의 소프트웨어와 그 라이선스예요. 앱 설정 화면의 \"라이선스 전문 보기\"와 <a href=\"third_party_notices.txt\">THIRD_PARTY_NOTICES.txt</a>(설치 폴더에 있는 것과 같은 파일)에서 전문을 볼 수 있어요.",
+   ossadlx="라데온 드라이버 기능이 들어 있는 판에는 AMD ADLX SDK로 만든 부분도 있어요. 오픈소스가 아니고 AMD의 라이선스를 따르며, 조건은 <a href=\"#a12-2\">제12조의2</a>에 있어요.",
+   tm="NVIDIA, AMD, Radeon, Intel, Windows, Discord 등 이 페이지에 나오는 회사명과 제품명은 각 소유자의 상표이고, 호환 대상이나 판매자가 쓰는 서비스를 가리키려고만 써요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.",
    osscols=["구성 요소", "라이선스", "쓰는 곳"],
-   ossuse=["앱 화면", "설치 파일에 함께 들어 있음", "설치와 자동 업데이트", "Windows NVIDIA 드라이버 설정"],
+   ossuse=["앱 화면", "앱 화면 그리기", "앱 화면 그리기", "Avalonia 안의 글꼴(앱 화면은 Windows 글꼴을 써요)", "Avalonia가 함께 씀",
+             "앱 실행(설치 파일에 함께 들어 있음)", "설치와 자동 업데이트", "Windows NVIDIA 드라이버 설정", "프레임 생성 엔진과 도우미", "2단계 인증 QR 코드"],
    own="만든 방법: 코드, 셰이더, 문서는 Anthropic Claude(claude.ai, Claude Code)를 써서 만들었고, 로고는 Anthropic Claude(claude.ai)로 만들었어요. AI 도구로 만든 부분에 저작권이 생기는지, 생긴다면 누구에게 있는지는 확인하지 않았어요. 이 고지로 저작권을 주장하지 않아요.",
    contactp=f'판매자: DOKKU<br>라이선스, 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
  "en": dict(h1="License Agreement · Privacy", sub='This is the same agreement the app shows on first start. You can read it again in the app under Settings → "View license agreement".',
@@ -245,20 +248,33 @@ LT = {
          ["Sign-up / login / email request abuse prevention", "Seller's server", "A one-way hash of the connecting IP", "1 hour"],
          ["Update check", "GitHub", "Nothing (only fetches the list of versions)", "—"]],
    privfoot=f'To check or delete your data, ask in #help on the <a href="{DC}">official Discord</a>. Account data is deleted immediately when you delete your account in the app.',
-   ossp="Other people's software that SystemBoost uses, and its licenses. Full texts are in the app under Settings → \"View full licenses\".",
+   ossp="Other people's software that SystemBoost uses, and its licenses. Full texts are in the app under Settings → \"View full licenses\" and in <a href=\"third_party_notices.txt\">THIRD_PARTY_NOTICES.txt</a> (the same file as in the install folder).",
+   ossadlx="Versions with the Radeon driver features also contain parts built with the AMD ADLX SDK. They are not open source and follow AMD's licence; the terms are in <a href=\"#a12-2\">Article 12-2</a>.",
+   tm="NVIDIA, AMD, Radeon, Intel, Windows, Discord and the other company and product names on this page are trademarks of their owners and are used only to name compatible products or services the seller uses. SystemBoost is not affiliated with or endorsed by these companies.",
    osscols=["Component", "License", "Used for"],
-   ossuse=["App UI", "Bundled with the installer", "Installer and automatic updates", "Windows NVIDIA driver settings"],
+   ossuse=["App UI", "Drawing the app", "Drawing the app", "A font inside Avalonia (the app's screens use Windows fonts)", "Used by Avalonia",
+             "Running the app (bundled with the installer)", "Installer and automatic updates", "Windows NVIDIA driver settings", "Frame generation engine and helper", "2-step verification QR code"],
    own="How it was made: the code, shaders and documents were made with Anthropic Claude (claude.ai and Claude Code); the logo was made with Anthropic Claude (claude.ai). Whether copyright exists in the AI-made parts, and who would hold it, has not been checked, and this notice does not claim it.",
    contactp=f'Seller: DOKKU<br>For license, key, payment, withdrawal/refund and privacy questions, post in #help on the <a href="{DC}">official Discord</a>. Never post your full key in a public channel. Staff never DM you first.'),
 }
-OSS = [('<a href="https://github.com/AvaloniaUI/Avalonia">Avalonia</a>', "MIT"), ('<a href="https://github.com/dotnet/runtime">.NET</a>', "MIT"),
-       ('<a href="https://github.com/velopack/velopack">Velopack</a>', "MIT"), ('<a href="https://github.com/NVIDIA/nvapi">NVAPI</a>', "MIT")]
+# The same components as the app's Settings card and THIRD_PARTY_NOTICES.txt (one row each, ossuse in the same order).
+OSS = [('<a href="https://github.com/AvaloniaUI/Avalonia">Avalonia</a>', "MIT"),
+       ("ANGLE, xxHash", "BSD-3-Clause, BSD-2-Clause"),
+       ('<a href="https://github.com/mono/SkiaSharp">SkiaSharp</a>, HarfBuzzSharp (Skia, HarfBuzz, libjpeg-turbo, libpng, libwebp, zlib)', "MIT, BSD, IJG, zlib"),
+       ("Roboto Light", "Apache-2.0"),
+       ("MicroCom.Runtime, Tmds.DBus.Protocol", "MIT"),
+       ('<a href="https://github.com/dotnet/runtime">.NET 8</a>', "MIT"),
+       ('<a href="https://github.com/velopack/velopack">Velopack</a>, NuGet.Versioning, Rust crates', "MIT, Apache-2.0, ISC, BSD-3-Clause, Zlib, Unicode-3.0, CDLA-Permissive-2.0"),
+       ('<a href="https://github.com/NVIDIA/nvapi">NVAPI</a>', "MIT"),
+       ("C++/WinRT, Microsoft C/C++ runtime", "MIT, Apache-2.0 WITH LLVM-exception"),
+       ('<a href="https://www.nayuki.io/page/qr-code-generator-library">QR Code generator</a> (Project Nayuki)', "MIT")]
 
 def license_body(L, eulas):
     s = S[L]; base = "ko" if L == "ko" else "en"; t = LT[base]
     head, secs = eulas[base]
     toc, body = eula_html(secs, {R8: t["rev"], R9: t["rev9"], R27: t["rev27"]})
     rows = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in t["rows"])
+    if len(t["ossuse"]) != len(OSS): raise SystemExit(f"license ({base}): ossuse has {len(t['ossuse'])} rows for {len(OSS)} components")
     oss = "".join(f"<tr><td>{a}</td><td>{b}</td><td>{u}</td></tr>" for (a, b), u in zip(OSS, t["ossuse"]))
     note = f'<div class="langnote">{LIC_NOTE[L]}</div>' if L in LIC_NOTE else ""
     return f'''{header(s, "license")}
@@ -276,10 +292,11 @@ def license_body(L, eulas):
 <h2 id="oss">{t["oss"]}</h2>
 <p>{t["ossp"]}</p>
 <div class="tbl"><table><tr>{"".join(f"<th>{c}</th>" for c in t["osscols"])}</tr>{oss}</table></div>
+<p>{t["ossadlx"]}</p>
 <p>{t["own"]}</p>
 <h2 id="contact">{t["contact"]}</h2>
 <p>{t["contactp"]}</p>
-<footer>SystemBoost · DOKKU · <a href="./">SystemBoost</a> · <a href="{DC}">{s["nav_discord"]}</a></footer>'''
+<footer>SystemBoost · DOKKU · <a href="./">SystemBoost</a> · <a href="{DC}">{s["nav_discord"]}</a><br><span class="tm">{t["tm"]}</span></footer>'''
 
 SCRIPT = '''<script>
 const LANGS = %s, META = %s;
@@ -371,6 +388,9 @@ if __name__ == "__main__":
     links = set(re.findall(r"license\.html#([\w-]+)", idx))
     missing = sorted(a for a in links if f'id="{a}"' not in lic)
     if missing: raise SystemExit(f"index.html links to license.html anchors that do not exist: {missing}")
-    for name, text in (("index.html", idx), ("license.html", lic)):
+    tpn = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(sys.argv[1])), "..", "..", "..", "THIRD_PARTY_NOTICES.txt"))
+    notices = read(tpn).replace("\r\n", "\n")
+    if "Third-party notices" not in notices.splitlines()[0]: raise SystemExit("THIRD_PARTY_NOTICES.txt not found next to the agreement's repository")
+    for name, text in (("index.html", idx), ("license.html", lic), ("third_party_notices.txt", notices)):
         with open(os.path.join(ROOT, name), "w", encoding="utf-8", newline="\n") as out: out.write(text)
     print("index", len(idx), "license", len(lic))
