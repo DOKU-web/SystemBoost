@@ -491,11 +491,21 @@ button.todoRow:hover{border-color:var(--or)}
     <h2>사전예약 <small id="preNote">불러오는 중이에요</small></h2>
     <div class="stats in" id="preStats"></div>
     <div class="row"><button class="p" id="preSeen">새 신청 확인</button><button id="preCsv">메일 목록 CSV 내려받기</button><span class="mut" id="preMsg"></span></div>
-    <p class="mut">사이트 팝업에서 받은 출시 알림 신청이에요. 메일 주소는 목록에 보이지 않고, CSV로 내려받을 때만 보여요(관리자 접속 기록에 남아요). 출시 알림 메일 1회에만 쓰고, 2027년 2월 28일에 서버가 모두 지워요. 내려받은 파일도 그 뒤에는 지워 주세요.</p>
+    <p class="mut">사이트 팝업에서 받은 출시 알림 신청이에요. 메일 주소는 목록에 보이지 않고, CSV로 내려받을 때만 보여요(내려받으면 기록과 관리자 접속 기록에 남아요). 출시 알림 메일 1회에만 쓰고, 2027년 2월 28일에 서버가 모두 지워요. 처리방침에 내려받은 파일도 그날 지운다고 적었으니, 늦어도 2027년 2월 28일에는 내려받은 파일을 모두 지워 주세요.</p>
+  </div>
+  <div class="card" id="paCard">
+    <h2>새 신청 브라우저 알림 <small id="paState">꺼짐</small></h2>
+    <div class="cIds">
+      <label class="mut">시작 (한국 시간)<input id="paFrom" type="datetime-local" style="color-scheme:dark"></label>
+      <label class="mut">끝 (한국 시간)<input id="paTo" type="datetime-local" style="color-scheme:dark"></label>
+    </div>
+    <div class="row" style="margin-top:8px"><button class="p" id="paOn" aria-describedby="paState">알림 켜기</button><button id="paSave">기간 저장</button><span class="mut" id="paMsg" role="status"></span></div>
+    <p id="paPeriod" style="margin:10px 0 4px"></p>
+    <p class="mut" style="margin:0">대시보드 창(탭)이 열려 있어야 알림이 와요. 최소화하거나 다른 탭을 봐도 돼요. 브라우저를 닫으면 오지 않아요.</p>
   </div>
   <div class="card">
     <h2>최근 신청 <small>최근 100건, 새 신청은 주황색</small></h2>
-    <div class="tbl" style="max-height:420px;overflow:auto"><table><thead><tr><th>시각</th><th>관심 플랜</th><th>언어</th></tr></thead><tbody id="preList"></tbody></table></div>
+    <div class="tbl" style="max-height:420px;overflow:auto"><table><thead><tr><th>시각 (한국 시간)</th><th>관심 플랜</th><th>언어</th></tr></thead><tbody id="preList"></tbody></table></div>
   </div>
   <div class="card">
     <h2>신청 지우기 <small>삭제를 요청받았을 때</small></h2>
@@ -581,41 +591,67 @@ async function loadAll() { await Promise.all([loadSummary(), loadOrders(), loadK
 let preNow = null;
 const PRE_PLAN = { undecided: "아직 모름", free: "무료", premium: "프로", ultra: "울트라", biz: "산업" };
 const PRE_LANG = { en: "영어", ko: "한국어", ja: "일본어", zh: "중국어", es: "스페인어", pt: "포르투갈어", ru: "러시아어", de: "독일어", fr: "프랑스어" };
+// Time left on this PC's clock: minutes in the last hour, never below zero (the server's `open` says when it is over).
+function preLeft(until) {
+  const m = Math.floor((Date.parse(until) - Date.now()) / 6e4), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60);
+  return !(m > 0) ? "곧 마감돼요" : (d ? d + "일 " : "") + (d || h ? h + "시간" : m + "분") + " 남음";
+}
+function preSay(t, cls) { $("preMsg").textContent = t; $("preMsg").className = cls || "mut"; }
+// times on this tab in Korean time whatever this PC's time zone (when() shows the PC's own)
+const preWhen = iso => iso ? new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
 async function loadPre() {
   let r; try { r = await api("/preorders"); } catch (e) { if (e.message !== "401") $("preNote").textContent = "불러오지 못했어요: " + e.message; return; }
   preNow = r;
   $("goPre").classList.toggle("hide", !r.shown);
+  if (!r.shown && tabNow === "pre") showTab("home", true);   // the rows are gone (2027-02-28) and the tab with them
   $("preBadge").textContent = num(r.fresh); $("preBadge").classList.toggle("hide", !r.fresh);
   $("goPre").title = r.fresh ? "사전예약 새 신청 " + num(r.fresh) + "건" : "";
-  const left = Date.parse(r.until) - Date.now(), d = Math.floor(left / 864e5), h = Math.floor(left % 864e5 / 36e5);
-  $("preNote").textContent = r.open ? `받는 중 · 마감 ${when(r.until)} (${d > 0 ? d + "일 " : ""}${h}시간 남음)` : "마감됐어요. 신청을 더 받지 않아요.";
+  $("preNote").textContent = r.open ? `받는 중 · 마감 ${preWhen(r.until)} 한국 시간 (${preLeft(r.until)})` : "마감됐어요. 신청을 더 받지 않아요.";
   const byPlan = Object.keys(PRE_PLAN).map(k => [PRE_PLAN[k], num(r.byPlan[k] || 0)]);
   const langs = Object.entries(r.byLang || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => (PRE_LANG[k] || k) + " " + num(n)).join(" · ");
   $("preStats").innerHTML = tiles([["전체 신청", num(r.count), langs], ["새 신청", num(r.fresh)], ["오늘(한국 시간)", num(r.today)], ...byPlan]);
-  $("preList").innerHTML = r.recent.length ? r.recent.map(x => `<tr${x.fresh ? ' style="color:var(--or)"' : ""}><td>${esc(when(x.at))}</td><td>${esc(PRE_PLAN[x.plan] || x.plan)}</td><td>${esc(PRE_LANG[x.lang] || x.lang)}</td></tr>`).join("")
+  // a new sign-up is orange and says 새 (not by colour alone)
+  $("preList").innerHTML = r.recent.length ? r.recent.map(x => `<tr${x.fresh ? ' style="color:var(--or)"' : ""}><td>${esc(preWhen(x.at))}${x.fresh ? " <b>새</b>" : ""}</td><td>${esc(PRE_PLAN[x.plan] || x.plan)}</td><td>${esc(PRE_LANG[x.lang] || x.lang)}</td></tr>`).join("")
                                          : `<tr><td colspan="3" class="mut">아직 신청이 없어요</td></tr>`;
   $("preSeen").disabled = !r.fresh;
+  $("preCsv").disabled = !r.count;   // an empty file would still be logged as an export of personal data
+  paCheck(r);
   if (sumCounts) renderTodo(sumCounts);
 }
-$("preSeen").onclick = async () => { try { await api("/preorders/seen", {}); await loadPre(); toast("확인했어요"); } catch (e) { $("preMsg").textContent = e.message; } };
+$("preSeen").onclick = async () => {
+  try { await api("/preorders/seen", {}); preSay(""); await loadPre(); toast("확인했어요"); }
+  catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
+};
 $("preCsv").onclick = async () => {
-  if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 2027년 2월 28일 뒤에는 지워 주세요.", "내려받기"))) return;
+  if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 기록과 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 늦어도 2027년 2월 28일에는 지워 주세요. 메일 발송 서비스로 보내려면 먼저 처리방침에 그 회사를 적어야 해요.", "내려받기"))) return;
   try {
     const r = await api("/preorders/export", {});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + r.csv], { type: "text/csv;charset=utf-8" }));
-    a.download = "systemboost-preorders-" + new Date().toISOString().slice(0, 10) + ".csv"; a.click();
+    // the date in Korea (toISOString alone is UTC: before 9 a.m. it named the file after yesterday)
+    a.download = "systemboost-preorders-" + new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10) + ".csv"; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    $("preMsg").textContent = num(r.count) + "건을 내려받았어요";
-  } catch (e) { $("preMsg").textContent = e.message; }
+    preSay(num(r.count) + "건을 내려받았어요");
+  } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
 $("preDelGo").onclick = async () => {
-  const email = $("preDel").value.trim(); if (!email) return;
-  if (!(await ask("사전예약 지우기", esc(email) + " 의 신청을 지울까요? 되돌릴 수 없어요.", "지우기"))) return;
-  try { const r = await api("/preorders/delete", { email }); $("preMsg").textContent = r.deleted ? "지웠어요" : "그 메일로 된 신청이 없어요"; $("preDel").value = ""; loadPre(); }
-  catch (e) { $("preMsg").textContent = e.message; }
+  const email = $("preDel").value.trim();
+  if (!email) { preSay("지울 메일 주소를 적어 주세요", "err"); $("preDel").focus(); return; }
+  if (!(await ask("사전예약 지우기", esc(email) + " 의 신청을 지울까요? 되돌릴 수 없어요.", "지우기"))) return;   // ask() sets innerHTML
+  try {
+    const r = await api("/preorders/delete", { email });
+    if (r.deleted) { preSay("지웠어요"); $("preDel").value = ""; loadPre(); }
+    else preSay("그 메일로 된 신청이 없어요. 주소를 확인해 주세요", "err");   // the address stays in the box, to fix a typo
+  } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
-setInterval(() => { if (token && !document.hidden && !$("app").classList.contains("hide") && preNow && preNow.shown) loadPre(); }, 60e3);
+// GET /preorders reads the Stats object's SQLite (a daily rows-read budget): every 60 s only while this tab is the one
+// shown in a visible page, or while the browser alert is on and in its period (paActive, below; a hidden page too), one
+// request either way. Also until a first load that failed has worked once (preNow null), so the tab still turns up.
+// Opening the tab loads it once (showTab); on the other tabs the badge and 할 일 row come with loadAll.
+setInterval(() => {
+  if (!token || $("app").classList.contains("hide") || (preNow && !preNow.shown)) return;
+  if ((!document.hidden && (tabNow === "pre" || !preNow)) || paActive()) loadPre();
+}, 60e3);
 const CARD_PLANS = ["monthly", "yearly", "ultra_monthly", "ultra_yearly", "biz_monthly", "biz_yearly"];
 function showCard(c) {
   const mark = (id, on) => { $(id).textContent = on ? "등록됨" : "없음"; $(id).className = on ? "yes" : "no"; };
@@ -1132,6 +1168,7 @@ function showTab(name, quiet) {
   try { if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name); } catch (e) {}
   if (name === "stats") drawCharts();   // drawn while the tab was hidden, the charts had no width to fit
   if (name === "support") { feedNew = 0; feedTitle(); }
+  if (name === "pre" && changed && token && !$("app").classList.contains("hide")) loadPre();   // its 60 s refresh runs only while shown
   if (changed && !quiet) scrollTo(0, 0);
   const b = document.querySelector('#tabs [data-tab="' + name + '"]');
   if (b && matchMedia("(max-width:900px)").matches) b.scrollIntoView({ block: "nearest", inline: "nearest" });   // a narrow menu scrolls sideways
@@ -1179,7 +1216,7 @@ function renderTodo(c) {
     const ready = recNow.filter(x => Number(x.due) <= Date.now()).length, wait = recNow.length - ready;
     html += `<button class="todoRow" data-go="members" data-seg="" data-scroll="rcCard"><span class="tn" style="color:var(--or)">${num(recNow.length)}</span><span class="tt"><b>계정 복구 요청</b><span class="mut">${ready ? num(ready) + "건은 지금 승인할 수 있어요. " : ""}${wait ? num(wait) + "건은 72시간 대기 중이에요. " : ""}결제 기록과 맞춰 본인인지 확인하세요.</span></span><span class="tg">보기 ›</span></button>`;
   }
-  if (preNow && preNow.fresh > 0) html += `<button class="todoRow" data-go="pre" data-seg=""><span class="tn" style="color:var(--or)">${num(preNow.fresh)}</span><span class="tt"><b>사전예약 새 신청</b><span class="mut">사이트 팝업에서 출시 알림을 신청했어요. 전체 ${num(preNow.count)}건${preNow.open ? " · 마감 " + esc(when(preNow.until)) : " · 마감됨"}.</span></span><span class="tg">보기 ›</span></button>`;
+  if (preNow && preNow.fresh > 0) html += `<button class="todoRow" data-go="pre" data-seg=""><span class="tn" style="color:var(--or)">${num(preNow.fresh)}</span><span class="tt"><b>사전예약 새 신청</b><span class="mut">사이트 팝업에서 출시 알림을 신청했어요. 전체 ${num(preNow.count)}건${preNow.open ? " · 마감 " + esc(preWhen(preNow.until)) + " 한국 시간" : " · 마감됨"}.</span></span><span class="tg">보기 ›</span></button>`;
   if (!html) html = `<div class="todoDone">지금 처리할 일이 없어요.</div>`;
   const waiting = Math.max(0, (Number(c.ordersOpen) || 0) - (Number(c.ordersPaid) || 0));
   if (waiting) html += `<p class="mut" style="margin:6px 0 0">결제 전 신청 ${num(waiting)}건: 앱에서 '결제하기'를 눌렀지만 아직 결제했다고 알리지 않았어요. 판매·키의 결제 신청에 있어요.</p>`;
@@ -1943,6 +1980,92 @@ document.addEventListener("visibilitychange", () => { if (feedOn()) { feedPoll()
 addEventListener("focus", feedLook);
 addEventListener("scroll", () => { if (feedNew) requestAnimationFrame(feedLook); }, { passive: true });
 
+// ------------------------------------------------------------ 사전예약: browser notifications for new sign-ups (this browser only)
+// While on, allowed by the browser, logged in and now inside the period the seller saved (Korean time), GET /preorders is
+// asked every 60 s even in a hidden tab (the same request as the tab's refresh, see loadPre's interval). One notification a
+// poll for sign-ups newer than the newest this browser has already seen; sign-ups that were there before the alert was
+// turned on or before the page loaded never notify. Nothing is marked 확인. Kept in localStorage only: {on, from, to, last}.
+const PA_KEY = DEMO ? "sbPreAlertDemo" : "sbPreAlert";
+const KST = 9 * 36e5;
+// Korean time <-> instants whatever this PC's time zone: a datetime-local value ("2026-11-27T23:59") is read as Korean time
+const kstInput = ms => new Date(ms + KST).toISOString().slice(0, 16);
+function kstParse(v) { const m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::\d{2}(?:\.\d{1,3})?)?$/.exec(String(v || "")); return m ? Date.parse(m[1] + ":00+09:00") : NaN; }
+function kstText(ms) {
+  const d = new Date(ms + KST), p = n => String(n).padStart(2, "0");
+  return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일(${"일월화수목금토"[d.getUTCDay()]}) ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+let pa = { on: false, from: "", to: "", last: "" }, paPageSeen = false;
+function paLoad() {
+  try { const v = JSON.parse(localStorage.getItem(PA_KEY) || "null"); if (v && typeof v === "object") pa = { on: v.on === true, from: String(v.from || ""), to: String(v.to || ""), last: String(v.last || "") }; } catch (e) {}
+}
+function paStore() { try { localStorage.setItem(PA_KEY, JSON.stringify(pa)); } catch (e) {} }
+function paSay(t, cls) { $("paMsg").textContent = t; $("paMsg").className = cls || "mut"; }
+const paPerm = () => canAlert() ? Notification.permission : "none";
+function paActive(t = Date.now()) { return !!token && pa.on && paPerm() === "granted" && Date.parse(pa.from) <= t && t <= Date.parse(pa.to); }
+// the period in the boxes: the end counts to the end of its minute (23:59 is 23:59:59)
+function paPeriodIn() {
+  const f = kstParse($("paFrom").value), e = kstParse($("paTo").value);
+  if (Number.isNaN(f) || Number.isNaN(e)) return { err: "시작과 끝을 모두 적어 주세요" };
+  if (e <= f) return { err: "끝은 시작보다 뒤여야 해요" };
+  if (e + 59999 < Date.now()) return { err: "끝 시각이 이미 지났어요" };
+  return { from: new Date(f).toISOString(), to: new Date(e + 59999).toISOString() };
+}
+function paRender() {
+  const perm = paPerm(), f = Date.parse(pa.from), e = Date.parse(pa.to), t = Date.now(), off = !(pa.on && perm !== "default");
+  $("paState").textContent = perm === "none" ? "이 브라우저는 알림을 지원하지 않아요"
+    : perm === "denied" ? "브라우저에서 막혀 있어요. 주소창 왼쪽의 사이트 정보(자물쇠)에서 알림을 허용으로 바꾸고 새로고침해 주세요"
+    : pa.on && perm === "granted" ? "켜짐" : "꺼짐";
+  $("paState").className = pa.on && perm === "granted" ? "okc" : "";
+  $("paOn").textContent = off ? "알림 켜기" : "알림 끄기";
+  $("paOn").disabled = perm === "none" || (off && perm === "denied");
+  $("paPeriod").textContent = f < e ? "알림 기간: " + kstText(f) + " ~ " + kstText(e) + (t > e ? " · 알림 기간이 끝났어요" : t < f ? " · 아직 시작 전이에요" : "")
+                                    : "알림 기간을 아직 저장하지 않았어요. 켜면 위의 기간으로 저장해요.";
+}
+// the saved period in the boxes, or now ~ the sign-up deadline (GET /preorders until) while none is saved
+function paFill() {
+  const f = Date.parse(pa.from), e = Date.parse(pa.to);
+  if (f < e) { $("paFrom").value = kstInput(f); $("paTo").value = kstInput(e); return; }
+  if (!$("paFrom").value) $("paFrom").value = kstInput(Date.now());
+  if (!$("paTo").value && preNow && preNow.until) $("paTo").value = kstInput(Date.parse(preNow.until));
+}
+function paNotify(rows, capped) {
+  const by = {}; rows.forEach(x => { by[x.plan] = (by[x.plan] || 0) + 1; });
+  const plans = Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) => (PRE_PLAN[k] || k) + " " + num(n)).join(" · ");
+  try {
+    const n = new Notification("SystemBoost 사전예약", { body: `새 신청 ${num(rows.length)}건${capped ? " 이상" : ""} · ${plans}`, tag: "sb-pre", renotify: true });
+    n.onclick = () => { window.focus(); showTab("pre"); n.close(); };
+  } catch (e) { /* e.g. Android Chrome needs a service worker: no notification then */ }
+}
+// after every GET /preorders (loadPre): notify what is newer than `last`, then move `last` to the newest sign-up
+function paCheck(r) {
+  paLoad();   // another dashboard tab of this browser may have notified already
+  const lastMs = Date.parse(pa.last) || 0, from = Date.parse(pa.from);
+  const newest = r.recent.reduce((m, x) => Math.max(m, Date.parse(x.at) || 0), 0);
+  const rows = paPageSeen ? r.recent.filter(x => Date.parse(x.at) > lastMs && Date.parse(x.at) >= from) : [];
+  paPageSeen = true;
+  if (newest > lastMs) { pa.last = new Date(newest).toISOString(); paStore(); }
+  if (rows.length && paActive() && (document.hidden || !document.hasFocus())) paNotify(rows, rows.length >= 100);
+  if (!(Date.parse(pa.from) < Date.parse(pa.to)) && !$("paTo").value) paFill();
+  paRender();
+}
+$("paSave").onclick = () => {
+  const p = paPeriodIn(); if (p.err) return paSay(p.err, "err");
+  pa.from = p.from; pa.to = p.to; paStore(); paRender(); paSay("기간을 저장했어요");
+};
+$("paOn").onclick = async () => {
+  if (pa.on && paPerm() !== "default") { pa.on = false; paStore(); paRender(); paSay("알림을 껐어요"); return; }
+  if (paPerm() === "none") return;
+  const p = paPeriodIn(); if (p.err) return paSay(p.err, "err");
+  let perm = paPerm();
+  if (perm === "default")   // asked in the click itself (browsers want a user gesture); old browsers only call back
+    perm = await new Promise(res => { try { const q = Notification.requestPermission(res); if (q && q.then) q.then(res, () => res(paPerm())); } catch (e) { res(paPerm()); } });
+  if (perm !== "granted") { paRender(); return paSay(perm === "denied" ? "브라우저가 알림을 막았어요" : "알림을 허락하지 않았어요", "err"); }
+  if (token) await loadPre();   // the sign-ups there now are counted as seen before `on`
+  pa.from = p.from; pa.to = p.to; pa.on = true; paStore(); paRender();
+  paSay(Date.parse(p.from) > Date.now() ? "켰어요. 기간이 시작되면 알려 드려요" : "켰어요");
+};
+paLoad(); paFill(); paRender();
+
 // ------------------------------------------------------------ demo data (file:// or ?demo only)
 let demo;
 function demoApi(path, b) {
@@ -2004,15 +2127,28 @@ function demoApi(path, b) {
   const [p, qs] = path.split("?"); const q = new URLSearchParams(qs || "");
   const R = v => Promise.resolve(JSON.parse(JSON.stringify(v)));
   if (p.startsWith("/preorders")) {
-    if (!demo.pre) { const m = n => new Date(Date.now() - n * 36e5).toISOString(); const P = ["ultra", "premium", "undecided", "biz", "ultra", "free", "premium", "ultra"], G = ["ko", "ko", "en", "ko", "ja", "en", "ko", "zh"];
-      demo.pre = { seen: 3, rows: P.map((plan, i) => ({ plan, lang: G[i], at: m(i * 5 + 0.3), email: "fan" + (i + 1) + "@example.com" })) }; }
-    const rows = demo.pre.rows, fresh = Math.max(0, rows.length - demo.pre.seen);
+    // like src/preorder.js and stats.js: open until `until`, every row gone at `deleteAt`, 새 = after the last 확인 (a time),
+    // 오늘 = since midnight in Korea, a malformed address is refused
+    const until = "2026-11-27T14:59:59Z", deleteAt = "2027-02-27T15:00:00Z", t = Date.now();
+    if (!demo.pre) { const m = n => new Date(Math.min(t, Date.parse(until)) - n * 36e5).toISOString(); const P = ["ultra", "premium", "undecided", "biz", "ultra", "free", "premium", "ultra"], G = ["ko", "ko", "en", "ko", "ja", "en", "ko", "zh"];
+      demo.pre = { rows: P.map((plan, i) => ({ plan, lang: G[i], at: m(i * 5 + 0.3), email: "fan" + (i + 1) + "@example.com" })) };
+      demo.pre.seenAt = Date.parse(demo.pre.rows[5].at); demo.pre.next = t + 90e3; }   // the newest five are new
+    if (t >= Date.parse(deleteAt)) demo.pre.rows = [];
+    if (p === "/preorders" && t >= demo.pre.next && t <= Date.parse(until)) {   // a made-up sign-up every 90 s or so, for the browser alert
+      const pick = a => a[Math.floor(Math.random() * a.length)];
+      demo.pre.rows.unshift({ plan: pick(["ultra", "premium", "undecided", "biz", "free"]), lang: pick(["ko", "ko", "en", "ja"]), at: new Date(t).toISOString(), email: "fan" + (demo.pre.rows.length + 1) + "-" + t + "@example.com" });
+      demo.pre.next = t + 90e3;
+    }
+    const rows = demo.pre.rows, isNew = x => Date.parse(x.at) > demo.pre.seenAt;
     const cnt = k => rows.reduce((o, x) => (o[x[k]] = (o[x[k]] || 0) + 1, o), {});
-    if (p === "/preorders/seen") { demo.pre.seen = rows.length; return R({ ok: true }); }
+    if (p === "/preorders/seen") { demo.pre.seenAt = rows.length ? Math.max(...rows.map(x => Date.parse(x.at))) : t; return R({ ok: true }); }
     if (p === "/preorders/export") { L("사전예약 내보내기", rows.length + "건"); return R({ count: rows.length, csv: "email,plan,lang,at\r\n" + rows.map(x => [x.email, x.plan, x.lang, x.at].join(",")).join("\r\n") }); }
-    if (p === "/preorders/delete") { const i = rows.findIndex(x => x.email === String(b.email || "").trim().toLowerCase()); if (i >= 0) { rows.splice(i, 1); L("사전예약 삭제", "1건"); } return R({ ok: true, deleted: i >= 0 }); }
-    return R({ count: rows.length, fresh, today: rows.filter(x => Date.now() - Date.parse(x.at) < 864e5).length, byPlan: cnt("plan"), byLang: cnt("lang"),
-               recent: rows.map((x, i) => ({ plan: x.plan, lang: x.lang, at: x.at, fresh: i < fresh })), open: true, until: "2026-11-27T14:59:59Z", deleteAt: "2027-02-27T15:00:00Z", shown: true });
+    if (p === "/preorders/delete") { const e = String(b.email || "").trim().toLowerCase();
+      if (!(e.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e))) return Promise.reject(new Error("메일 주소를 확인해 주세요"));
+      const i = rows.findIndex(x => x.email === e); if (i >= 0) { rows.splice(i, 1); L("사전예약 삭제", "1건"); } return R({ ok: true, deleted: i >= 0 }); }
+    const since = Date.parse(new Date(t + 9 * 36e5).toISOString().slice(0, 10) + "T00:00:00+09:00");
+    return R({ count: rows.length, fresh: rows.filter(isNew).length, today: rows.filter(x => Date.parse(x.at) >= since).length, byPlan: cnt("plan"), byLang: cnt("lang"),
+               recent: rows.slice(0, 100).map(x => ({ plan: x.plan, lang: x.lang, at: x.at, fresh: isNew(x) })), open: t <= Date.parse(until) && t < Date.parse(deleteAt), until, deleteAt, shown: t < Date.parse(deleteAt) });
   }
   if (p === "/stats") {
     const dayAgo = n => new Date(Date.now() - n * 864e5 + 9 * 36e5).toISOString().slice(0, 10);
