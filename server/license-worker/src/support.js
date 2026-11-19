@@ -866,7 +866,7 @@ const PRIVACY_PRE = {
                                "지운 기록은 Cloudflare 데이터베이스의 복구 기능에 최대 30일 남았다가 저절로 사라지고, 복구가 필요한 장애 때만 써요"],
           ["처리 위탁과 국외 이전", "판매자 서버를 운영하는 Cloudflare(제4조)가 처리하고 보관해요. 어느 나라의 데이터센터인지는 Cloudflare가 정해요. " +
                                    "알림 메일을 메일 발송 서비스에 맡겨 보내게 되면, 보내기 전에 그 회사와 이전 내용을 이 페이지에 적어요"],
-          ["너무 많은 신청 막기", "같은 곳에서 온 신청 수를 IP 주소로 만든 해시값(서버만 아는 값을 섞어 만들어요)으로 세고, 마지막 신청 뒤 1시간까지만 둬요. IP 주소와 브라우저 정보는 저장하지 않아요"],
+          ["너무 많은 신청 막기", "같은 곳에서 온 신청 수를 IP 주소와 그 주소가 속한 네트워크(같은 회사나 학교 등)로 만든 해시값(서버만 아는 값을 섞어 만들어요)으로 세고, 마지막 신청 뒤 1시간까지만 둬요. IP 주소와 브라우저 정보는 저장하지 않아요"],
           ["동의를 거부할 권리", "동의하지 않아도 돼요. 그러면 사전예약을 할 수 없을 뿐, 앱을 받거나 쓰는 데는 영향이 없어요"],
           ["열람 · 삭제 · 동의 철회", "제5조의 방법(웹 /help, 제10조의 메일)으로 언제든 요구할 수 있어요. 신청한 메일 주소로 본인을 확인해요"],
         ] },
@@ -882,7 +882,7 @@ const PRIVACY_PRE = {
                     "Deleted records stay up to 30 days in the recovery feature of Cloudflare's database, then go by themselves; it is used only to recover from a failure"],
           ["Processors and transfer abroad", "Processed and stored by Cloudflare, which runs the seller's server (see Sharing, processors and transfers abroad); Cloudflare chooses the data centre and country. " +
                                              "If the launch email is sent through a mail service, that company and the transfer are listed on this page before it is sent"],
-          ["Abuse limits", "Sign-ups from one place are counted with a hash made from the IP address (mixed with a value only the server knows), kept up to 1 hour after the last sign-up. The IP address and browser details are not stored"],
+          ["Abuse limits", "Sign-ups from one place are counted with hashes made from the IP address and its network, such as one company or school (mixed with a value only the server knows), kept up to 1 hour after the last sign-up. The IP address and browser details are not stored"],
           ["Right to refuse", "You may refuse. You then can't pre-register; downloading and using the app are not affected"],
           ["Access, deletion, withdrawal", "Ask at any time as under Your rights (web /help or the email under Contact). The email address you signed up with is used to confirm it is you"],
         ] },
