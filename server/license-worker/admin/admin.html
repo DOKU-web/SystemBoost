@@ -619,9 +619,13 @@ async function loadPre() {
   if (sumCounts) renderTodo(sumCounts);
 }
 $("preSeen").onclick = async () => {
-  try { await api("/preorders/seen", {}); preSay(""); await loadPre(); toast("확인했어요"); }
+  // only up to the newest sign-up this page showed: one that came in after the last refresh stays 새
+  const upTo = preNow && preNow.recent && preNow.recent[0] ? preNow.recent[0].at : undefined;
+  try { await api("/preorders/seen", upTo ? { upTo } : {}); preSay(""); await loadPre(); toast("확인했어요"); }
   catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
+// the 기록 and 접속 기록 tabs get the new rows an export or a deletion writes, without 새로고침
+const preLogs = () => { loadLog().catch(() => {}); loadAccess(); };
 $("preCsv").onclick = async () => {
   if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 기록과 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 늦어도 2027년 2월 28일에는 지워 주세요. 메일 발송 서비스로 보내려면 먼저 처리방침에 그 회사를 적어야 해요.", "내려받기"))) return;
   try {
@@ -632,15 +636,17 @@ $("preCsv").onclick = async () => {
     a.download = "systemboost-preorders-" + new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10) + ".csv"; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     preSay(num(r.count) + "건을 내려받았어요");
+    preLogs();
   } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
 $("preDelGo").onclick = async () => {
   const email = $("preDel").value.trim();
   if (!email) { preSay("지울 메일 주소를 적어 주세요", "err"); $("preDel").focus(); return; }
+  if (!$("preDel").checkValidity()) { preSay("메일 주소를 확인해 주세요", "err"); $("preDel").focus(); return; }
   if (!(await ask("사전예약 지우기", esc(email) + " 의 신청을 지울까요? 되돌릴 수 없어요.", "지우기"))) return;   // ask() sets innerHTML
   try {
     const r = await api("/preorders/delete", { email });
-    if (r.deleted) { preSay("지웠어요"); $("preDel").value = ""; loadPre(); }
+    if (r.deleted) { preSay("지웠어요"); $("preDel").value = ""; loadPre(); preLogs(); }
     else preSay("그 메일로 된 신청이 없어요. 주소를 확인해 주세요", "err");   // the address stays in the box, to fix a typo
   } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
@@ -2141,7 +2147,8 @@ function demoApi(path, b) {
     }
     const rows = demo.pre.rows, isNew = x => Date.parse(x.at) > demo.pre.seenAt;
     const cnt = k => rows.reduce((o, x) => (o[x[k]] = (o[x[k]] || 0) + 1, o), {});
-    if (p === "/preorders/seen") { demo.pre.seenAt = rows.length ? Math.max(...rows.map(x => Date.parse(x.at))) : t; return R({ ok: true }); }
+    if (p === "/preorders/seen") { const top = rows.length ? Math.max(...rows.map(x => Date.parse(x.at))) : t, up = Date.parse(b.upTo);
+      demo.pre.seenAt = Number.isFinite(up) ? Math.min(top, up) : top; return R({ ok: true }); }
     if (p === "/preorders/export") { L("사전예약 내보내기", rows.length + "건"); return R({ count: rows.length, csv: "email,plan,lang,at\r\n" + rows.map(x => [x.email, x.plan, x.lang, x.at].join(",")).join("\r\n") }); }
     if (p === "/preorders/delete") { const e = String(b.email || "").trim().toLowerCase();
       if (!(e.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e))) return Promise.reject(new Error("메일 주소를 확인해 주세요"));
