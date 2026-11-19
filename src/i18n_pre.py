@@ -12,7 +12,7 @@ PRE = {}
 PRE["ko"] = dict(
   bar='사전예약 받는 중 · 11월 27일(금) 23:59까지 · 출시되면 메일로 알려 드려요', go='신청하기',
   nav="사전예약", badge="사전예약", title="SystemBoost 사전예약",
-  lead="2026년 12월 초 정식 출시 전에 사전예약을 받아요. 출시되면 적어 주신 메일로 한 번 알려 드려요.",
+  lead="SystemBoost는 2026년 12월 4일(금)에 정식 출시해요. 사전예약하면 출시일에 적어 주신 메일로 한 번 알려 드려요.",
   until="신청 마감: 2026년 11월 27일(금) 23:59 (한국 시간)",
   free="결제는 하지 않아요. 사전예약은 출시 알림 신청이에요.",
   email="메일 주소", plan="관심 있는 플랜",
@@ -29,7 +29,7 @@ PRE["ko"] = dict(
 PRE["en"] = dict(
   bar="Pre-registration is open until Nov 27, 23:59 KST · we'll email you at launch", go='Sign up',
   nav="Pre-register", badge="Pre-register", title="Pre-register for SystemBoost",
-  lead="SystemBoost launches in early December 2026. Pre-register and we'll email you once when it's out.",
+  lead="SystemBoost launches on December 4, 2026. Pre-register and we'll email you once on launch day.",
   until="Closes: November 27, 2026, 23:59 KST (UTC+9)",
   free="No payment. Pre-registering only signs you up for the launch email.",
   email="Email address", plan="Plan you're interested in",
@@ -46,7 +46,7 @@ PRE["en"] = dict(
 PRE["ja"] = dict(
   bar='事前登録受付中 · 11月27日（金）23:59まで · リリース時にメールでお知らせします', go='登録する',
   nav="事前登録", badge="事前登録", title="SystemBoost 事前登録",
-  lead="2026年12月上旬の正式リリース前に事前登録を受け付けています。リリースしたら、入力したメールに一度だけお知らせします。",
+  lead="SystemBoostは2026年12月4日（金）に正式リリースします。事前登録すると、リリース日に入力したメールへ一度だけお知らせします。",
   until="締め切り：2026年11月27日（金）23:59（日本時間・韓国時間）",
   free="お支払いはありません。事前登録はリリースのお知らせの申し込みです。",
   email="メールアドレス", plan="気になるプラン",
@@ -62,7 +62,7 @@ PRE["ja"] = dict(
 PRE["zh"] = dict(
   bar='预约登记进行中 · 截至 11 月 27 日 23:59（韩国时间）· 发布时邮件通知你', go='立即预约',
   nav="预约", badge="预约", title="SystemBoost 预约登记",
-  lead="SystemBoost 将于 2026 年 12 月初正式发布，现在开放预约。发布时我们会给你填写的邮箱发一次通知。",
+  lead="SystemBoost 将于 2026 年 12 月 4 日（周五）正式发布。预约后，我们会在发布当天给你填写的邮箱发一次通知。",
   until="截止：2026 年 11 月 27 日（周五）23:59（韩国时间，UTC+9）",
   free="无需付款。预约只是登记发布通知。",
   email="邮箱地址", plan="感兴趣的套餐",
@@ -78,7 +78,7 @@ PRE["zh"] = dict(
 PRE["es"] = dict(
   bar='Prerregistro abierto hasta el 27 de noviembre, 23:59 KST · te avisamos por correo en el lanzamiento', go='Registrarme',
   nav="Prerregistro", badge="Prerregistro", title="Prerregistro de SystemBoost",
-  lead="SystemBoost sale a principios de diciembre de 2026. Regístrate antes y te avisaremos una vez por correo cuando esté disponible.",
+  lead="SystemBoost sale el 4 de diciembre de 2026. Regístrate antes y te avisaremos una vez por correo el día del lanzamiento.",
   until="Cierra: 27 de noviembre de 2026, 23:59 KST (UTC+9)",
   free="No se paga nada. El prerregistro solo te apunta al aviso de lanzamiento.",
   email="Correo electrónico", plan="Plan que te interesa",
@@ -94,7 +94,7 @@ PRE["es"] = dict(
 PRE["pt"] = dict(
   bar='Pré-cadastro aberto até 27 de novembro, 23:59 KST · avisamos por e-mail no lançamento', go='Cadastrar',
   nav="Pré-cadastro", badge="Pré-cadastro", title="Pré-cadastro do SystemBoost",
-  lead="O SystemBoost será lançado no início de dezembro de 2026. Faça o pré-cadastro e avisaremos uma vez por e-mail no lançamento.",
+  lead="O SystemBoost será lançado em 4 de dezembro de 2026. Faça o pré-cadastro e avisaremos uma vez por e-mail no dia do lançamento.",
   until="Encerra: 27 de novembro de 2026, 23:59 KST (UTC+9)",
   free="Nada é cobrado. O pré-cadastro só inscreve você no aviso de lançamento.",
   email="E-mail", plan="Plano de interesse",
@@ -110,7 +110,7 @@ PRE["pt"] = dict(
 PRE["ru"] = dict(
   bar='Предрегистрация открыта до 27 ноября, 23:59 KST · напишем вам в день выхода', go='Записаться',
   nav="Предрегистрация", badge="Предрегистрация", title="Предрегистрация SystemBoost",
-  lead="SystemBoost выходит в начале декабря 2026 года. Зарегистрируйтесь заранее, и мы один раз напишем вам на почту в день выхода.",
+  lead="SystemBoost выходит 4 декабря 2026 года. Зарегистрируйтесь заранее, и мы один раз напишем вам на почту в день выхода.",
   until="Приём до: 27 ноября 2026 г., 23:59 KST (UTC+9)",
   free="Ничего платить не нужно. Предрегистрация — это только подписка на письмо о выходе.",
   email="Электронная почта", plan="Интересующий тариф",
@@ -126,7 +126,7 @@ PRE["ru"] = dict(
 PRE["de"] = dict(
   bar='Vorregistrierung offen bis 27. November, 23:59 KST · wir schreiben dir zum Start', go='Anmelden',
   nav="Vorregistrierung", badge="Vorregistrierung", title="Vorregistrierung für SystemBoost",
-  lead="SystemBoost erscheint Anfang Dezember 2026. Registriere dich vorab, dann schreiben wir dir zum Start einmal eine E-Mail.",
+  lead="SystemBoost erscheint am 4. Dezember 2026. Registriere dich vorab, dann schreiben wir dir am Starttag einmal eine E-Mail.",
   until="Schluss: 27. November 2026, 23:59 KST (UTC+9)",
   free="Es wird nichts bezahlt. Die Vorregistrierung ist nur die Anmeldung für die Start-E-Mail.",
   email="E-Mail-Adresse", plan="Plan, der dich interessiert",
@@ -142,7 +142,7 @@ PRE["de"] = dict(
 PRE["fr"] = dict(
   bar='Pré-inscription ouverte jusqu’au 27 novembre, 23:59 KST · nous vous écrirons à la sortie', go='M’inscrire',
   nav="Pré-inscription", badge="Pré-inscription", title="Pré-inscription à SystemBoost",
-  lead="SystemBoost sort début décembre 2026. Pré-inscrivez-vous et nous vous enverrons un seul e-mail à la sortie.",
+  lead="SystemBoost sort le 4 décembre 2026. Pré-inscrivez-vous et nous vous enverrons un seul e-mail le jour de la sortie.",
   until="Clôture : 27 novembre 2026, 23:59 KST (UTC+9)",
   free="Aucun paiement. La pré-inscription vous inscrit seulement à l’e-mail de sortie.",
   email="Adresse e-mail", plan="Offre qui vous intéresse",
