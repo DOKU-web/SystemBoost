@@ -21,7 +21,7 @@ import { fakeStats } from "./fake_stats.mjs";
 import { accountsV2Day, accountsV2From, accountsV2Open } from "./src/accounts_gate.js";
 import { PRIVACY_HTML } from "./src/privacy_page.js";
 import { PRIVACY_PREV_HTML } from "./src/privacy_prev_page.js";
-import { DEFAULT_FAQ, PRIVACY_EMPTY } from "./src/support.js";
+import { DEFAULT_FAQ, PRIVACY_EMPTY, PRIVACY_PRE_CSS } from "./src/support.js";
 
 const LIVE = "776dd71";   // the server deployed on 2026-11-13
 const here = new URL(".", import.meta.url);
@@ -398,6 +398,12 @@ const nonceFree = r => r.text.replace(/nonce="[^"]+"/g, 'nonce="N"');
 const cspShape = r => r.headers["content-security-policy"].replace(/'nonce-[^']+'/, "'nonce-N'");
 const notice = /<div class="notice"><p>(.*?)<\/p><\/div>\n/;
 const NOTICE_CSS = ".notice{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin:18px 0}\n";
+// the pre-registration notice (test_preorder.mjs checks its words): a box under the date and a section at the end
+const PRE_BOX = /<div class="prenote" id="preorder-note"><p>.*?<\/p><\/div>\n(?=<nav class="toc")/, PRE_SECTION = /<section id="preorder">\n[\s\S]*?<\/section>\n(?=<\/main>)/;
+const noPre = r => {
+  ok(r.text.includes(PRIVACY_PRE_CSS) && PRE_BOX.test(r.text) && PRE_SECTION.test(r.text), "the pre-registration notice is there");
+  return { text: r.text.replace(PRIVACY_PRE_CSS, "").replace(PRE_BOX, "").replace(PRE_SECTION, "") };
+};
 const before = at("2026-11-20T09:00:00+09:00", (path, env = P.env) => call(P, path, {}, env));
 const after = at("2027-01-02T09:00:00+09:00", (path, env = P.env) => call(P, path, {}, env));
 for (const lang of ["ko", "en"]) {
@@ -412,7 +418,7 @@ for (const lang of ["ko", "en"]) {
   eq(box[1], lang === "en" ? 'The privacy policy changes on January 1, 2027. <a href="/privacy?next=1&amp;lang=en">Preview the new policy</a>'
                            : '개인정보 처리방침이 2027년 1월 1일에 바뀌어요. <a href="/privacy?next=1">바뀌는 처리방침 미리 보기</a>');
   ok(now.text.indexOf(box[0]) === now.text.indexOf("<main>\n") + 7, lang + ": right at the top of the page");
-  eq(nonceFree({ text: now.text.replace(box[0], "").replace(NOTICE_CSS, "") }), nonceFree(live), lang + ": otherwise the policy in force, as the live server shows it");
+  eq(nonceFree(noPre({ text: now.text.replace(box[0], "").replace(NOTICE_CSS, "") })), nonceFree(live), lang + ": otherwise the policy in force, as the live server shows it");
   ok(live.text.includes(lang === "en" ? "Effective date: November 13, 2026" : "시행일: 2026년 11월 13일"), lang + ": its blanks filled as always");
   eq([...now.text.matchAll(/<style nonce="([^"]+)">/g)].map(m => m[1]).join(), /'nonce-([^']+)'/.exec(now.headers["content-security-policy"])[1]);
   ok(!/<script|<link|<img|<iframe|\bsrc=|\son\w+=/i.test(now.text), lang + ": no script, nothing loaded");
@@ -449,7 +455,7 @@ for (const v of [undefined, "", "2027-01-01", "2027-01-01T00:00:00+09:00 ", "202
   eq((await call(N, "/account/login", { body: { id: "bobby", password: "bobbyspass", device: APP_DEVICE } }, env)).status, 200, label + "아이디 login as before");
   eq(sent.now.slice(from).filter(x => V2_FIELDS.some(k => k in x.b)).length, 0, label + "nothing of accounts v2 to the database");
   const pv = await after("/privacy", env), live = await call(L, "/privacy");
-  eq(nonceFree(pv), nonceFree(live), label + "/privacy is the policy in force, with no date to announce");
+  eq(nonceFree(noPre(pv)), nonceFree(live), label + "/privacy is the policy in force, with no date to announce");
   const nx = await after("/privacy?next=1", env);
   ok(nx.text.includes("이 처리방침은 아직 시행하지 않아요. 지금은 지금의 개인정보 처리방침이 적용돼요.") && nx.text.includes("시행일: <span class=\"blank\">" + PRIVACY_EMPTY.ko + "</span>"),
      label + "?next=1: the new policy, no date");

@@ -133,6 +133,36 @@ env.PREORDER_UNTIL = "2026-11-20T00:00:00Z";
 assert.equal((await j("/preorder")).open, false);
 delete env.PREORDER_UNTIL;
 
+// /privacy: the policy in force (privacy_prev_page.js, word for word) gets the pre-registration notice while the rows
+// exist (support.js withPreorder): a box under the date and the section #preorder that the site's consent text links
+const page = async (path, iso) => {
+  Date.now = () => Date.parse(iso);
+  try { const r = await call(path); return { http: r.status, text: await r.text() }; } finally { Date.now = realNow; }
+};
+for (const [q, words] of [
+  ["", ["별도 안내: 공식 사이트 사전예약", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각", "2026년 11월 20일부터 적용해요",
+        "사전예약 창에서 동의 칸에 체크한 경우만, 2026년 11월 27일 23:59(한국 시간)까지 받아요. 만 14세 이상만",
+        "2027년 2월 28일에 서버에서 모두 지워요", "Cloudflare(제4조)", "동의하지 않아도 돼요", "제5조의 방법(웹 /help, 제10조의 메일)"]],
+  ["?lang=en", ["Separate notice: pre-registration on the official site", "Email address, plan of interest, site language, time of sign-up",
+                "It applies from November 20, 2026.", "until November 27, 2026, 23:59 (Korean time). 14 or older only",
+                "All deleted from the server on February 28, 2027", "You may refuse.", "Your rights"]]]) {
+  const p = await page("/privacy" + q, "2026-11-21T00:00:00Z");
+  assert.equal(p.http, 200);
+  for (const w of words) assert.ok(p.text.includes(w), JSON.stringify(q) + " has: " + w);
+  assert.ok(p.text.includes('<section id="preorder">') && p.text.includes('<a href="#preorder">'), q + ": the section and the link to it");
+  assert.ok(p.text.indexOf('id="preorder-note"') < p.text.indexOf('<nav class="toc"'), q + ": the box is above the contents");
+  assert.ok(!/<script|\son\w+=|\bsrc=/i.test(p.text), q + ": no script, nothing loaded");
+  // the new policy (?next=1) lists pre-registration in its own articles, without this notice
+  const nx = await page("/privacy?next=1" + q.replace("?", "&"), "2026-11-21T00:00:00Z");
+  assert.ok(!nx.text.includes('id="preorder') && nx.text.includes(q ? "Pre-registration on the official site" : "공식 사이트의 사전예약"), q + ": ?next=1");
+  // gone with the rows on 2027-02-28 KST
+  assert.ok((await page("/privacy" + q, "2027-02-27T14:59:00Z")).text.includes('id="preorder"'));
+  assert.ok(!(await page("/privacy" + q, "2027-02-27T15:00:00Z")).text.includes('id="preorder'), q + ": gone on the day the rows go");
+}
+env.PREORDER_UNTIL = "2026-11-25T14:59:59Z";
+assert.ok((await page("/privacy", "2026-11-21T00:00:00Z")).text.includes("2026년 11월 25일 23:59(한국 시간)까지"), "PREORDER_UNTIL moves the date");
+delete env.PREORDER_UNTIL;
+
 // on 2027-02-28 KST everything is deleted: by the hourly tick and by any call; the tab goes away
 at("2027-02-27T14:59:00Z", () => st.obj.prePurge());
 assert.equal(rows().length, 8, "kept until the day");

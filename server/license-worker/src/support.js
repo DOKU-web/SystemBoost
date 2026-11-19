@@ -65,6 +65,7 @@ import { accountsV2Day, accountsV2Open } from "./accounts_gate.js";
 import { HELP_HTML } from "./help_page.js";
 import { PRIVACY_HTML } from "./privacy_page.js";
 import { PRIVACY_PREV_HTML } from "./privacy_prev_page.js";
+import { PRE, preShown, preUntil } from "./preorder.js";
 import { TERMS_HTML } from "./terms_page.js";
 
 const DAY = 86400;
@@ -844,6 +845,57 @@ const privacyHref = (next, lang) => "/privacy" + (next ? "?next=1" + (lang === "
 const withNotice = (page, inner) =>
   page.replace("</style>", ".notice{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin:18px 0}\n</style>")
       .replace("<main>\n", '<main>\n<div class="notice"><p>' + inner + "</p></div>\n");
+// Pre-registration on the official site (src/preorder.js) began on PRE_FROM, under the policy in force then, which stays
+// word for word (privacy_prev_page.js): its own notice goes on that page while the rows exist (preShown), as a box under
+// the date and a section at the end, #preorder (the site's consent text links it). It changes nothing else the policy
+// says, so it is not a change under the policy's 제12조. The new policy (privacy/*.md) lists it in its articles.
+const PRE_FROM = "2026-11-20";
+const kst = ms => new Date(ms + 9 * 36e5).toISOString();
+export const PRIVACY_PRE_CSS = ".prenote{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin:18px 0}\n";
+const PRIVACY_PRE = {
+  ko: { box: '공식 사이트의 사전예약에 신청한 분의 개인정보 처리는 <a href="#preorder">별도 안내: 공식 사이트 사전예약</a>에 적었어요.',
+        title: "별도 안내: 공식 사이트 사전예약", head: ["구분", "내용"],
+        lead: from => "이 안내는 공식 사이트(doku-web.github.io/SystemBoost)의 사전예약 창에서 신청한 분에게만 해당해요. " + from +
+                      "부터 적용해요. 앱과 판매자 서버의 다른 개인정보 처리는 이 안내로 바뀌지 않아요.",
+        rows: (until, del) => [
+          ["처리하는 항목", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각"],
+          ["목적", "정식 출시 알림 메일을 한 번 보내기. 광고나 다른 메일은 보내지 않고, 다른 사람에게 제공하지 않아요"],
+          ["받는 방법과 기간", "사전예약 창에서 동의 칸에 체크한 경우만, " + until + "(한국 시간)까지 받아요. 만 14세 이상만 신청할 수 있어요"],
+          ["보유 기간과 파기", del + "에 서버에서 모두 지워요. 그 전에 지워 달라고 하면 바로 지워요. 판매자가 알림 메일을 보내려고 내려받은 메일 목록 파일도 그날 지워요"],
+          ["처리 위탁과 국외 이전", "판매자 서버를 운영하는 Cloudflare(제4조)가 처리하고 보관해요. 어느 나라의 데이터센터인지는 Cloudflare가 정해요. " +
+                                   "알림 메일을 메일 발송 서비스에 맡겨 보내게 되면, 보내기 전에 그 회사와 이전 내용을 이 페이지에 적어요"],
+          ["너무 많은 신청 막기", "같은 곳에서 온 신청 수를 IP 주소로 만든 해시값(서버만 아는 값을 섞어 만들어요)으로 세고, 마지막 신청 뒤 1시간까지만 둬요. IP 주소와 브라우저 정보는 저장하지 않아요"],
+          ["동의를 거부할 권리", "동의하지 않아도 돼요. 그러면 사전예약을 할 수 없을 뿐, 앱을 받거나 쓰는 데는 영향이 없어요"],
+          ["열람 · 삭제 · 동의 철회", "제5조의 방법(웹 /help, 제10조의 메일)으로 언제든 요구할 수 있어요. 신청한 메일 주소로 본인을 확인해요"],
+        ] },
+  en: { box: 'If you signed up for pre-registration on the official site, see <a href="#preorder">Separate notice: pre-registration on the official site</a>.',
+        title: "Separate notice: pre-registration on the official site", head: ["Item", "Details"],
+        lead: from => "This notice applies only to people who sign up in the pre-registration window on the official site (doku-web.github.io/SystemBoost). " +
+                      "It applies from " + from + ". It does not change anything else the app or the seller's server processes.",
+        rows: (until, del) => [
+          ["What is processed", "Email address, plan of interest, site language, time of sign-up"],
+          ["Purpose", "To send one launch email. No ads or other mail, and nothing is given to anyone else"],
+          ["How and until when", "Only when the consent box is ticked, until " + until + " (Korean time). 14 or older only"],
+          ["Kept for", "All deleted from the server on " + del + ", or at once on request. Email lists the seller downloads to send the launch email are deleted that day too"],
+          ["Processors and transfer abroad", "Processed and stored by Cloudflare, which runs the seller's server (see Sharing, processors and transfers abroad); Cloudflare chooses the data centre and country. " +
+                                             "If the launch email is sent through a mail service, that company and the transfer are listed on this page before it is sent"],
+          ["Abuse limits", "Sign-ups from one place are counted with a hash made from the IP address (mixed with a value only the server knows), kept up to 1 hour after the last sign-up. The IP address and browser details are not stored"],
+          ["Right to refuse", "You may refuse. You then can't pre-register; downloading and using the app are not affected"],
+          ["Access, deletion, withdrawal", "Ask at any time as under Your rights (web /help or the email under Contact). The email address you signed up with is used to confirm it is you"],
+        ] },
+};
+function withPreorder(page, lang, env) {
+  if (!preShown()) return page;
+  const T = PRIVACY_PRE[lang], end = kst(Date.parse(preUntil(env)));
+  const until = dayText(end.slice(0, 10), lang) + (lang === "en" ? ", " : " ") + end.slice(11, 16);
+  const rows = T.rows(until, dayText(kst(Date.parse(PRE.deleteAt)).slice(0, 10), lang))
+    .map(([k, v]) => "<tr><td>" + escHtml(k) + "</td><td>" + escHtml(v) + "</td></tr>").join("");
+  const section = '<section id="preorder">\n<h2>' + escHtml(T.title) + "</h2>\n<p>" + escHtml(T.lead(dayText(PRE_FROM, lang))) + "</p>\n" +
+    '<div class="tbl"><table><thead><tr><th>' + T.head.join("</th><th>") + "</th></tr></thead><tbody>" + rows + "</tbody></table></div>\n</section>\n";
+  return page.replace("</style>", () => PRIVACY_PRE_CSS + "</style>")
+    .replace('<nav class="toc"', () => '<div class="prenote" id="preorder-note"><p>' + T.box + '</p></div>\n<nav class="toc"')
+    .replace("</main>", () => section + "</main>");
+}
 export async function privacyPage(url, env) {
   const lang = lang2(url.searchParams.get("lang"));
   const c = await supportConfig(env), v = privacyBlanks(c, lang), T = PRIVACY_NEXT[lang];
@@ -864,6 +916,7 @@ export async function privacyPage(url, env) {
   } else {
     page = !start ? PRIVACY_PREV_HTML[lang]
          : withNotice(PRIVACY_PREV_HTML[lang], escHtml(T.box(dayText(start, lang))) + ' <a href="' + privacyHref(true, lang) + '">' + escHtml(T.link) + "</a>");
+    page = withPreorder(page, lang, env);
   }
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
   const html = page.replaceAll("__NONCE__", nonce)
