@@ -491,11 +491,11 @@ button.todoRow:hover{border-color:var(--or)}
     <h2>사전예약 <small id="preNote">불러오는 중이에요</small></h2>
     <div class="stats in" id="preStats"></div>
     <div class="row"><button class="p" id="preSeen">새 신청 확인</button><button id="preCsv">메일 목록 CSV 내려받기</button><span class="mut" id="preMsg"></span></div>
-    <p class="mut">사이트 팝업에서 받은 출시 알림 신청이에요. 메일 주소는 목록에 보이지 않고, CSV로 내려받을 때만 보여요(관리자 접속 기록에 남아요). 출시 알림 메일 1회에만 쓰고, 2027년 2월 28일에 서버가 모두 지워요. 내려받은 파일도 그 뒤에는 지워 주세요.</p>
+    <p class="mut">사이트 팝업에서 받은 출시 알림 신청이에요. 메일 주소는 목록에 보이지 않고, CSV로 내려받을 때만 보여요(내려받으면 기록과 관리자 접속 기록에 남아요). 출시 알림 메일 1회에만 쓰고, 2027년 2월 28일에 서버가 모두 지워요. 처리방침에 내려받은 파일도 그날 지운다고 적었으니, 늦어도 2027년 2월 28일에는 내려받은 파일을 모두 지워 주세요.</p>
   </div>
   <div class="card">
     <h2>최근 신청 <small>최근 100건, 새 신청은 주황색</small></h2>
-    <div class="tbl" style="max-height:420px;overflow:auto"><table><thead><tr><th>시각</th><th>관심 플랜</th><th>언어</th></tr></thead><tbody id="preList"></tbody></table></div>
+    <div class="tbl" style="max-height:420px;overflow:auto"><table><thead><tr><th>시각 (한국 시간)</th><th>관심 플랜</th><th>언어</th></tr></thead><tbody id="preList"></tbody></table></div>
   </div>
   <div class="card">
     <h2>신청 지우기 <small>삭제를 요청받았을 때</small></h2>
@@ -587,6 +587,8 @@ function preLeft(until) {
   return !(m > 0) ? "곧 마감돼요" : (d ? d + "일 " : "") + (d || h ? h + "시간" : m + "분") + " 남음";
 }
 function preSay(t, cls) { $("preMsg").textContent = t; $("preMsg").className = cls || "mut"; }
+// times on this tab in Korean time whatever this PC's time zone (when() shows the PC's own)
+const preWhen = iso => iso ? new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
 async function loadPre() {
   let r; try { r = await api("/preorders"); } catch (e) { if (e.message !== "401") $("preNote").textContent = "불러오지 못했어요: " + e.message; return; }
   preNow = r;
@@ -594,12 +596,12 @@ async function loadPre() {
   if (!r.shown && tabNow === "pre") showTab("home", true);   // the rows are gone (2027-02-28) and the tab with them
   $("preBadge").textContent = num(r.fresh); $("preBadge").classList.toggle("hide", !r.fresh);
   $("goPre").title = r.fresh ? "사전예약 새 신청 " + num(r.fresh) + "건" : "";
-  $("preNote").textContent = r.open ? `받는 중 · 마감 ${when(r.until)} (${preLeft(r.until)})` : "마감됐어요. 신청을 더 받지 않아요.";
+  $("preNote").textContent = r.open ? `받는 중 · 마감 ${preWhen(r.until)} 한국 시간 (${preLeft(r.until)})` : "마감됐어요. 신청을 더 받지 않아요.";
   const byPlan = Object.keys(PRE_PLAN).map(k => [PRE_PLAN[k], num(r.byPlan[k] || 0)]);
   const langs = Object.entries(r.byLang || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => (PRE_LANG[k] || k) + " " + num(n)).join(" · ");
   $("preStats").innerHTML = tiles([["전체 신청", num(r.count), langs], ["새 신청", num(r.fresh)], ["오늘(한국 시간)", num(r.today)], ...byPlan]);
   // a new sign-up is orange and says 새 (not by colour alone)
-  $("preList").innerHTML = r.recent.length ? r.recent.map(x => `<tr${x.fresh ? ' style="color:var(--or)"' : ""}><td>${esc(when(x.at))}${x.fresh ? " <b>새</b>" : ""}</td><td>${esc(PRE_PLAN[x.plan] || x.plan)}</td><td>${esc(PRE_LANG[x.lang] || x.lang)}</td></tr>`).join("")
+  $("preList").innerHTML = r.recent.length ? r.recent.map(x => `<tr${x.fresh ? ' style="color:var(--or)"' : ""}><td>${esc(preWhen(x.at))}${x.fresh ? " <b>새</b>" : ""}</td><td>${esc(PRE_PLAN[x.plan] || x.plan)}</td><td>${esc(PRE_LANG[x.lang] || x.lang)}</td></tr>`).join("")
                                          : `<tr><td colspan="3" class="mut">아직 신청이 없어요</td></tr>`;
   $("preSeen").disabled = !r.fresh;
   $("preCsv").disabled = !r.count;   // an empty file would still be logged as an export of personal data
@@ -610,7 +612,7 @@ $("preSeen").onclick = async () => {
   catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
 $("preCsv").onclick = async () => {
-  if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 2027년 2월 28일 뒤에는 지워 주세요.", "내려받기"))) return;
+  if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 기록과 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 늦어도 2027년 2월 28일에는 지워 주세요. 메일 발송 서비스로 보내려면 먼저 처리방침에 그 회사를 적어야 해요.", "내려받기"))) return;
   try {
     const r = await api("/preorders/export", {});
     const a = document.createElement("a");
@@ -631,8 +633,13 @@ $("preDelGo").onclick = async () => {
     else preSay("그 메일로 된 신청이 없어요. 주소를 확인해 주세요", "err");   // the address stays in the box, to fix a typo
   } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
 };
-// every minute while the page is in front; also after a first load that failed (preNow null), so the tab still turns up
-setInterval(() => { if (token && !document.hidden && !$("app").classList.contains("hide") && (!preNow || preNow.shown)) loadPre(); }, 60e3);
+// GET /preorders reads the Stats object's SQLite (a daily rows-read budget): every 60 s only while this tab is the one
+// shown in a visible page. Also until a first load that failed has worked once (preNow null), so the tab still turns up.
+// Opening the tab loads it once (showTab); on the other tabs the badge and 할 일 row come with loadAll.
+setInterval(() => {
+  if (!token || $("app").classList.contains("hide") || (preNow && !preNow.shown)) return;
+  if (!document.hidden && (tabNow === "pre" || !preNow)) loadPre();
+}, 60e3);
 const CARD_PLANS = ["monthly", "yearly", "ultra_monthly", "ultra_yearly", "biz_monthly", "biz_yearly"];
 function showCard(c) {
   const mark = (id, on) => { $(id).textContent = on ? "등록됨" : "없음"; $(id).className = on ? "yes" : "no"; };
@@ -1149,6 +1156,7 @@ function showTab(name, quiet) {
   try { if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name); } catch (e) {}
   if (name === "stats") drawCharts();   // drawn while the tab was hidden, the charts had no width to fit
   if (name === "support") { feedNew = 0; feedTitle(); }
+  if (name === "pre" && changed && token && !$("app").classList.contains("hide")) loadPre();   // its 60 s refresh runs only while shown
   if (changed && !quiet) scrollTo(0, 0);
   const b = document.querySelector('#tabs [data-tab="' + name + '"]');
   if (b && matchMedia("(max-width:900px)").matches) b.scrollIntoView({ block: "nearest", inline: "nearest" });   // a narrow menu scrolls sideways
@@ -1196,7 +1204,7 @@ function renderTodo(c) {
     const ready = recNow.filter(x => Number(x.due) <= Date.now()).length, wait = recNow.length - ready;
     html += `<button class="todoRow" data-go="members" data-seg="" data-scroll="rcCard"><span class="tn" style="color:var(--or)">${num(recNow.length)}</span><span class="tt"><b>계정 복구 요청</b><span class="mut">${ready ? num(ready) + "건은 지금 승인할 수 있어요. " : ""}${wait ? num(wait) + "건은 72시간 대기 중이에요. " : ""}결제 기록과 맞춰 본인인지 확인하세요.</span></span><span class="tg">보기 ›</span></button>`;
   }
-  if (preNow && preNow.fresh > 0) html += `<button class="todoRow" data-go="pre" data-seg=""><span class="tn" style="color:var(--or)">${num(preNow.fresh)}</span><span class="tt"><b>사전예약 새 신청</b><span class="mut">사이트 팝업에서 출시 알림을 신청했어요. 전체 ${num(preNow.count)}건${preNow.open ? " · 마감 " + esc(when(preNow.until)) : " · 마감됨"}.</span></span><span class="tg">보기 ›</span></button>`;
+  if (preNow && preNow.fresh > 0) html += `<button class="todoRow" data-go="pre" data-seg=""><span class="tn" style="color:var(--or)">${num(preNow.fresh)}</span><span class="tt"><b>사전예약 새 신청</b><span class="mut">사이트 팝업에서 출시 알림을 신청했어요. 전체 ${num(preNow.count)}건${preNow.open ? " · 마감 " + esc(preWhen(preNow.until)) + " 한국 시간" : " · 마감됨"}.</span></span><span class="tg">보기 ›</span></button>`;
   if (!html) html = `<div class="todoDone">지금 처리할 일이 없어요.</div>`;
   const waiting = Math.max(0, (Number(c.ordersOpen) || 0) - (Number(c.ordersPaid) || 0));
   if (waiting) html += `<p class="mut" style="margin:6px 0 0">결제 전 신청 ${num(waiting)}건: 앱에서 '결제하기'를 눌렀지만 아직 결제했다고 알리지 않았어요. 판매·키의 결제 신청에 있어요.</p>`;
