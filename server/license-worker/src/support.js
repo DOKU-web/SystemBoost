@@ -846,8 +846,9 @@ const withNotice = (page, inner) =>
   page.replace("</style>", ".notice{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin:18px 0}\n</style>")
       .replace("<main>\n", '<main>\n<div class="notice"><p>' + inner + "</p></div>\n");
 // Pre-registration on the official site (src/preorder.js) began on PRE_FROM, under the policy in force then, which stays
-// word for word (privacy_prev_page.js): its own notice goes on that page while the rows exist (preShown), as a box under
-// the date and a section at the end, #preorder (the site's consent text links it). It changes nothing else the policy
+// word for word (privacy_prev_page.js): its own notice goes on that page, as a box under the date and a section at the
+// end, #preorder (the site's consent text links it). It shows while that page does, so until accounts v2 start
+// (ACCOUNTS_V2_FROM, 2027-01-01) when the new policy takes over, or without a start until the rows go (preShown). It changes nothing else the policy
 // says, so it is not a change under the policy's 제12조. The new policy (privacy/*.md) lists it in its articles.
 const PRE_FROM = "2026-11-20";
 const kst = ms => new Date(ms + 9 * 36e5).toISOString();
@@ -859,9 +860,10 @@ const PRIVACY_PRE = {
                       "부터 적용해요. 앱과 판매자 서버의 다른 개인정보 처리는 이 안내로 바뀌지 않아요.",
         rows: (until, del) => [
           ["처리하는 항목", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각"],
-          ["목적", "정식 출시 알림 메일을 한 번 보내기. 광고나 다른 메일은 보내지 않고, 다른 사람에게 제공하지 않아요"],
+          ["목적", "정식 출시 알림 메일을 한 번 보내기. 그 밖의 메일은 보내지 않고, 다른 사람에게 제공하지 않아요"],
           ["받는 방법과 기간", "사전예약 창에서 동의 칸에 체크한 경우만, " + until + "(한국 시간)까지 받아요. 만 14세 이상만 신청할 수 있어요"],
-          ["보유 기간과 파기", del + "에 서버에서 모두 지워요. 그 전에 지워 달라고 하면 바로 지워요. 판매자가 알림 메일을 보내려고 내려받은 메일 목록 파일도 그날 지워요"],
+          ["보유 기간과 파기", del + "에 서버에서 모두 지워요. 그 전에 지워 달라고 하면 바로 지워요. 판매자가 알림 메일을 보내려고 내려받은 메일 목록 파일도 그날 지워요. " +
+                               "지운 기록은 Cloudflare 데이터베이스의 복구 기능에 최대 30일 남았다가 저절로 사라지고, 복구가 필요한 장애 때만 써요"],
           ["처리 위탁과 국외 이전", "판매자 서버를 운영하는 Cloudflare(제4조)가 처리하고 보관해요. 어느 나라의 데이터센터인지는 Cloudflare가 정해요. " +
                                    "알림 메일을 메일 발송 서비스에 맡겨 보내게 되면, 보내기 전에 그 회사와 이전 내용을 이 페이지에 적어요"],
           ["너무 많은 신청 막기", "같은 곳에서 온 신청 수를 IP 주소로 만든 해시값(서버만 아는 값을 섞어 만들어요)으로 세고, 마지막 신청 뒤 1시간까지만 둬요. IP 주소와 브라우저 정보는 저장하지 않아요"],
@@ -874,9 +876,10 @@ const PRIVACY_PRE = {
                       "It applies from " + from + ". It does not change anything else the app or the seller's server processes.",
         rows: (until, del) => [
           ["What is processed", "Email address, plan of interest, site language, time of sign-up"],
-          ["Purpose", "To send one launch email. No ads or other mail, and nothing is given to anyone else"],
+          ["Purpose", "To send one launch email. No other mail, and nothing is given to anyone else"],
           ["How and until when", "Only when the consent box is ticked, until " + until + " (Korean time). 14 or older only"],
-          ["Kept for", "All deleted from the server on " + del + ", or at once on request. Email lists the seller downloads to send the launch email are deleted that day too"],
+          ["Kept for", "All deleted from the server on " + del + ", or at once on request. Email lists the seller downloads to send the launch email are deleted that day too. " +
+                    "Deleted records stay up to 30 days in the recovery feature of Cloudflare's database, then go by themselves; it is used only to recover from a failure"],
           ["Processors and transfer abroad", "Processed and stored by Cloudflare, which runs the seller's server (see Sharing, processors and transfers abroad); Cloudflare chooses the data centre and country. " +
                                              "If the launch email is sent through a mail service, that company and the transfer are listed on this page before it is sent"],
           ["Abuse limits", "Sign-ups from one place are counted with a hash made from the IP address (mixed with a value only the server knows), kept up to 1 hour after the last sign-up. The IP address and browser details are not stored"],
