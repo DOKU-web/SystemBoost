@@ -4,7 +4,7 @@
 // *.workers.dev the memory copy is what holds; both are approximate, and the daily KV caps stay the backstop.
 // An address is used only as the first 16 hex of SHA-256 of a value made from the signing key, a label and the address,
 // so the counter names cannot be mapped back to addresses without that secret (tests have none: plain form).
-import { ipBucket } from "./support.js";
+import { bucket48, ipBucket } from "./support.js";
 
 const mem = new Map();   // name -> { n, exp }
 let swept = 0;
@@ -15,10 +15,18 @@ async function sha(s) {
   return [...h].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 let salt = null, saltOf = null;
-async function tag(req, env, what) {
+async function tagOf(env, what, bucket) {
   const k = env?.LICENSE_PRIVATE_KEY || "";
   if (saltOf !== k) { salt = k ? await sha("systemboost-pay-ip|" + k) : ""; saltOf = k; }
-  return (await sha(salt + "|" + what + "|" + ipBucket(req.headers.get("CF-Connecting-IP")))).slice(0, 16);
+  return (await sha(salt + "|" + what + "|" + bucket)).slice(0, 16);
+}
+const tag = (req, env, what) => tagOf(env, what, ipBucket(req.headers.get("CF-Connecting-IP")));
+/** For a limit that the Stats object counts (src/preorder.js): this request's address (IPv4 as it is, IPv6 by /64) and
+ *  its network (IPv4 /24, IPv6 /48) as the same kind of salted 16-hex tags; the address itself goes nowhere. */
+export async function ipTags(req, env, what) {
+  const b = ipBucket(req.headers.get("CF-Connecting-IP"));
+  const net = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(b) ? b.replace(/\.\d{1,3}$/, ".0/24") : bucket48(b) || b;
+  return { ip: await tagOf(env, what, b), net: await tagOf(env, what + ":net", net) };
 }
 function edge() { try { return globalThis.caches?.default || null; } catch { return null; } }
 

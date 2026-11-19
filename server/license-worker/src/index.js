@@ -6,7 +6,7 @@ import { mailOn } from "./mail.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
 import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
-import { overIp } from "./iplimit.js";
+import { ipTags, overIp } from "./iplimit.js";
 import { preorderAdmin, preorderPublic } from "./preorder.js";
 import { purchaseNote } from "./purchase_note.js";
 import { alertOn, dueForReminder, paidText, reminderText, sellerAlert } from "./seller_alert.js";
@@ -341,7 +341,7 @@ export default {
       if (req.method === "POST" && url.pathname === "/subscription/change") return await subscriptionChange(req, env);
       if (req.method === "POST" && url.pathname === "/sub/price") return await subPrice(req, env);
       if (req.method === "POST" && url.pathname === "/sub/price/choose") return await subPriceChoose(req, env);
-      if (url.pathname === "/preorder") return await preorderPublic(req, env, { stats, overIp, json });
+      if (url.pathname === "/preorder") return await preorderPublic(req, env, { stats, ipTags, json });
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);

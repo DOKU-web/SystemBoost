@@ -2,11 +2,19 @@
 // send the launch email once, all deleted at PRE.deleteAt (the site and the consent text say "2027년 2월 28일에 삭제").
 //
 // The rows live in the Stats Durable Object's SQLite (src/stats.js, table preorders), not in KV: KV's 1,000 writes a day
-// are shared with orders and keys, and a sign-up rush must not take them. No IP address or User-Agent is stored; the
-// per-address limit is iplimit.js's hashed hourly counter.
+// are shared with orders and keys, and a sign-up rush must not take them. No IP address or User-Agent is stored.
 //
-//   GET  /preorder   {open, until}   — the site shows the popup only while open is true
-//   POST /preorder   {email, plan, lang, consent: true} -> {ok} | {error: consent|email|closed|busy|body}
+// Limits, all counted by the Stats object in the same step as the sign-up (not in an isolate's memory, which on
+// *.workers.dev is all iplimit.js has): PRE.perIpHour per address (IPv4, IPv6 /64) and PRE.perNetHour per network
+// (IPv4 /24, IPv6 /48) an hour, as salted hashes the Worker makes (iplimit.js ipTags), and PRE.perDay in all a Korean day,
+// the storage backstop. 20 a network: four addresses' worth, so a home, office or campus is not shut out, while one
+// network can take at most 480 a day (16% of the day) and filling the day takes seven or more networks.
+// A sign-up is taken only from the official site's pages (PRE.origins, or env PREORDER_ORIGINS, comma-separated) and only
+// as application/json, so another site cannot make its visitors' browsers sign up (a text/plain form needs no preflight).
+// A script can send any Origin; the counts above hold it.
+//
+//   GET  /preorder   {open, until}   — the site shows the popup only while open is true; anyone may ask (CORS *)
+//   POST /preorder   {email, plan, lang, consent: true} -> {ok} | {error: origin|type|body|consent|email|closed|busy}
 //                    {ok} also when the address had signed up already: the answer must not tell anyone whether an
 //                    address is on the list (the notice promises it is given to nobody else).
 //   admin (index.js): GET /preorders (counts and recent rows without emails), POST /preorders/seen,
@@ -15,8 +23,9 @@
 export const PRE = {
   until: "2026-11-27T14:59:59Z",      // 2026-11-27 23:59:59 KST
   deleteAt: "2027-02-27T15:00:00Z",   // 2027-02-28 00:00 KST: the Stats object deletes every row (hourly tick and every call)
-  perIpHour: 5, perDay: 3000, recent: 100,
-  body: 4096,                         // bytes of a POST body read at most; the site's is under 400
+  perIpHour: 5, perNetHour: 20, perDay: 3000, recent: 100,
+  body: 2048,                         // bytes of a POST body read at most; the site's is under 400
+  origins: ["https://doku-web.github.io"],
   plans: ["undecided", "free", "premium", "ultra", "biz"],
   langs: ["en", "ko", "ja", "zh", "es", "pt", "ru", "de", "fr"],
 };
@@ -25,6 +34,12 @@ export const PRE_PLAN_KO = { undecided: "아직 모름", free: "무료", premium
 export function preUntil(env) {
   const v = env?.PREORDER_UNTIL;
   return typeof v === "string" && !Number.isNaN(Date.parse(v)) ? new Date(Date.parse(v)).toISOString() : PRE.until;
+}
+/** The origins a sign-up may come from: env PREORDER_ORIGINS (comma-separated) when it names any, else PRE.origins. */
+export function preOrigins(env) {
+  const v = env?.PREORDER_ORIGINS;
+  const list = typeof v === "string" ? v.split(",").map(s => s.trim().toLowerCase().replace(/\/+$/, "")).filter(Boolean) : [];
+  return list.length ? list : PRE.origins;
 }
 const preOff = env => String(env?.PREORDER ?? "").trim().toLowerCase() === "off";
 export const preOpen = (env, t = Date.now()) => !preOff(env) && t <= Date.parse(preUntil(env)) && t < Date.parse(PRE.deleteAt);
@@ -76,28 +91,40 @@ async function readSmall(req) {
   try { const b = JSON.parse(new TextDecoder().decode(all)); return b && typeof b === "object" ? b : {}; } catch { return {}; }
 }
 
-// deps: { stats(env, path, body), overIp(req, env, what, max), json(o, status) }
+// deps: { stats(env, path, body), ipTags(req, env, what) -> {ip, net}, json(o, status) }
 export async function preorderPublic(req, env, deps) {
   const until = preUntil(env);
   if (req.method === "GET") return deps.json({ open: preOpen(env), until });
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: {
-    "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" } });
+  // The preflight and every POST answer name the allowed origin it came from (Vary: Origin), never *; another origin
+  // gets no CORS header at all, so its page cannot read the answer either.
+  const origin = req.headers.get("Origin") || "";
+  const allowed = origin !== "" && preOrigins(env).includes(origin.toLowerCase());
+  const cors = allowed ? { "access-control-allow-origin": origin, vary: "Origin" } : { vary: "Origin" };
+  const out = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...cors } });
+  if (req.method === "OPTIONS") {
+    if (!allowed) return out({ error: "origin" }, 403);
+    return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-methods": "GET, POST",
+      "access-control-allow-headers": "content-type", "access-control-max-age": "86400" } });
+  }
   if (req.method !== "POST") return deps.json({ error: "method" }, 405);
-  if (!preOpen(env)) return deps.json({ error: "closed" }, 403);
+  if (!allowed) return out({ error: "origin" }, 403);
+  if (!preOpen(env)) return out({ error: "closed" }, 403);
+  if ((req.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase() !== "application/json") return out({ error: "type" }, 415);
   const b = await readSmall(req);
-  if (!b) return deps.json({ error: "body" }, 413);
-  if (b.consent !== true) return deps.json({ error: "consent" }, 400);
+  if (!b) return out({ error: "body" }, 413);
+  if (b.consent !== true) return out({ error: "consent" }, 400);
   const email = preEmail(b.email);
-  if (!email) return deps.json({ error: "email" }, 400);
+  if (!email) return out({ error: "email" }, 400);
   const plan = PRE.plans.includes(b.plan) ? b.plan : "undecided";
   const lang = PRE.langs.includes(b.lang) ? b.lang : "en";
-  if (await deps.overIp(req, env, "preorder", PRE.perIpHour)) return deps.json({ error: "busy" }, 429);
   let r;
-  try { r = await deps.stats(env, "/pre/add", { id: await preId(email), email, plan, lang, max: PRE.perDay }); }
-  catch { return deps.json({ error: "busy" }, 503); }
-  if (r?.error === "full") return deps.json({ error: "busy" }, 429);
-  if (!r?.ok) return deps.json({ error: "busy" }, 503);
-  return deps.json({ ok: true });   // the same whether it is new or was there (see the top)
+  try {
+    const { ip, net } = await deps.ipTags(req, env, "preorder");
+    r = await deps.stats(env, "/pre/add", { id: await preId(email), email, plan, lang, max: PRE.perDay, ip, net });
+  } catch { return out({ error: "busy" }, 503); }
+  if (r?.error === "full" || r?.error === "ip") return out({ error: "busy" }, 429);
+  if (!r?.ok) return out({ error: "busy" }, 503);
+  return out({ ok: true });   // the same whether it is new or was there (see the top)
 }
 
 // Quotes alone do not stop Excel or Sheets from running a cell that starts with = + - @ (or a tab or CR) as a formula,
