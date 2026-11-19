@@ -242,7 +242,8 @@ if (preLeft() >= 0 && document.body.classList.contains("index")) {
     if (!j || j.open !== true) return;
     preOpen = true; preAfter(preLang);
     // Auto-open once per browser, but not over a popup already opened from the bar or the nav link (it would wipe the form).
-    if (!preSeen()) setTimeout(() => { if (preEl.hidden && !preSeen()) preShow(); }, 1200);
+    // It counts as seen when it opens by itself, so a reload or a visitor who left without closing it does not get it again.
+    if (!preSeen()) setTimeout(() => { if (preEl.hidden && !preSeen()) { preShow(); try { localStorage.setItem("sbPreSeen", "1"); } catch (e) {} } }, 1200);
   }).catch(() => {});
 }
 </script>'''
@@ -250,10 +251,10 @@ if (preLeft() >= 0 && document.body.classList.contains("index")) {
 PRECSS = '''
 #pre{position:fixed;inset:0;background:rgba(0,0,0,.66);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
 #pre[hidden]{display:none}
-.pbox{position:relative;background:var(--card);border:1px solid #4a2c10;border-top:4px solid var(--or);border-radius:18px;max-width:460px;width:100%;max-height:92vh;overflow:auto;padding:22px 22px 18px}
+.pbox{position:relative;background:var(--card);border:1px solid #4a2c10;border-top:4px solid var(--or);border-radius:18px;max-width:460px;width:100%;max-height:92vh;max-height:calc(100dvh - 32px);overflow:auto;padding:22px 22px 18px}
 .pbox h2{margin:10px 0 6px;font-size:22px}.pbox p{margin:6px 0;color:var(--mut);font-size:15px}.pbox .pu{font-size:13px}
 .pbox .pd{color:var(--or);font-size:13px;font-weight:700;margin-left:6px}
-.pbox .px{position:absolute;top:10px;right:12px;background:none;border:0;color:var(--mut);font-size:26px;cursor:pointer;line-height:1}
+.pbox .px{position:sticky;top:0;float:right;margin:-12px -10px 0 6px;padding:0 4px 2px;background:var(--card);border:0;border-radius:8px;color:var(--mut);font-size:26px;cursor:pointer;line-height:1;z-index:1}
 .pbox form{margin-top:12px;display:flex;flex-direction:column;gap:12px}
 .pbox label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--txt)}
 .pbox input[type=email],.pbox select{background:#0e0e10;border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:11px 12px;font-size:15px}
