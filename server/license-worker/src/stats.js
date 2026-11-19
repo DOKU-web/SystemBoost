@@ -324,9 +324,12 @@ export class Stats {
       return { count: s.n, fresh: s.fresh, today: s.today, byPlan: { ...s.plan }, byLang: { ...s.lang }, recent };
     }
     if (path === "/pre/seen") {
-      const s = this.preTotals(t), last = this.one("SELECT MAX(at) AS m FROM preorders").m || t;
-      this.sql.exec("INSERT INTO meta (k, v) VALUES ('pre_seen', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", String(last));
-      s.fresh = 0;   // nothing is later than the newest row
+      // up to the newest row the dashboard showed (upTo, when given), so a sign-up that came after its last refresh
+      // stays new; never earlier than a 확인 already stored (another, older tab)
+      const s = this.preTotals(t), newest = this.one("SELECT MAX(at) AS m FROM preorders").m || t;
+      const seen = Math.max(this.preSeen(), Math.min(newest, Number.isFinite(b.upTo) ? b.upTo : Infinity));
+      this.sql.exec("INSERT INTO meta (k, v) VALUES ('pre_seen', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", String(seen));
+      s.fresh = this.one("SELECT COUNT(*) AS n FROM preorders WHERE at > ?", seen).n;   // through the index: the newer rows only
       this.preSave(s);
       return { ok: true };
     }

@@ -1131,7 +1131,10 @@ async function admin(req, url, env, ctx) {
   if (req.method === "GET" && url.searchParams.get("q") && ["GET /keys", "GET /members", "GET /support"].includes(route))
     return json({ error: "검색어는 POST 본문으로 보내요" }, 400, false);
   if (route === "GET /preorders" || route.startsWith("POST /preorders/")) {
-    const { status = 200, ...r } = await preorderAdmin(env, route, body, { stats, audit: (action, detail) => audit(env, "admin", action, detail) });
+    let res;   // the rows are only in the Stats object: when it cannot be reached, say so (not the generic 500)
+    try { res = await preorderAdmin(env, route, body, { stats, audit: (action, detail) => audit(env, "admin", action, detail) }); }
+    catch { return json({ error: "통계 저장소에 연결하지 못했어요. 잠시 뒤 다시 시도하세요", error_en: "Could not reach the stats store. Try again in a moment." }, 503, false); }
+    const { status = 200, ...r } = res;
     return json(r, status, false);
   }
   if (route === "GET /announce" || route.startsWith("POST /announce/")) {

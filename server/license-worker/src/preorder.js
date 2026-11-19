@@ -144,7 +144,11 @@ export async function preorderAdmin(env, route, body, deps) {
     const r = await deps.stats(env, "/pre/read", { recent: PRE.recent });
     return { ...r, open: preOpen(env), until, deleteAt: PRE.deleteAt, shown: preShown() };
   }
-  if (route === "POST /preorders/seen") return await deps.stats(env, "/pre/seen", {});
+  if (route === "POST /preorders/seen") {
+    // {upTo}: the newest sign-up the dashboard showed (ms or ISO time); without it, everything there is now
+    const u = body?.upTo, upTo = typeof u === "number" ? u : typeof u === "string" ? Date.parse(u) : NaN;
+    return await deps.stats(env, "/pre/seen", Number.isFinite(upTo) && upTo >= 0 ? { upTo } : {});
+  }
   if (route === "POST /preorders/export") {
     const r = await deps.stats(env, "/pre/export", {});
     const rows = r.rows || [];

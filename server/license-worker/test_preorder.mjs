@@ -182,6 +182,12 @@ assert.equal(rows().length, 8);
 st.down = true;
 r = await pre({ email: "down@example.com", consent: true });
 assert.deepEqual([r.http, r.error], [503, "busy"]);
+// and the dashboard's calls get a 503 that says so, not the generic 500 "server error"
+for (const [p, b] of [["/preorders"], ["/preorders/seen", {}], ["/preorders/export", {}], ["/preorders/delete", { email: "fan@example.com" }]]) {
+  const d = await adm(p, b);
+  assert.deepEqual([d.http, d.error, d.csv], [503, "통계 저장소에 연결하지 못했어요. 잠시 뒤 다시 시도하세요", undefined], p);
+  assert.ok(d.error_en, p);
+}
 st.down = false;
 
 // admin: unauthorised is refused; the list has counts and no email anywhere; the numbers are the table's
@@ -201,6 +207,24 @@ Date.now = () => Date.parse("2026-11-20T04:00:00Z");
 await pre({ email: "late@example.com", plan: "biz", consent: true });
 assert.deepEqual(numbers(await adm("/preorders")), brute());
 assert.equal((await adm("/preorders")).fresh, 1);
+// 확인 with upTo (the newest sign-up the dashboard showed, ISO or ms): one that came after its last refresh stays new;
+// an older tab's upTo does not move 확인 back; a bad upTo is left out (everything there is now)
+const shownUpTo = (await adm("/preorders")).recent[0].at;
+assert.equal(shownUpTo, "2026-11-20T04:00:00.000Z");
+Date.now = () => Date.parse("2026-11-20T04:30:00Z");
+await pre({ email: "after-refresh@example.com", consent: true });
+assert.equal((await adm("/preorders/seen", { upTo: shownUpTo })).ok, true);
+let seenNow = await adm("/preorders");
+assert.equal(seenNow.fresh, 1, "the sign-up after the refresh is still new");
+assert.deepEqual(seenNow.recent.filter(x => x.fresh).map(x => x.at), ["2026-11-20T04:30:00.000Z"]);
+assert.deepEqual(numbers(seenNow), brute());
+await adm("/preorders/seen", { upTo: Date.parse("2026-11-20T03:00:00Z") });
+assert.equal((await adm("/preorders")).fresh, 1, "an older tab does not move it back");
+await adm("/preorders/seen", { upTo: "not a time" });
+seenNow = await adm("/preorders");
+assert.deepEqual([seenNow.fresh, numbers(seenNow)], [0, brute()]);
+assert.equal((await adm("/preorders/delete", { email: "after-refresh@example.com" })).deleted, true);
+Date.now = () => Date.parse("2026-11-20T04:00:00Z");
 
 // The free plan reads 5 million rows a day and the dashboard reads every 60 s: neither the read, a sign-up, 확인 nor a
 // delete walks the table or sorts it (SQLite's plan for every query they run; an export reads every row on purpose)
