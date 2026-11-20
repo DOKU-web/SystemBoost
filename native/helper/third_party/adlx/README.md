@@ -16,45 +16,34 @@ instead of asking Radeon owners to update a driver that may be fine.
   (its zip comment is the commit above). The per-file hashes in `adlx.cmake` were taken from this
   archive and match the raw files at that commit.
 
-## Licence: not MIT
+## Licence
 
 ADLX is distributed under AMD's own "ADLX SDK License Agreement" (`ADLX SDK License Agreement.pdf`
 at the root of AMD's repository; every tag from v1.0 to v2.0 has it, none has an MIT licence).
-Downloading, copying or using the SDK counts as accepting it. Points that matter here:
 
-- §2: a revocable licence to use the SDK internally to make software for use with AMD hardware, and
-  to distribute it only in object code inside our software, under an end-user licence agreement
-  that meets §3.
-- §3 and Schedule B: that end-user agreement must at least prohibit transfer/duplication and reverse
-  engineering of our software, carry AMD's warranty disclaimer and liability limit, require export
-  compliance, tell the user the software is under a restricted licence for the licensed purpose
-  only, make AMD a third-party beneficiary, and cover later updates.
-- §4(b): the SDK files may not be distributed or published: hence nothing of AMD's in this public
-  repository.
-- §4(f): no use that would require the SDK to be licensed as open source.
-- §12: the SDK and information related to it are to be kept confidential.
-- §16: Texas law, courts of Travis County.
+## File hashes
 
-The owner accepted the agreement on 2026-11-17. `build.ps1 -Adlx` turns SB_ADLX on; the local default stays OFF, and
-the CI build passes it from 0.8.18 (owner's decision, 2026-11-18). Article 12-2 below binds earlier users only from
-2027-01-01, so until then the app sends no ADLX command on a PC whose user has not agreed to Article 12-2 separately
-(Services/AmdTerms.cs; the date is not moved earlier). SystemBoost's EULA carries the §3 terms in Article 12-2
-("AMD 구성 요소"), in force 2027-01-01 for people who agreed to an earlier version (EULA Article 13: 30 days'
-notice). Left out of Article 12-2 because they clash with a Korean consumer agreement: Schedule B's
-confidentiality, the user's indemnity, Texas law and courts, feedback licence and US government clauses.
-Whether AMD would see Article 12-2 as "substantially similar" to Schedule B has not been checked by a lawyer.
-This is not legal advice.
+SHA-256 of the 17 headers `adlx.cmake` fetches from `SDK/Include/` at commit `1ca2dd42f1df8cbd045489b7a20013a07692a446`
+(the same values as in `adlx.cmake`, which checks them on download):
 
-## What is used, and how the DLL is loaded
+| File | SHA-256 |
+|---|---|
+| `ADLX.h` | `a7fd218b772f7955d5e88fbb14ceae5f3a281be5bdc7bdb6ae0372fc36dbbd36` |
+| `ADLXDefines.h` | `ceddbbf3b1a2fe92c1614cc1fcef4d37a2d9d02668bfcef07f3596dde8e3b17f` |
+| `ADLXStructures.h` | `e19a1384ed226b9da29848e625dd122fb3cf29bbc208df62dd244947087ef63e` |
+| `ADLXVersion.h` | `7532d1dc988602f6593ee632855d23e3057a25dce1da1a11a038b1265bd8bdd4` |
+| `I3DSettings.h` | `d8e76c9f2bfd044baf3c9a9b0d9bf3772834717d823552ab5cb6bbaf20d45fd4` |
+| `I3DSettings1.h` | `96cafb020425c80359c510c9621d37f4e9ab7771abc38080d78a411be2129694` |
+| `IChangedEvent.h` | `cca43de0a038a381cb937944441a7de7809d14fe5c935353b2623330a26527d2` |
+| `ICollections.h` | `2f38e038a12b000955d47345cbf33f5155eef874e7bdfe7431a1408080cde1f9` |
+| `IGPUAutoTuning.h` | `a5cda3a440a7cf48e4aeb7fb1c21f468b26e9f10efeacf43a2f0418aabbd4f7d` |
+| `IGPUManualGFXTuning.h` | `67640c1d2c559e1444600bdeacd4cce9204675a84a129f16f4ee39469ba74cc1` |
+| `IGPUManualPowerTuning.h` | `081d81e629134d553f2c748152ee3f9ef107370d5eb615f4e5b006bd5d137597` |
+| `IGPUManualVRAMTuning.h` | `8661a47eb9f37610d0c69ef22d2291c86a31fc5f6420f7156b775fac2becc290` |
+| `IGPUTuning.h` | `be772160c1d20586272a043eb7add050253c4e59c0ac96c0961fd74466d8270c` |
+| `IPerformanceMonitoring.h` | `250e86ab3bd655fee20c79166c160d59846e319f5a72b6c52bf012d26086053d` |
+| `ISystem.h` | `7fe4d9874b2f0a2c4852b4516d49ef1f2006c0b814b22ee6d2d986ae13c2fbd0` |
+| `ISystem1.h` | `1f8e73c2ec21dc9d66dbd0fcc5ad31ab2b6c5e4212e66e6a67b175c62ebae880` |
+| `ISystem2.h` | `b9bbcf979e2588c06a7e7dac45a416e00ac190df145cb336a5c7f1430a281a82` |
 
-- Only the 17 headers listed in `adlx.cmake`. ADLXHelper and SDK/Platform are not used: their
-  loader (`SDK/Platform/Windows/WinAPIs.cpp`, `adlx_load_library`) calls `LoadLibraryEx` with
-  `LOAD_LIBRARY_SEARCH_USER_DIRS | LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
-  | LOAD_LIBRARY_SEARCH_SYSTEM32`, which also searches the application folder.
-- `src/amd_adlx.cpp` loads `LoadLibraryExW(L"amdadlx64.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)`
-  and resolves ADLX's documented entry points itself (ADLXQueryVersion, ADLXInitialize2 or
-  ADLXInitialize, the legacy-driver variants, ADLXTerminate). No DLL, missing entry points, or a
-  driver ADLX starts only in legacy mode end as the status `no_dll` / `old_driver`.
-- amdadlx64.dll comes with the user's AMD driver. It is not in this repository and not in the package.
-
-To update: change `ADLX_COMMIT` and every hash in `adlx.cmake` together, and check the licence again.
+To update: change `ADLX_COMMIT` and every hash in `adlx.cmake` together.
