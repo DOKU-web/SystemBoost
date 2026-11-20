@@ -116,7 +116,7 @@ def index_body(L):
 <div class="note"><b>{s["iw"]}</b><ol>{lis(s["iwl"])}</ol></div>
 <div class="note"><b>{s["kh"]}</b>{"".join(f"<p>{x}</p>" for x in s["kl"])}</div>
 <div class="discord"><div class="t"><h2>{s["dch"]}</h2><p>{s["dcp"]}</p></div><a class="btn dcb" href="{DC}">{s["dcb"]}</a></div>
-<footer>SystemBoost · DOKKU · <a href="license.html">{s["ft1"]}</a> · <a href="{DC}">{s["nav_discord"]}</a><br>{f(s["ft2"])}<br>{s["ft3"]}<br><span class="tm">{s["ft4"]}</span></footer>'''
+<footer>SystemBoost · Riye · <a href="license.html">{s["ft1"]}</a> · <a href="{DC}">{s["nav_discord"]}</a><br>{f(s["ft2"])}<br>{s["ft3"]}<br><span class="tm">{s["ft4"]}</span></footer>'''
 
 # ---------------------------------------------------------------- trademarks
 # The footer line ft4 names exactly the brands in TM_NAMES. The build stops if the visible text of index.html
@@ -229,7 +229,7 @@ LT = {
    ossuse=["앱 화면", "앱 화면 그리기", "앱 화면 그리기", "Avalonia 안의 글꼴(앱 화면은 Windows 글꼴을 써요)", "Avalonia가 함께 씀",
              "앱 실행(설치 파일에 함께 들어 있음)", "설치와 자동 업데이트", "Windows NVIDIA 드라이버 설정", "프레임 생성 엔진과 도우미", "2단계 인증 QR 코드"],
    own="만든 방법: 코드, 셰이더, 문서는 Anthropic Claude(claude.ai, Claude Code)를 써서 만들었고, 로고는 Anthropic Claude(claude.ai)로 만들었어요. AI 도구로 만든 부분에 저작권이 생기는지, 생긴다면 누구에게 있는지는 확인하지 않았어요. 이 고지로 저작권을 주장하지 않아요.",
-   contactp=f'판매자: DOKKU<br>라이선스, 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
+   contactp=f'판매자: Riye<br>라이선스, 키, 결제, 청약철회·환불, 개인정보 문의는 <a href="{DC}">공식 디스코드</a>의 #help에 글을 남겨 주세요. 키 전체를 공개 채널에 올리지 마세요. 운영진은 DM으로 먼저 연락하지 않아요.'),
  "en": dict(h1="License Agreement · Privacy", sub='This is the same agreement the app shows on first start. You can read it again in the app under Settings → "View license agreement".',
    revh="Upcoming revisions", revp='The agreement changes three times. Changed paragraphs are marked with their date.<br>• <b>December 8, 2026</b>: <a href="#a3">Article 3, Paragraph 3</a> changes for card subscriptions, which go on sale that day. Keys bought before then, and keys bought by bank transfer or other direct payment, are never charged automatically.<br>• <b>December 9, 2026</b>: for the Business plan, 5-PC and 10-PC bundle keys and the plan names, <a href="#a2">Article 2(1)</a>, <a href="#a3">Article 3(2), (5), (8) and (9)</a>, <a href="#a6">Article 6(1)</a> and <a href="#a11">Article 11(2)</a> change. Premium is renamed Pro; its features and prices stay the same. Bundle keys go on sale that day.<br>• <b>January 1, 2027</b>: the sales page and the Windows program in <a href="#a1">Article 1</a>; cancellation and refunds in <a href="#a3">Article 3(3)</a>; <a href="#a3">Article 3(2), (10) and (11)</a>; personal information in <a href="#a8">Article 8</a>; <a href="#a9">Article 9(2) and (5)</a>; and <a href="#a10">Article 10(3)</a> change, and <a href="#oc">Article 6-2</a> (overclocking and hardware tuning) and <a href="#a12-2">Article 12-2</a> (AMD components) are added. This includes usage statistics that start off (Article 8(3)).<br>After updating the app you accept the revised agreement once.',
    rev="Revised Dec 8, 2026", rev9="Revised Dec 9, 2026", rev27="Revised Jan 1, 2027", toc="Contents", imp="Please read the marked articles (orange border) carefully.",
@@ -255,7 +255,7 @@ LT = {
    ossuse=["App UI", "Drawing the app", "Drawing the app", "A font inside Avalonia (the app's screens use Windows fonts)", "Used by Avalonia",
              "Running the app (bundled with the installer)", "Installer and automatic updates", "Windows NVIDIA driver settings", "Frame generation engine and helper", "2-step verification QR code"],
    own="How it was made: the code, shaders and documents were made with Anthropic Claude (claude.ai and Claude Code); the logo was made with Anthropic Claude (claude.ai). Whether copyright exists in the AI-made parts, and who would hold it, has not been checked, and this notice does not claim it.",
-   contactp=f'Seller: DOKKU<br>For license, key, payment, withdrawal/refund and privacy questions, post in #help on the <a href="{DC}">official Discord</a>. Never post your full key in a public channel. Staff never DM you first.'),
+   contactp=f'Seller: Riye<br>For license, key, payment, withdrawal/refund and privacy questions, post in #help on the <a href="{DC}">official Discord</a>. Never post your full key in a public channel. Staff never DM you first.'),
 }
 # The same components as the app's Settings card and THIRD_PARTY_NOTICES.txt (one row each, ossuse in the same order).
 OSS = [('<a href="https://github.com/AvaloniaUI/Avalonia">Avalonia</a>', "MIT"),
@@ -296,7 +296,7 @@ def license_body(L, eulas):
 <p>{t["own"]}</p>
 <h2 id="contact">{t["contact"]}</h2>
 <p>{t["contactp"]}</p>
-<footer>SystemBoost · DOKKU · <a href="./">SystemBoost</a> · <a href="{DC}">{s["nav_discord"]}</a><br><span class="tm">{t["tm"]}</span></footer>'''
+<footer>SystemBoost · Riye · <a href="./">SystemBoost</a> · <a href="{DC}">{s["nav_discord"]}</a><br><span class="tm">{t["tm"]}</span></footer>'''
 
 SCRIPT = '''<script>
 const LANGS = %s, META = %s;
