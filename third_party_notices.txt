@@ -6434,9 +6434,12 @@ subject to the following conditions:
 (https://github.com/filips123/PWAsForFirefox; the link points to the fork
 vaginessa/PWAsForFirefox at commit fba68dbcc7ca27b970dc5a278ebdad32e0ab3c83,
 native/src/integrations/implementation/windows.rs; Mozilla Public License 2.0)
-as a reference. The lines the two files share are the usual Windows shortcut calls
-(IShellLinkW, IPropertyStore with the AppUserModel ID, IPersistFile) and a three-line
-COM helper. If any of it is covered by MPL-2.0, its Source Code Form is Velopack's
-source at tag 0.0.1298:
+as a reference. The two files share a three-line COM helper, the usual Windows
+shortcut calls (IShellLinkW, IPropertyStore with the AppUserModel ID, IPersistFile) in
+five statements with the same variable names, the comment "Set app user model ID
+property" and a link to Microsoft's documentation. Those shared parts are treated here
+as covered by MPL-2.0. Their Source Code Form is Velopack's source at tag 0.0.1298:
 https://github.com/velopack/velopack/blob/0.0.1298/src/bins/src/windows/shortcuts.rs
-The MPL-2.0 text is at https://mozilla.org/MPL/2.0/.
+A copy of that file is also available from the seller on request (support page in the
+app). The MPL-2.0 text is at https://mozilla.org/MPL/2.0/. Nothing in the SystemBoost
+licence agreement limits the rights MPL-2.0 gives in that Source Code Form.
