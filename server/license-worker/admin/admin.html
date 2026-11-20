@@ -195,6 +195,7 @@ button.todoRow:hover{border-color:var(--or)}
 <main>
   <div id="demoNote" class="demo hide">시연 모드예요. 가짜 데이터로 동작하고 서버에 아무것도 저장하지 않아요.</div>
 <section class="tab" data-tab="home" aria-label="홈">
+  <div id="sellerWarn" class="warnBar hide" role="alert"></div>
   <div id="cfgWarn" class="warnBar hide" role="alert"></div>
   <div class="card" id="todoCard">
     <h2>할 일 <small>지금 처리할 것만 모았어요. 누르면 그 화면으로 가요.</small></h2>
@@ -314,6 +315,7 @@ button.todoRow:hover{border-color:var(--or)}
     <div class="sfGrid" id="sfSeller"></div>
     <p class="mut" style="margin:8px 0 0">비워 둔 칸은 앱과 /help에 나오지 않아요. 모두 비우면 '판매자가 아직 입력하지 않았어요'로 보여요.</p>
     <div class="sfWarn bad hide" id="sfSellerWarn" role="alert"></div>
+    <div class="sfWarn hide" id="sfSellerNote"></div>
     <p class="anSub">개인정보 처리방침 (/privacy)</p>
     <div class="sfGrid">
       <label>회원 DB 위치 (Supabase 지역)<input id="sf_dbRegion" maxlength="120" placeholder="예: 대한민국 서울 (ap-northeast-2)"></label>
@@ -806,6 +808,7 @@ function sumTiles(c) {
 async function loadSummary() {
   const s = await api("/summary"), c = s.counts;
   sellerNow = { missing: s.sellerMissing || [], blocked: !!s.sellerBlocked };
+  if (!supCfg) sellerWarn(sellerMissingKeys(sellerNow.missing));   // the saved settings decide once they are loaded
   depositsNow = Array.isArray(s.deposits) ? s.deposits : null;
   sumCounts = c; renderBudget(s.budget); supBadge(c); sumTiles(c);
   const partial = [c.keysMore && "키가 2만 개를 넘어 앞의 2만 개만 셌어요", c.ordersMore && "주문이 1,000개를 넘어 앞의 1,000개만 셌어요",
@@ -1859,13 +1862,32 @@ function sfPrivWarn() {
   $("sfPrivWarn").textContent = gaps.length ? `개인정보 처리방침(/privacy)에 아직 빈 칸이 있어요 (저장한 설정 기준): ${gaps.join(", ")}. 빈 칸은 처리방침에 '판매자가 아직 입력하지 않았어요'로 보여요.${repGap}` : "";
   $("sfPrivWarn").classList.toggle("hide", !gaps.length);
   const sellerGaps = SELLER_NEED.filter(([k]) => !String(s[k] || "").trim()).map(([, l]) => l);
-  $("sfSellerWarn").textContent = sellerGaps.length ? `판매자 정보에 빈 칸이 있어요 (저장한 설정 기준): ${sellerGaps.join(", ")}. 그 칸은 구매자 화면에 나오지 않아요.` : "";
-  $("sfSellerWarn").classList.toggle("hide", !sellerGaps.length);
-  // the same, at the top of the dashboard, until both are filled
-  const top = [sellerGaps.length && `판매자 정보 ${sellerGaps.length}칸 (${sellerGaps.join(", ")})`, gaps.length && `개인정보 처리방침 ${gaps.length}칸 (${gaps.join(", ")})`].filter(Boolean);
+  // the seller's details (판매자 정보 bar, here and on 홈): the ones a buyer must see, from the saved settings
+  sellerWarn(sellerMissingOf(s));
+  // the other empty seller fields (통신판매업 신고번호 only, now) as before, softly, in this card
+  const other = sellerGaps.filter(l => !SELLER_DISCLOSE.some(([, , old]) => old === l));
+  $("sfSellerNote").textContent = other.length ? `${other.join(", ")}: 신고한 경우에만 적어요. 비워 두면 구매자 화면에 나오지 않고, 판매 모드가 '실판매'이면 다 채울 때까지 앱에서 결제할 수 없어요.` : "";
+  $("sfSellerNote").classList.toggle("hide", !other.length);
+  // the privacy policy's blanks at the top of the dashboard, until they are filled
+  const top = [gaps.length && `개인정보 처리방침 ${gaps.length}칸 (${gaps.join(", ")})`].filter(Boolean);
   $("cfgWarn").innerHTML = top.length ? `<b>비어 있는 칸이 있어요:</b> ${esc(top.join(" · "))}. ${!s.rep ? "개인정보 보호책임자(대표자) 이름이 필요해요. " : ""}<button id="cfgGo">고객센터 설정 열기</button>` : "";
   $("cfgWarn").classList.toggle("hide", !top.length);
   if ($("cfgGo")) $("cfgGo").onclick = () => { showTab("support"); $("sfCard").scrollIntoView(); };
+}
+// 판매자 정보 (전자상거래법 seller identity): the six a buyer must see. 통신판매업 신고번호 is shown only "if reported", so it is
+// not in this list (sfSellerNote names it softly). [key, label in the bar, label of SELLER]
+const SELLER_DISCLOSE = [["name", "상호", "상호"], ["rep", "대표자 성명", "대표자"], ["address", "주소", "주소"], ["phone", "전화번호", "전화"],
+                         ["email", "전자우편주소", "메일"], ["bizNo", "사업자등록번호", "사업자등록번호"]];
+const sellerMissingOf = s => SELLER_DISCLOSE.filter(([k]) => !String((s || {})[k] || "").trim()).map(([, l]) => l);
+// keys from GET /summary sellerMissing (before the settings are loaded) -> the same labels
+const sellerMissingKeys = keys => SELLER_DISCLOSE.filter(([k]) => (keys || []).includes(k)).map(([, l]) => l);
+function sellerWarn(missing) {
+  const text = missing.length ? `판매자 정보가 덜 채워졌어요: ${missing.join(", ")}` : "";
+  $("sfSellerWarn").textContent = text ? text + ". 비워 둔 칸은 구매자 화면에 나오지 않아요." : "";
+  $("sfSellerWarn").classList.toggle("hide", !text);
+  $("sellerWarn").innerHTML = text ? `<b>${esc(text)}</b> <button id="sellerGo">고객센터 설정 열기</button>` : "";
+  $("sellerWarn").classList.toggle("hide", !text);
+  if ($("sellerGo")) $("sellerGo").onclick = () => { showTab("support"); $("sfCard").scrollIntoView(); };
 }
 function renderFaq() {
   const box = $("sfFaq"); box.textContent = "";

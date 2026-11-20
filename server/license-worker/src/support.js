@@ -94,6 +94,22 @@ const SELLER_FIELDS = ["name", "rep", "address", "bizNo", "mailOrderNo", "email"
 // sales mode nothing new is sold while one of them is empty (index.js sellerBlocked).
 export const SELLER_REQUIRED = SELLER_FIELDS.filter(f => f !== "hours");
 export const sellerGaps = c => SELLER_REQUIRED.filter(f => !String(c?.seller?.[f] ?? "").trim());
+// GET /seller: the filled-in fields of the seller's details, for the official site and the app (nothing that is not
+// already on /help). CORS for the site's origin only, GET only; cached 300 s.
+const SELLER_PUBLIC = ["name", "rep", "address", "phone", "email", "bizNo", "mailOrderNo", "hours"];
+export const SELLER_ORIGINS = ["https://doku-web.github.io"];
+export async function sellerPublic(req, env) {
+  const origin = req.headers.get("Origin") || "";
+  const allowed = SELLER_ORIGINS.includes(origin);
+  const cors = allowed ? { "access-control-allow-origin": origin, vary: "Origin" } : { vary: "Origin" };
+  if (req.method === "OPTIONS")
+    return new Response(null, { status: allowed ? 204 : 403, headers: allowed ? { ...cors, "access-control-allow-methods": "GET", "access-control-max-age": "86400" } : cors });
+  if (req.method !== "GET" && req.method !== "HEAD")
+    return new Response(JSON.stringify({ error: "method" }), { status: 405, headers: { "content-type": "application/json", allow: "GET", ...cors } });
+  const c = await supportConfig(env), out = {};
+  for (const f of SELLER_PUBLIC) { const v = String(c?.seller?.[f] ?? "").trim(); if (v) out[f] = v; }
+  return new Response(JSON.stringify(out), { headers: { "content-type": "application/json", "cache-control": "public, max-age=300", ...cors } });
+}
 
 export const CATEGORIES = [
   { id: "pay", ko: "결제", en: "Payment" },
@@ -851,6 +867,7 @@ const withNotice = (page, inner) =>
 // (ACCOUNTS_V2_FROM, 2027-01-01) when the new policy takes over, or without a start until the rows go (preShown). It changes nothing else the policy
 // says, so it is not a change under the policy's 제12조. The new policy (privacy/*.md) lists it in its articles.
 const PRE_FROM = "2026-11-20";
+const PRE_UNSUB_URL = "https://systemboost-license.euning97.workers.dev/preorder/unsubscribe";   // preorder.js preorderUnsubscribe
 const kst = ms => new Date(ms + 9 * 36e5).toISOString();
 export const PRIVACY_PRE_CSS = ".prenote{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin:18px 0}\n";
 const PRIVACY_PRE = {
@@ -859,7 +876,7 @@ const PRIVACY_PRE = {
         lead: from => "이 안내는 공식 사이트(doku-web.github.io/SystemBoost)의 사전예약 창에서 신청한 분에게만 해당해요. " + from +
                       "부터 적용해요. 앱과 판매자 서버의 다른 개인정보 처리는 이 안내로 바뀌지 않아요.",
         rows: (until, del) => [
-          ["처리하는 항목", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각"],
+          ["처리하는 항목", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각, 광고성 정보 수신 동의 시각"],
           ["목적", "정식 출시 알림 메일을 한 번 보내기. 그 밖의 메일은 보내지 않고, 다른 사람에게 제공하지 않아요"],
           ["받는 방법과 기간", "사전예약 창에서 동의 칸에 체크한 경우만, " + until + "(한국 시간)까지 받아요. 만 14세 이상만 신청할 수 있어요"],
           ["보유 기간과 파기", del + "에 서버에서 모두 지워요. 그 전에 지워 달라고 하면 바로 지워요. 판매자가 알림 메일을 보내려고 내려받은 메일 목록 파일과 네이버 메일의 보낸 메일도 그날 지워요. " +
@@ -869,14 +886,14 @@ const PRIVACY_PRE = {
                                    "판매자가 켠 경우 판매자만 보는 디스코드 채널로 새 신청 수(관심 플랜과 언어별 수)를 알려요. 메일 주소는 보내지 않아요"],
           ["너무 많은 신청 막기", "같은 곳에서 온 신청 수를 IP 주소와 그 주소가 속한 네트워크(같은 회사나 학교 등)로 만든 해시값(서버만 아는 값을 섞어 만들어요)으로 세고, 마지막 신청 뒤 1시간까지만 둬요. IP 주소와 브라우저 정보는 저장하지 않아요"],
           ["동의를 거부할 권리", "동의하지 않아도 돼요. 그러면 사전예약을 할 수 없을 뿐, 앱을 받거나 쓰는 데는 영향이 없어요"],
-          ["열람 · 삭제 · 동의 철회", "제5조의 방법(웹 /help, 제10조의 메일)으로 언제든 요구할 수 있어요. 신청한 메일 주소로 본인을 확인해요"],
+          ["열람 · 삭제 · 동의 철회", "제5조의 방법(웹 /help, 제10조의 메일)으로 언제든 요구할 수 있어요. 신청한 메일 주소로 본인을 확인해요. 수신 거부는 " + PRE_UNSUB_URL + " 에 신청한 메일 주소만 넣으면 바로 돼요(2027년 2월 28일까지). 그 주소의 사전예약 정보를 지우고, 그 뒤로 출시 알림 등 광고성 메일을 보내지 않아요"],
         ] },
   en: { box: 'If you signed up for pre-registration on the official site, see <a href="#preorder">Separate notice: pre-registration on the official site</a>.',
         title: "Separate notice: pre-registration on the official site", head: ["Item", "Details"],
         lead: from => "This notice applies only to people who sign up in the pre-registration window on the official site (doku-web.github.io/SystemBoost). " +
                       "It applies from " + from + ". It does not change anything else the app or the seller's server processes.",
         rows: (until, del) => [
-          ["What is processed", "Email address, plan of interest, site language, time of sign-up"],
+          ["What is processed", "Email address, plan of interest, site language, time of sign-up, time of consent to receive advertising information"],
           ["Purpose", "To send one launch email. No other mail, and nothing is given to anyone else"],
           ["How and until when", "Only when the consent box is ticked, until " + until + " (Korean time). 14 or older only"],
           ["Kept for", "All deleted from the server on " + del + ", or at once on request. Email lists the seller downloads to send the launch email, and the sent copies in the seller's Naver Mail, are deleted that day too. " +
@@ -886,7 +903,7 @@ const PRIVACY_PRE = {
                                              "If the seller turns it on, a Discord channel only the seller reads gets the number of new sign-ups (by plan and language), never an email address"],
           ["Abuse limits", "Sign-ups from one place are counted with hashes made from the IP address and its network, such as one company or school (mixed with a value only the server knows), kept up to 1 hour after the last sign-up. The IP address and browser details are not stored"],
           ["Right to refuse", "You may refuse. You then can't pre-register; downloading and using the app are not affected"],
-          ["Access, deletion, withdrawal", "Ask at any time as under Your rights (web /help or the email under Contact). The email address you signed up with is used to confirm it is you"],
+          ["Access, deletion, withdrawal", "Ask at any time as under Your rights (web /help or the email under Contact). The email address you signed up with is used to confirm it is you. To unsubscribe, enter that address at " + PRE_UNSUB_URL + " (until February 28, 2027): its pre-registration is deleted at once and no launch or other advertising email is sent to it"],
         ] },
 };
 function withPreorder(page, lang, env) {
@@ -936,10 +953,31 @@ export async function privacyPage(url, env) {
 // GET /terms. The licence agreement as the app shows it, made from the app's eula.txt / eula.en.txt by build_terms.mjs
 // (static, no script, nothing filled in). It is on the sales page (/help links to it) so a change can be announced
 // there 30 days ahead (EULA Article 13).
-export function termsPage(url) {
+// Below the agreement (outside its text) the seller's identity from 고객센터 설정, as /help shows it: only the fields
+// filled in, each escaped; "not entered yet" when none is.
+export const SELLER_LABELS = {
+  ko: { title: "판매자 정보", empty: "판매자가 아직 입력하지 않았어요",
+        name: "상호", rep: "대표자", address: "주소", bizNo: "사업자등록번호", mailOrderNo: "통신판매업 신고번호", email: "메일", phone: "전화", hours: "문의 받는 시간" },
+  en: { title: "Seller", empty: "Not entered by the seller yet",
+        name: "Business name", rep: "Representative", address: "Address", bizNo: "Business registration no.", mailOrderNo: "Mail-order business no.", email: "Email", phone: "Phone", hours: "Support hours" },
+};
+const TERMS_SELLER_CSS = ".seller{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:32px 0 0;font-size:14px}" +
+  ".seller dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:8px 0 0}.seller dt{color:var(--muted)}.seller dd{margin:0}\n";
+/** The filled-in seller fields, trimmed, in SELLER_FIELDS order. */
+export const sellerFilled = c => Object.fromEntries(SELLER_FIELDS.map(f => [f, String(c?.seller?.[f] ?? "").trim()]).filter(([, v]) => v));
+export function sellerBlock(c, lang) {
+  const L = SELLER_LABELS[lang], s = sellerFilled(c);
+  const rows = Object.entries(s).map(([f, v]) => "<dt>" + escHtml(L[f]) + "</dt><dd>" + escHtml(v) + "</dd>").join("");
+  return '<footer class="seller" id="seller" aria-label="' + escHtml(L.title) + '"><b>' + escHtml(L.title) + "</b>" +
+         (rows ? "<dl>" + rows + "</dl>" : '<p class="lead">' + escHtml(L.empty) + "</p>") + "</footer>\n";
+}
+export async function termsPage(url, env) {
   const lang = lang2(url.searchParams.get("lang"));
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  return new Response(TERMS_HTML[lang].replaceAll("__NONCE__", nonce), { headers: {
+  let c = null;
+  try { c = await supportConfig(env); } catch { /* the agreement still shows */ }
+  const page = TERMS_HTML[lang].replace("</style>", () => TERMS_SELLER_CSS + "</style>").replace("</main>", () => "</main>\n" + sellerBlock(c, lang));
+  return new Response(page.replaceAll("__NONCE__", nonce), { headers: {
     "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
     "content-security-policy": `default-src 'none'; style-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     "x-frame-options": "DENY", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });

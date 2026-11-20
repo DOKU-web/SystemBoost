@@ -49,6 +49,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
 <header><h1 data-t="title"></h1><a id="langLink" href="?lang=en"></a></header>
 <p class="m" data-t="lead"></p>
 <p class="m" data-t="about"></p>
+<p class="m" data-t="koreaOnly"></p>
 <nav><a href="#s-faq" data-t="faq"></a><a href="#s-refund" data-t="refund"></a><a href="#s-seller" data-t="seller"></a><a href="#s-ask" data-t="ask"></a><a href="#s-mine" data-t="mine"></a><a id="privacyNav" href="/privacy" data-t="privacy"></a><a id="termsNav" href="/terms" data-t="termsNav"></a></nav>
 <div id="offline" class="box warn" hidden></div>
 <div id="notice" class="box" hidden></div>
@@ -133,6 +134,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     ko: {
       title: "SystemBoost 고객센터", other: "English", lead: "자주 묻는 질문과 환불 안내를 보고, 앱 없이도 문의를 남길 수 있어요.",
       about: "지원 환경: 현재 윈도우만 지원해요",
+      koreaOnly: "SystemBoost는 대한민국에서만 판매해요.",
       // Only the names this page and the default FAQ actually show (a FAQ written on the dashboard may add others).
       trademark: "Windows(윈도우)는 Microsoft 그룹 회사의 상표예요. AMD, Radeon은 Advanced Micro Devices, Inc.의 상표예요. Cloudflare, Supabase, Resend, Lemon Squeezy, Discord는 각 소유자의 상표이고, 판매자가 쓰는 서비스를 가리키려고만 써요. SystemBoost는 Microsoft나 AMD가 만들거나 승인한 제품이 아니에요.",
       faq: "자주 묻는 질문", refund: "환불 · 청약철회", seller: "판매자 정보", ask: "문의하기", mine: "내 문의", loading: "불러오는 중…",
@@ -149,7 +151,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
                    "제9조 제2항: 구매 전에 써 볼 수 있는 것이 3일 시험 키에서 무료 플랜으로 바뀌어요. 유료 플랜에만 있는 기능은 구매 전에 써 볼 수 없어요.",
                    "제9조 제5항: 청약철회와 환불 문의를 앱이나 이 도움말 페이지의 고객센터로도 보낼 수 있어요.",
                    "제10조 제3항: 판매자의 경과실로 생긴 손해의 배상 한도가 '지급한 금액'에서 '지급한 금액과 10만 원 가운데 큰 금액'으로 바뀌어요. 무료 플랜만 쓰면 10만 원이에요.",
-                   "제12조의2(새 조항): 라데온 드라이버 기능에 쓰는 AMD 구성 요소(AMD의 ADLX SDK로 만든 부분)는 AMD 하드웨어와 함께 쓰는 목적으로만 쓸 수 있고, 복제·역분석 등은 할 수 없어요. AMD는 보증하지 않고 AMD의 책임은 미화 100달러가 한도예요. 판매자의 책임은 제10조 그대로예요."],
+                   "제12조의2(새 조항): AMD 구성 요소(ADLX SDK) 사용 조건으로, 라데온 드라이버 기능이 들어 있는 빌드에만 적용돼요. 라데온 드라이버 기능은 라이선스 확인이 끝날 때까지 빠졌어요. 프레임 생성은 라데온에서도 그대로 쓸 수 있어요."],
       refundLead: "환불(청약철회)은 사용권 계약 제9조를 따라요. 아래는 그 조항 그대로예요. 제2항과 제5항은 2027년 1월 1일부터 시행하는 문구이고, 그 전에는 이전 문구가 적용돼요.",
       refundDays: "청약철회 기간: 키를 받은 날부터 7일 (사용권 계약 제9조 제1항)",
       refundDaysLonger: "판매자가 안내하는 청약철회 기간: 키를 받은 날부터 {n}일 (법이 정한 7일보다 길어요)",
@@ -198,6 +200,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
     en: {
       title: "SystemBoost Support", other: "한국어", lead: "Read the FAQ and the refund policy, and send a request without the app.",
       about: "Supported system: Windows only for now",
+      koreaOnly: "SystemBoost is sold only in the Republic of Korea.",
       trademark: "Windows is a trademark of the Microsoft group of companies. AMD and Radeon are trademarks of Advanced Micro Devices, Inc. Cloudflare, Supabase, Resend, Lemon Squeezy and Discord are trademarks of their owners, named only to identify services the seller uses. SystemBoost is not made or endorsed by Microsoft or AMD.",
       faq: "FAQ", refund: "Refunds and withdrawal", seller: "Seller", ask: "Send a request", mine: "My requests", loading: "Loading…",
       privacy: "Privacy policy", privacyMore: "Details are in the privacy policy",
@@ -213,7 +216,7 @@ button.ghost{background:transparent;color:var(--text);border:1px solid var(--lin
                    "Article 9, Paragraph 2: what can be tried before buying changes from a 3-day trial key to the free plan. Features only in paid plans cannot be tried before buying.",
                    "Article 9, Paragraph 5: withdrawal and refund requests can also be sent from Support in the app or on this help page.",
                    "Article 10, Paragraph 3: the cap on damages for the seller's slight negligence changes from 'the amount paid' to 'the larger of the amount paid and 100,000 won' (100,000 won for free-plan users).",
-                   "Article 12-2 (new): the AMD components used by the Radeon driver features (parts made with AMD's ADLX SDK) may be used only with AMD hardware, and may not be duplicated or reverse engineered. AMD gives no warranty and its liability is capped at 100 US dollars. The seller's liability stays as in Article 10."],
+                   "Article 12-2 (new): the terms for the AMD components (ADLX SDK) apply only to builds that include the Radeon driver features. Radeon driver features are left out until the license check is finished. Frame generation still works on Radeon."],
       refundLead: "Refunds (withdrawal) follow Article 9 of the license agreement. Here it is word for word. Paragraphs 2 and 5 are the wording in force from January 1, 2027; until then the previous wording applies.",
       refundDays: "Withdrawal period: 7 days from receiving the key (license agreement, Article 9, Paragraph 1)",
       refundDaysLonger: "Withdrawal period announced by the seller: {n} days from receiving the key (longer than the 7 days set by law)",
