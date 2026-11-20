@@ -3,7 +3,7 @@ Effective date: November 6, 2026
 Revision effective: December 8, 2026 (automatic payment for card subscriptions in Article 3, Paragraph 3. The Seller does not sell card subscriptions before then)
 Revision effective: December 9, 2026 (the Business plan, bundle keys and plan names: Article 2, Paragraph 1; Article 3, Paragraphs 2, 5, 8 and 9; Article 6, Paragraph 1; Article 11, Paragraph 2. The Premium plan is renamed Pro; its features and prices stay the same. The Seller does not sell bundle keys before then)
 Revision effective: January 1, 2027 (the sales page and the Windows program in Article 1; cancellation and refunds in Article 3, Paragraph 3, and Article 3, Paragraphs 2, 10 and 11; overclocking and hardware tuning in Article 6-2; personal information in Article 8; Article 9, Paragraphs 2 and 5; Article 10, Paragraph 3; the AMD components in Article 12-2)
-Seller: DOKKU (the Seller's name or business name, address and contact details are shown on the app's ★ Plans screen, under Seller in the app's Support, and on the help page (/help) of the Seller's server)
+Seller: Riye (the Seller's name or business name, address and contact details are shown on the app's ★ Plans screen, under Seller in the app's Support, and on the help page (/help) of the Seller's server)
 
 ## Article 1 (Subject of this agreement)
 This agreement applies between the Seller and the person who installs or uses SystemBoost (a program for Windows, including the app, engine, updates and documents, the "Program"; that person, the "User"). The User agrees to this agreement on the app's consent screen before using the Program.

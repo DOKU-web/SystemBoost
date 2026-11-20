@@ -11,7 +11,7 @@
     <!-- build\windows\build.ps1 -Adlx: the AMD Radeon driver features are in this build (Services/Gpu/AmdBuild.cs) -->
     <DefineConstants Condition="'$(SbAdlx)' == 'true'">$(DefineConstants);SB_ADLX</DefineConstants>
     <Product>SystemBoost</Product>
-    <Company>DOKKU</Company>
+    <Company>Riye</Company>
     <Authors>Riye</Authors>
     <Copyright>Made by Riye. See LICENSE.txt.</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
