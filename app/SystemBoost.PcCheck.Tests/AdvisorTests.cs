@@ -96,6 +96,19 @@ internal static class AdvisorTests
             T.Equal("꺼짐", fg.Current, "current");
         });
 
+        T.Test("fg: a Radeon card gets the same frame generation as an NVIDIA one (no AMD driver feature involved)", () =>
+        {
+            var radeon = new GpuSpec("AMD Radeon RX 7800 XT", "amd", false, 16368, "0");
+            foreach (var hz in new[] { 60.0, 144, 240 })
+            {
+                var amd = Get(Rec(Specs(hz: hz, gpus: new[] { radeon })), "fg");
+                var nv = Get(Rec(Specs(hz: hz)), "fg");
+                T.Equal(nv.FrameGen, amd.FrameGen, $"{hz} Hz: choice");
+                T.Check(amd.FrameGen?.Mode == "auto" && amd.Applicable, $"{hz} Hz: on and applicable");
+                T.Equal(nv.Reason, amd.Reason, $"{hz} Hz: reason");
+            }
+        });
+
         T.Test("fg: 144 Hz, fast GPU -> 4x (6x would leave 24 fps), quality", () =>
         {
             var fg = Get(Rec(Specs(hz: 144)), "fg");

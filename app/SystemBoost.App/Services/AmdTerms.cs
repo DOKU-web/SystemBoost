@@ -46,6 +46,26 @@ public static partial class AmdTerms
     public static bool Withdrawable(DateTime nowUtc, IEnumerable<ConsentRecord> records, string version) =>
         !InForce(nowUtc) && Agreed(records, version);
 
+    // ------------------------------------------------------------ the build decides first (AmdBuild.DriverFeatures)
+    // A build without ADLX never asks for, shows or withdraws this consent, and never reads consents.json for it:
+    // `agreed` is only called in a build with the Radeon driver features.
+
+    /// The windows for this consent (Pages/AmdTermsDialog.cs) may open: only in a build with the Radeon driver features.
+    public static bool MayAsk(bool driverFeatures) => driverFeatures;
+
+    /// The first thing those windows do: throws in a build without the Radeon driver features.
+    public static void EnsureMayAsk(bool driverFeatures)
+    {
+        if (!MayAsk(driverFeatures)) throw new InvalidOperationException("This build has no Radeon driver features: the AMD terms window never opens.");
+    }
+
+    /// What AmdHost.AmdTermsOk asks before every AMD command: false while the separate consent is required.
+    /// Builds without ADLX: always true (their helper answers "off").
+    public static bool Ok(bool driverFeatures, DateTime nowUtc, Func<bool> agreed) => !driverFeatures || InForce(nowUtc) || agreed();
+
+    /// '동의 철회' is offered (a build with ADLX, before 2027-01-01 KST, a consent in force).
+    public static bool Withdrawable(bool driverFeatures, DateTime nowUtc, Func<bool> agreed) => driverFeatures && !InForce(nowUtc) && agreed();
+
     private static DateTime Utc(DateTime t) => t.Kind == DateTimeKind.Local ? t.ToUniversalTime() : DateTime.SpecifyKind(t, DateTimeKind.Utc);
 
     /// Records the consent to Article 12-2 of this agreement version. Throws when the file could not be written.

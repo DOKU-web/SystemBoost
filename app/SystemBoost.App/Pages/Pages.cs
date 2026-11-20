@@ -308,7 +308,8 @@ public sealed class SettingsPage : UserControl
             "C++/WinRT (MIT) · Microsoft C/C++ runtime · " +
             "Velopack Rust crates (MIT, Apache-2.0, ISC, BSD-3-Clause, Zlib, Unicode-3.0, CDLA-Permissive-2.0) · " +
             "QR Code generator, Project Nayuki (MIT) · Roboto Light font in Avalonia (Apache-2.0)", "muted", wrap: true));
-        p.Children.Add(Ui.Text("라데온 드라이버 기능이 들어 있는 판에는 AMD ADLX SDK로 만든 부분이 있어요. 이 부분은 오픈소스가 아니고 AMD의 라이선스를 따라요. 조건은 사용권 계약 제12조의2에 있어요.", "muted", wrap: true));
+        if (AmdBuild.DriverFeatures)   // only a build with ADLX has these parts
+            p.Children.Add(Ui.Text("라데온 드라이버 기능이 들어 있는 판에는 AMD ADLX SDK로 만든 부분이 있어요. 이 부분은 오픈소스가 아니고 AMD의 라이선스를 따라요. 조건은 사용권 계약 제12조의2에 있어요.", "muted", wrap: true));
         // The marks by owner, then the other names the app shows (THIRD_PARTY_NOTICES.txt has the same line).
         p.Children.Add(Ui.Text("NVIDIA, DLSS는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의, Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. 그 밖에 나오는 회사명과 제품명(GeForce, Anti-Lag, Radeon Chill, Xbox, Discord 등)도 각 소유자의 상표이고, 호환 대상이나 판매자가 쓰는 서비스를 가리키려고만 써요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.", "muted", wrap: true));
         if (Platform.IsMac)

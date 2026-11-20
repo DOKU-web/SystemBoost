@@ -66,7 +66,7 @@ internal static class GpuCards
     private static async Task AskAmdTermsAsync(WindowsBoostBackend b, Control from, TextBlock status)
     {
         const string what = "AMD 구성 요소 조건";
-        if (TopLevel.GetTopLevel(from) is not Window owner) return;
+        if (!AmdTerms.DialogAllowed || TopLevel.GetTopLevel(from) is not Window owner) return;
         if (!await new AmdTermsDialog(ask: true).ShowDialog<bool>(owner))
         {
             status.Text = $"{what}: 취소했어요 (바뀐 것 없음)";
@@ -115,11 +115,11 @@ internal static class GpuCards
         line.Children.Add(withdraw);
         view.Click += async (_, _) =>
         {
-            if (TopLevel.GetTopLevel(view) is Window owner) await new AmdTermsDialog(ask: false).ShowDialog(owner);
+            if (AmdTerms.DialogAllowed && TopLevel.GetTopLevel(view) is Window owner) await new AmdTermsDialog(ask: false).ShowDialog(owner);
         };
         withdraw.Click += async (_, _) =>
         {
-            if (TopLevel.GetTopLevel(withdraw) is not Window owner || !await new AmdTermsWithdrawDialog().ShowDialog<bool>(owner)) return;
+            if (!AmdTerms.DialogAllowed || TopLevel.GetTopLevel(withdraw) is not Window owner || !await new AmdTermsWithdrawDialog().ShowDialog<bool>(owner)) return;
             withdraw.IsEnabled = false;
             status.Text = "AMD 구성 요소 조건: 처리하는 중…";
             try { status.Text = "AMD 구성 요소 조건: " + await b.WithdrawAmdTermsAsync(AmdTerms.RecordWithdrawal); }
@@ -247,7 +247,7 @@ internal static class GpuCards
             {
                 var why = note ?? GpuCapabilities.NotOnThisCard;
                 Control shown = Ui.Text(why, "muted", wrap: true);
-                if (why == AmdProtocol.TermsText)
+                if (why == AmdProtocol.TermsText && AmdTerms.DialogAllowed)
                 {
                     var both = new StackPanel { Spacing = 2 };
                     both.Children.Add(shown);
@@ -283,9 +283,12 @@ internal static class GpuCards
         if (!waiting && AmdTerms.WithdrawableNow) p.Children.Add(AmdTermsLine(b, status));
         if (b.AmdGpu is not { } first)
         {
-            p.Children.Add(Ui.Text(b.AmdProblem ?? "AMD 드라이버에서 정보를 읽지 못했어요", "muted", wrap: true));
-            if (waiting) p.Children.Add(AmdTermsButton(b, status, link: false));   // nothing was asked of ADLX yet
-            p.Children.Add(Untested());
+            var problem = b.AmdProblem ?? "AMD 드라이버에서 정보를 읽지 못했어요";
+            p.Children.Add(Ui.Text(problem, "muted", wrap: true));
+            // a build without ADLX: why, and that frame generation is not affected; no untested line, nothing to test
+            if (problem == AmdProtocol.OffText) p.Children.Add(Ui.Text(AmdProtocol.OffNote, "muted", wrap: true));
+            if (waiting && AmdTerms.DialogAllowed) p.Children.Add(AmdTermsButton(b, status, link: false));   // nothing was asked of ADLX yet
+            if (AmdBuild.DriverFeatures) p.Children.Add(Untested());
             return p;
         }
         var reading = Ui.Text(first.Name, "label", wrap: true);
@@ -547,7 +550,7 @@ internal static class GpuCards
             name.Text = n.Length > 0 ? n : "그래픽카드 이름을 읽지 못했어요";
             reading.Text = t != null ? Telemetry(t).TrimStart(' ', '·') : "";
             reading.IsVisible = reading.Text.Length > 0;
-            untested.IsVisible = vendor == GpuVendor.Amd;
+            untested.IsVisible = vendor == GpuVendor.Amd && AmdBuild.DriverFeatures;   // nothing of ADLX runs without it
         }
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         bool busy = false;

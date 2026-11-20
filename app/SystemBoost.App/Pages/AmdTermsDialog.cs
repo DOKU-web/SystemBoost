@@ -36,6 +36,7 @@ public sealed class AmdTermsDialog : Window
 
     public AmdTermsDialog(bool ask)
     {
+        AmdTerms.EnsureDialogAllowed();   // a build without ADLX never opens it (callers check AmdTerms.DialogAllowed)
         Title = "AMD 구성 요소 조건";
         Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://SystemBoost/Assets/SystemBoost.ico")));
         Width = 680;
@@ -180,6 +181,7 @@ public sealed class AmdTermsWithdrawDialog : Window
 {
     public AmdTermsWithdrawDialog()
     {
+        AmdTerms.EnsureDialogAllowed();   // a build without ADLX never opens it (callers check AmdTerms.DialogAllowed)
         Title = "동의 철회";
         Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://SystemBoost/Assets/SystemBoost.ico")));
         Width = 540;

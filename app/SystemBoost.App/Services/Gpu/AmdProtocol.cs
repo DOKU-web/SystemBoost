@@ -93,6 +93,8 @@ public static class AmdProtocol
     public const string Unchanged = " (바뀐 것 없음)";
     /// The helper was built without ADLX: no AMD driver features in this build (not the user's driver).
     public const string OffText = "AMD 드라이버 기능은 아직 준비 중이에요";
+    /// Under OffText on the GPU page's AMD card: frame generation does not depend on these features.
+    public const string OffNote = "라데온 드라이버 기능은 라이선스 확인이 끝날 때까지 빠졌어요. 프레임 생성은 라데온에서도 그대로 쓸 수 있어요.";
     /// The separate consent to Article 12-2 is missing (AmdTerms): nothing was sent to the helper, nothing changed.
     public const string TermsText = "AMD 구성 요소 조건(사용권 계약 제12조의2)에 동의하면 라데온 드라이버 기능을 쓸 수 있어요";
 

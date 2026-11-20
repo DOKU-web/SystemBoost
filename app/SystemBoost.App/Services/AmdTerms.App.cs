@@ -24,13 +24,19 @@ public static partial class AmdTerms
 
     /// What AmdHost.AmdTermsOk asks before every AMD command: false while the separate consent is required.
     /// Builds without ADLX: always true (their helper answers "off" as before).
-    public static bool Ok(DateTime nowUtc) => !AmdBuild.DriverFeatures || InForce(nowUtc) || AgreedNow;
+    public static bool Ok(DateTime nowUtc) => Ok(AmdBuild.DriverFeatures, nowUtc, () => AgreedNow);
 
     /// The separate consent is required now (an ADLX build, before 2027-01-01 KST, no valid consent).
     public static bool RequiredNow => !Ok(DateTime.UtcNow);
 
     /// '동의 철회' is offered (an ADLX build, before 2027-01-01 KST, a consent in force).
-    public static bool WithdrawableNow => AmdBuild.DriverFeatures && !InForce(DateTime.UtcNow) && AgreedNow;
+    public static bool WithdrawableNow => Withdrawable(AmdBuild.DriverFeatures, DateTime.UtcNow, () => AgreedNow);
+
+    /// AmdTermsDialog and AmdTermsWithdrawDialog may open (a build with ADLX). Every caller checks this first.
+    public static bool DialogAllowed => MayAsk(AmdBuild.DriverFeatures);
+
+    /// The first line of those windows' constructors: throws in a build without ADLX.
+    public static void EnsureDialogAllowed() => EnsureMayAsk(AmdBuild.DriverFeatures);
 
     /// Records the consent now. Throws when the file could not be written (nothing changed then).
     public static void RecordAgreement()

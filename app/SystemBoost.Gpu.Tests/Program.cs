@@ -902,6 +902,7 @@ internal static partial class Program
 
         DefineConsent();   // ConsentTests.cs
         DefineAmdTerms();   // AmdTermsTests.cs
+        DefineOffBuild();   // OffBuildTests.cs
     }
 
     private static AmdGpuInfo Gpu(int index, bool integrated) => new(index, integrated ? "AMD Radeon(TM) Graphics" : "AMD Radeon RX 7800 XT", integrated, true,

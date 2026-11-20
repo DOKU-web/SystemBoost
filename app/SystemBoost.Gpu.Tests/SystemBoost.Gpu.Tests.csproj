@@ -21,6 +21,8 @@
     <Compile Include="../SystemBoost.App/Services/OverclockNotice.cs" Link="App/OverclockNotice.cs" />
     <Compile Include="../SystemBoost.App/Services/OcConsent.cs" Link="App/OcConsent.cs" />
     <Compile Include="../SystemBoost.App/Services/AmdTerms.cs" Link="App/AmdTerms.cs" />
+    <!-- built without SbAdlx, like the release: DriverFeatures is false here (OffBuildTests.cs) -->
+    <Compile Include="../SystemBoost.App/Services/Gpu/AmdBuild.cs" Link="App/AmdBuild.cs" />
     <!-- the English entries of the notice are checked against OverclockNotice.English -->
     <None Include="../SystemBoost.App/Assets/lang.en.json" Link="lang.en.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Article 12-2 as the agreement shipped in the app has it, and the English of the texts for its consent (AmdTermsTests.cs) -->

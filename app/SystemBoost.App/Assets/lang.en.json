@@ -1489,6 +1489,7 @@
 "지난번 게임 중에 바꾼 AMD 3D 설정(Anti-Lag·Radeon Chill)을 이 버전에서는 되돌릴 수 없어요. AMD Software에서 직접 확인해 주세요": "This version cannot put back the AMD 3D settings (Anti-Lag, Radeon Chill) changed during the last game. Please check them yourself in AMD Software",
 "지난번 게임 중에 바꾼 AMD 3D 설정(Anti-Lag·Radeon Chill)이 남아 있어요. 다음 게임이 끝날 때나 '백업 · 되돌리기'에서 원래대로 돌려요": "The AMD 3D settings (Anti-Lag, Radeon Chill) changed during the last game are still set. They are put back when the next game ends, or in 'Backup · Restore'",
 "AMD 드라이버 기능은 아직 준비 중이에요": "AMD driver features are not ready yet",
+"라데온 드라이버 기능은 라이선스 확인이 끝날 때까지 빠졌어요. 프레임 생성은 라데온에서도 그대로 쓸 수 있어요.": "Radeon driver features are left out until the license check is finished. Frame generation still works on Radeon.",
 "GPU 온도가 제한 온도({0} °C)에 닿아서 AMD 그래픽카드를 공장 초기값으로 돌렸어요": "The GPU reached the temperature limit ({0} °C), so the AMD graphics card was set back to factory defaults",
 "그래픽 드라이버 오류가 보여서 AMD 그래픽카드를 공장 초기값으로 돌렸어요": "A graphics driver error was seen, so the AMD graphics card was set back to factory defaults",
 "GPU 온도를 읽지 못해서 AMD 그래픽카드를 공장 초기값으로 돌렸어요": "The GPU temperature could not be read, so the AMD graphics card was set back to factory defaults",

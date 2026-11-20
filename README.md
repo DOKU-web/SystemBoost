@@ -105,7 +105,7 @@ site/download.html          옛 다운로드 페이지 (실제 사이트는 gh-p
 - 범위: 코어 -200~+100 MHz, 메모리 -500~+300 MHz, 전력은 드라이버가 알려 주는 범위 안 (`validate.h`).
 - 도우미가 스스로 되돌리는 경우: 30초 안에 `유지`를 안 누름, 온도가 기준(기본 85 °C) 이상으로 3초, NVML 읽기 실패 또는 시스템 로그의 드라이버 오류(Display 4101, nvlddmkm 13/14/153), 앱 종료·강제 종료.
 - 도우미마저 강제로 죽으면 저장된 백업으로 다음 실행 때 되돌립니다.
-- AMD 라데온은 ADLX를 넣은 빌드(`build.ps1 -Adlx`)에서만: `Services/Gpu/AmdGpuBackend.cs`, `native/helper/src/amd_adlx.cpp`.
+- 라데온 드라이버 기능은 라이선스 확인이 끝날 때까지 빠졌어요. 프레임 생성은 라데온에서도 그대로 쓸 수 있어요.
 - 오버클럭 · 전력 제한 안내(`Services/OverclockNotice.cs`, 사용권 계약 제6조의2): 이 카드에 대한 동의(`Services/OcConsent*.cs`,
   `consents.json`)가 없으면 어떤 조정 값도 쓰지 않습니다. 프리셋을 가져오는 기능(아직 없음)을 만들면, 오버클럭 값을 넣기 전에
   `OcConsent.EnsureAsync(owner, gpu, fromPreset: true)`를 부르고 false면 오버클럭 값을 버려야 합니다(제6조의2 제4항이 약속한 동작).
