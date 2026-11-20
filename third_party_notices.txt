@@ -7,7 +7,7 @@ AMD ADLX SDK v2.0 (커밋 1ca2dd4), Copyright Advanced Micro Devices, Inc. All r
 AMD ADLX SDK v2.0 (commit 1ca2dd4), Copyright Advanced Micro Devices, Inc. All rights reserved. In versions that have the Radeon driver features (Anti-Lag, Chill, power and clock tuning), sb_helper.exe is built with this SDK's headers and distributed only in object code under AMD's ADLX SDK License Agreement (not an MIT licence). Versions without them show 'AMD driver features are not ready yet' under 'GPU · Overclock' on a Radeon PC. This part is under a restricted license and may be used only with AMD hardware products; the terms are in Article 12-2 of the licence agreement. amdadlx64.dll comes with the AMD driver and is not distributed with SystemBoost.
 NVIDIA, DLSS는 NVIDIA Corporation의, AMD, Radeon은 Advanced Micro Devices, Inc.의, Intel은 Intel Corporation의, Windows는 Microsoft Corporation의 상표예요. 그 밖에 나오는 회사명과 제품명(GeForce, Anti-Lag, Radeon Chill, Xbox, Discord 등)도 각 소유자의 상표이고, 호환 대상이나 판매자가 쓰는 서비스를 가리키려고만 써요. SystemBoost는 이 회사들과 제휴하거나 승인받지 않았어요.
 NVIDIA and DLSS are trademarks of NVIDIA Corporation; AMD and Radeon of Advanced Micro Devices, Inc.; Intel of Intel Corporation; Windows of Microsoft Corporation. Other company and product names (such as GeForce, Anti-Lag, Radeon Chill, Xbox and Discord) are trademarks of their owners and are used only to name compatible products or services the seller uses. SystemBoost is not affiliated with or endorsed by these companies.
-This software is based in part on the work of the Independent JPEG Group (libjpeg-turbo, inside libSkiaSharp.dll; see section 4).
+This software is based in part on the work of the Independent JPEG Group (libjpeg-turbo, inside libSkiaSharp.dll; see section 4; and the JPEG code of the Rust crate image inside the Velopack programs; see 12.13).
 
 목록 / Contents
   1. Avalonia 11.2.3 (UI framework), MIT, with the Roboto Light font (Apache-2.0)
@@ -21,7 +21,7 @@ This software is based in part on the work of the Independent JPEG Group (libjpe
   9. .NET 8 runtime and System packages, MIT
  10. Third-party notices of the .NET runtime
  11. NuGet.Versioning 6.14.0, Apache-2.0
- 12. Rust crates inside the Velopack installer and updater (Setup.exe, Update.exe, stub)
+ 12. Rust crates inside the Velopack installer and updater (Setup.exe, Update.exe, stub), with the Microsoft WebView2 loader (BSD-style licence)
  13. Microsoft C/C++ runtime (MSVC STL, VCRuntime, Universal CRT), statically linked
  14. C++/WinRT headers (Windows SDK), MIT
  15. QR Code generator library (Project Nayuki), MIT: the app's QR encoder is adapted from it
@@ -4916,7 +4916,12 @@ SystemBoost-win-Setup.exe, Update.exe and the launcher stub that Velopack places
 in the install folder are Velopack's own programs, written in Rust. Velopack's
 own code (crates velopack and velopack_bins) is MIT licensed, see section 7.
 They also contain, compiled in statically, the Rust standard library and the
-crates listed below.
+crates listed below. Setup.exe and Update.exe also contain Microsoft's WebView2
+loader (WebView2LoaderStatic.lib of the Microsoft.Web.WebView2 SDK 1.0.3124.44,
+shipped inside the crate webview2-com-sys 0.37.0), see 12.12. Velopack's own
+Rust code also includes code taken from ripunzip 2.0.1 (MIT OR Apache-2.0, used
+under MIT), mtzip 4.0.2 (MIT) and nushell (MIT); their copyright lines are in
+12.2. For a reference to PWAsForFirefox (MPL-2.0) see 12.13 (e).
 
 How this list was made: Velopack's Cargo.lock at tag 0.0.1298, resolved for the
 build Velopack's CI uses for these three programs (cargo +nightly build --target
@@ -5070,7 +5075,8 @@ Linked into the programs (172 crates from crates.io):
   walkdir               2.5.0              Unlicense/MIT                       -> used under MIT
   webpki-roots          0.26.11            CDLA-Permissive-2.0
   webpki-roots          1.0.0              CDLA-Permissive-2.0
-  webview2-com-sys      0.37.0             MIT
+  webview2-com-sys      0.37.0             MIT                                 (+ Microsoft WebView2
+      SDK loader, BSD-style licence, see 12.12)
   weezl                 0.1.10             MIT OR Apache-2.0                   -> used under MIT
   winapi                0.3.9              MIT/Apache-2.0                      -> used under MIT
   winapi-util           0.1.9              Unlicense OR MIT                    -> used under MIT
@@ -5109,13 +5115,15 @@ Linked into the programs (172 crates from crates.io):
   zune-jpeg             0.4.14             MIT OR Apache-2.0 OR Zlib           -> used under MIT
 
 
-Build-time code generators (proc-macro crates, 14). They run while the programs are
+Build-time code generators (proc-macro crates, 15). They run while the programs are
 compiled and are not themselves linked in; the code they generate is:
 
   clap_derive          4.5.32   MIT OR Apache-2.0                   -> used under MIT
   derivative           2.2.0    MIT/Apache-2.0                      -> used under MIT
   displaydoc           0.2.5    MIT OR Apache-2.0                   -> used under MIT
   enum-flags           0.4.0    MIT
+  rustversion          1.0.21   MIT OR Apache-2.0                   -> used under MIT
+      (used only by strum_macros)
   serde_derive         1.0.219  MIT OR Apache-2.0                   -> used under MIT
   strum_macros         0.27.1   MIT
   thiserror-impl       2.0.12   MIT OR Apache-2.0                   -> used under MIT
@@ -5129,12 +5137,17 @@ compiled and are not themselves linked in; the code they generate is:
 
 
 Rust standard library, built from source with -Z build-std for this target
-(versions follow the Rust nightly toolchain of the Velopack CI build, June 2025):
-  core, alloc, std, panic_abort          MIT OR Apache-2.0      -> used under MIT
+(Rust nightly of 6-7 June 2025, rustc 1.89.0-nightly; versions from that toolchain's
+library/Cargo.lock):
+  core, alloc, std, panic_abort, panic_unwind, unwind, std_detect 0.1.5,
+  windows-targets (std's own in-tree copy), backtrace (std's in-tree copy of
+  backtrace-rs, library/backtrace)
+                                         MIT OR Apache-2.0      -> used under MIT
   rustc-demangle 0.1.24                  MIT/Apache-2.0         -> used under MIT
-  hashbrown, cfg-if (std's own copies)   MIT OR Apache-2.0      -> used under MIT
+  hashbrown 0.15.3, cfg-if 1.0.0 (std's own copies)
+                                         MIT OR Apache-2.0      -> used under MIT
   rustc-std-workspace-core, -alloc, -std MIT OR Apache-2.0      -> used under MIT
-  compiler_builtins (about 0.1.160)      MIT AND Apache-2.0 WITH LLVM-exception AND (MIT OR
+  compiler_builtins 0.1.160              MIT AND Apache-2.0 WITH LLVM-exception AND (MIT OR
       Apache-2.0)
 
 ------------------------------------------------------------
@@ -5180,7 +5193,7 @@ anstyle-parse 0.2.6:
 anstyle-wincon 3.0.8:
     Copyright (c) 2015 Josh Triplett, 2022 The rust-cli Developers
 anyhow 1.0.98, itoa 1.0.15, semver 1.0.26, thiserror 2.0.12,
-thiserror-impl 2.0.12 (build-time code generator):
+thiserror-impl 2.0.12 (build-time code generator), rustversion 1.0.21 (build-time code generator):
     Copyright (c) David Tolnay  [authors per Cargo.toml; the licence file names no holder]
 as-slice 0.2.1:
     Copyright (c) 2018 Jorge Aparicio
@@ -5200,10 +5213,13 @@ cfg-if 1.0.0, wait-timeout 0.2.1:
 chrono 0.4.41:
     Copyright (c) 2014, Kang Seonghoon.
     Copyright (c) 2014--2025, Kang Seonghoon and contributors.
+    Portions copyright (c) 2015, John Nagle. (src/format/parse.rs)
 clap_builder 4.5.39, clap_derive 4.5.32 (build-time code generator), clap_lex 0.7.4:
     Copyright (c) 2015-2022 Kevin B. Knapp and Clap Contributors
 color_quant 1.1.0:
     Copyright (c) 2016 PistonDevelopers
+    Copyright (c) 2014 The Piston Developers (notice in src/lib.rs)
+    Its NeuQuant code also carries the notice of Anthony Dekker, see 12.13.
 cpufeatures 0.2.17:
     Copyright (c) 2020-2025 The RustCrypto Project Developers
 crc32fast 1.4.2:
@@ -5386,9 +5402,20 @@ zune-core 0.4.12:
 zune-jpeg 0.4.14:
     Copyright (c) caleb  [authors per Cargo.toml; the crate ships no licence file]
 
+Code taken into Velopack's own Rust source (not separate crates in the build):
+ripunzip 2.0.1 (src/bins/src/shared/fastzip, MIT OR Apache-2.0, used under MIT):
+    Copyright 2022 Google LLC
+mtzip 4.0.2 (src/bins/src/shared/fastzip/mtzip, MIT):
+    Copyright (c) 2022-2025 JohnTheCoolingFan
+nushell (function get_pids in src/bins/src/shared/util_windows.rs, adapted from
+crates/nu-system/src/windows.rs at commit 4458aae3d41517d74ce1507ad3e8cd94021feb16, MIT):
+    Copyright (c) 2019 - 2023 The Nushell Project Developers
+
 Rust standard library (core, alloc, std, panic_abort, rustc-std-workspace-*):
     Copyright (c) The Rust Project Developers (copyrights are retained by their contributors)
 rustc-demangle 0.1.24:
+    Copyright (c) 2014 Alex Crichton
+backtrace-rs (std's in-tree copy, library/backtrace, MIT OR Apache-2.0, used under MIT):
     Copyright (c) 2014 Alex Crichton
 hashbrown, cfg-if (std's copies): as for the crates of the same name above
 compiler_builtins (the parts derived from LLVM compiler-rt before 2019-01-19):
@@ -5435,7 +5462,8 @@ Used by:
   pretty-bytes-rust 0.3.0: Copyright (c) Patrick Desjardins  [authors per Cargo.toml; the
       licence file names no holder]
   ryu 1.0.20 (Apache-2.0 OR BSL-1.0, used under Apache-2.0): Copyright (c) David Tolnay
-      [authors per Cargo.toml; the licence file names no holder]
+      [authors per Cargo.toml; the licence file names no holder]; the Ryu code it is
+      translated from: Copyright 2018 Ulf Adams
   zopfli 0.8.2: Copyright 2011 Google Inc.
   ring 0.17.14: code from BoringSSL and OpenSSL (including the CRYPTOGAMS assembly) and from
     fiat-crypto. Copyright holders named in those source files: The OpenSSL Project Authors,
@@ -5671,8 +5699,13 @@ Software.
 
 Two wordings are used ("THE AUTHOR DISCLAIMS" and "THE AUTHORS DISCLAIM"); both follow.
 
-(a) ring 0.17.14 (its own new code, LICENSE-other-bits) and libloading 0.8.8:
+(a) ring 0.17.14 (its own new code, LICENSE-other-bits, and the files it took from
+    BoringSSL under this ISC text) and libloading 0.8.8:
     ring: Copyright 2015-2025 Brian Smith.
+          Copyright (c) 2014, Google Inc.  Copyright (c) 2015, Google Inc.
+          Copyright (c) 2016, Google Inc.  Copyright (c) 2019, Google Inc.
+          Copyright (c) 2014, Intel Corporation.
+          Copyright 2016 David Judd.  Copyright 2016 Simon Sapin.  Copyright 2018 Trent Clarke.
     libloading: Copyright © 2015, Simonas Kazlauskas
 
 Permission to use, copy, modify, and/or distribute this software for any
@@ -5815,7 +5848,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 zstd C library 1.5.7, bundled in zstd-sys 2.0.15+zstd.1.5.7 (zstd is licensed BSD-3-Clause OR
-GPL-2.0-only; SystemBoost uses it under the BSD licence):
+GPL-2.0-only; SystemBoost uses it under the BSD licence). Further copyright lines in the
+compiled files: Copyright (c) Yann Collet - Meta Platforms, Inc (xxHash);
+Copyright (c) 2016 Tino Reichardt (threading). The legacy-format decoders and the
+dictionary builder carry their own notices, see 12.13.
 
 BSD License
 
@@ -6078,7 +6114,8 @@ for the license to code that was sourced from the once_cell project.
 
 The ISC text is in 12.5 and the Apache 2.0 text (same as LICENSE-BoringSSL) in 12.4.
 The once_cell code is used under its MIT licence, as published in the crate
-(src/polyfill/once_cell/LICENSE-MIT; once_cell author: Aleksey Kladov):
+(src/polyfill/once_cell/LICENSE-MIT; once_cell author: Aleksey Kladov). The file
+src/polyfill/slice.rs carries the same MIT text (no holder named):
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -6197,6 +6234,130 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+------------------------------------------------------------
+12.12 Microsoft Edge WebView2 SDK 1.0.3124.44: WebView2LoaderStatic.lib
+------------------------------------------------------------
+
+Setup.exe and Update.exe link Microsoft's static WebView2 loader, which Velopack uses
+to check whether the WebView2 Runtime is installed. The library comes from the
+Microsoft.Web.WebView2 NuGet package 1.0.3124.44 (byte-identical copy inside the
+crate webview2-com-sys 0.37.0). Licence (LICENSE.txt of that package):
+
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * The name of Microsoft Corporation, or the names of its contributors 
+may not be used to endorse or promote products derived from this
+software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+------------------------------------------------------------
+12.13 Other notices in crate sources
+------------------------------------------------------------
+
+(a) color_quant 1.1.0, src/lib.rs (NeuQuant colour quantiser, used for GIF encoding):
+
+NeuQuant Neural-Net Quantization Algorithm
+------------------------------------------
+
+Copyright (c) 1994 Anthony Dekker
+
+NEUQUANT Neural-Net quantization algorithm by Anthony Dekker, 1994.
+See "Kohonen neural networks for optimal colour quantization"
+in "Network: Computation in Neural Systems" Vol. 5 (1994) pp 351-367.
+for a discussion of the algorithm.
+See also  http://members.ozemail.com.au/~dekker/NEUQUANT.HTML
+
+Any party obtaining a copy of these files from the author, directly or
+indirectly, is granted, free of charge, a full and unrestricted irrevocable,
+world-wide, paid up, royalty-free, nonexclusive right and license to deal
+in this software and documentation files (the "Software"), including without
+limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons who receive
+copies from any such party to do so, with the only requirement being
+that this copyright notice remain intact.
+
+(b) image 0.25.6, src/codecs/jpeg/transform.rs (forward DCT of the JPEG encoder, a Rust
+translation of jfdctint.c from the Independent JPEG Group's libjpeg 9a):
+This software is based in part on the work of the Independent JPEG Group.
+
+(c) zstd C library 1.5.7 in zstd-sys 2.0.15+zstd.1.5.7, legacy-format decoders
+(lib/legacy/zstd_v01.c to zstd_v07.c, compiled because the "legacy" feature is on).
+Copyright (C) 2013-2016, Yann Collet (each embedded module names years between 2013 and
+2016). Text as in the files:
+
+BSD 2-Clause License (https://opensource.org/licenses/bsd-license.php)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+(d) zstd C library 1.5.7 in zstd-sys 2.0.15+zstd.1.5.7, lib/dictBuilder/divsufsort.c
+(compiled because the "zdict_builder" feature is on):
+
+divsufsort.c for libdivsufsort-lite
+Copyright (c) 2003-2008 Yuta Mori All Rights Reserved.
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
 ============================================================
 13. Microsoft C/C++ runtime (MSVC STL, VCRuntime, Universal CRT), statically linked into sb_framegen.exe, sb_helper.exe and the Velopack programs (Setup.exe, Update.exe, stub)
 Source: https://github.com/microsoft/STL (STL); VCRuntime and UCRT ship with Visual Studio and the Windows SDK
@@ -6268,3 +6429,14 @@ subject to the following conditions:
   liability, whether in an action of contract, tort or otherwise, arising from,
   out of or in connection with the Software or the use or other dealings in the
   Software.
+
+(e) Velopack's src/bins/src/windows/shortcuts.rs names a file of PWAsForFirefox
+(https://github.com/filips123/PWAsForFirefox; the link points to the fork
+vaginessa/PWAsForFirefox at commit fba68dbcc7ca27b970dc5a278ebdad32e0ab3c83,
+native/src/integrations/implementation/windows.rs; Mozilla Public License 2.0)
+as a reference. The lines the two files share are the usual Windows shortcut calls
+(IShellLinkW, IPropertyStore with the AppUserModel ID, IPersistFile) and a three-line
+COM helper. If any of it is covered by MPL-2.0, its Source Code Form is Velopack's
+source at tag 0.0.1298:
+https://github.com/velopack/velopack/blob/0.0.1298/src/bins/src/windows/shortcuts.rs
+The MPL-2.0 text is at https://mozilla.org/MPL/2.0/.
