@@ -44,11 +44,7 @@ public sealed record SupportChoice(string Id, string Ko, string En = "")
 
 public sealed record SupportFaq(string Q, string A);
 
-public sealed record SupportSeller(string Name = "", string Rep = "", string Address = "", string BizNo = "", string MailOrderNo = "",
-                                   string Email = "", string Phone = "", string Hours = "")
-{
-    public bool Empty => new[] { Name, Rep, Address, BizNo, MailOrderNo, Email, Phone, Hours }.All(string.IsNullOrWhiteSpace);
-}
+// SupportSeller (the seller's details) is in SellerInfo.cs.
 
 /// Reachable false = the server did not answer; then the rest is the built-in fallback.
 public sealed record SupportInfo(bool Reachable, bool Open, SupportSeller Seller, string Notice, int RefundDays, bool BuiltInFaq,
@@ -420,9 +416,7 @@ public static class Support
             if (r.TryGetProperty("faq", out var fa) && fa.ValueKind == JsonValueKind.Array)
                 foreach (var f in fa.EnumerateArray())
                     if (Str(f, "q") is { Length: > 0 } q && Str(f, "a") is { Length: > 0 } a) faq.Add(new SupportFaq(q, a));
-            var s = Obj(r, "seller");
-            var seller = new SupportSeller(Str(s, "name") ?? "", Str(s, "rep") ?? "", Str(s, "address") ?? "", Str(s, "bizNo") ?? "",
-                                           Str(s, "mailOrderNo") ?? "", Str(s, "email") ?? "", Str(s, "phone") ?? "", Str(s, "hours") ?? "");
+            var seller = SupportSeller.Parse(Obj(r, "seller"));
             var open = !(r.TryGetProperty("open", out var o) && o.ValueKind == JsonValueKind.False);
             return new SupportInfo(true, open, seller, Str(r, "notice") ?? "", Int(r, "refundDays") ?? 7, faq.Count == 0,
                                    faq.Count > 0 ? faq : BuiltInFaq, Choices(r, "categories", BuiltInCategories), Choices(r, "refundReasons", BuiltInReasons));
