@@ -249,7 +249,7 @@ LT = {
          ["Update check", "GitHub", "Nothing (only fetches the list of versions)", "—"]],
    privfoot=f'To check or delete your data, ask in #help on the <a href="{DC}">official Discord</a>. Account data is deleted immediately when you delete your account in the app.',
    ossp="Other people's software that SystemBoost uses, and its licenses. Full texts are in the app under Settings → \"View full licenses\" and in <a href=\"third_party_notices.txt\">THIRD_PARTY_NOTICES.txt</a> (the same file as in the install folder).",
-   ossadlx="Versions with the Radeon driver features also contain parts built with the AMD ADLX SDK. They are not open source and follow AMD's licence; the terms are in <a href=\"#a12-2\">Article 12-2</a>.",
+   ossadlx="Versions with the Radeon driver features also contain parts built with the AMD ADLX SDK. They are not open source and follow AMD's license; the terms are in <a href=\"#a12-2\">Article 12-2</a>.",
    tm="NVIDIA, AMD, Radeon, Intel, Windows, Discord and the other company and product names on this page are trademarks of their owners and are used only to name compatible products or services the seller uses. SystemBoost is not affiliated with or endorsed by these companies.",
    osscols=["Component", "License", "Used for"],
    ossuse=["App UI", "Drawing the app", "Drawing the app", "A font inside Avalonia (the app's screens use Windows fonts)", "Used by Avalonia",
