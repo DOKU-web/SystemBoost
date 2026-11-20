@@ -117,10 +117,9 @@ jobs:
           VPK_TOKEN: ${{ github.token }}
         run: |
           $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.6.0' }
-          # -Adlx: the Radeon driver features (AMD's ADLX licence accepted 2026-11-17; the owner chose to ship it from 0.8.18).
-          # EULA Article 12-2 binds earlier users only from 2027-01-01, so until then the app asks a Radeon user to agree
-          # to Article 12-2 before it sends any ADLX command (Services/AmdTerms.cs).
-          build\windows\build.ps1 -Version $v -Adlx
+          # No -Adlx: sb_helper is built with SB_ADLX=OFF (no ADLX headers, src/amd_none.cpp) and the app without SB_ADLX
+          # (Services/Gpu/AmdBuild.cs). A Radeon PC sees "AMD 드라이버 기능은 아직 준비 중이에요"; frame generation is unchanged.
+          build\windows\build.ps1 -Version $v
       - uses: actions/upload-artifact@v4
         with: { name: SystemBoost-Windows, path: 'dist/windows/Releases/**' }
       - uses: actions/upload-artifact@v4
