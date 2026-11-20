@@ -1,4 +1,4 @@
-// AMD Radeon through ADLX, AMD's official SDK, which lives inside the elevated helper (native/helper): the app never
+// AMD Radeon through ADLX, the SDK AMD publishes, which lives inside the elevated helper (native/helper): the app never
 // loads amdadlx64.dll itself and never opens a game. Reads (amd.info, amd.metrics, amd.profile.get) may go through
 // the plain helper, which needs no administrator prompt; every write goes through the elevated one.
 // Every write is saved in boost-state.json first (amdoc before a tuning, amd3d before the game profile) and the record

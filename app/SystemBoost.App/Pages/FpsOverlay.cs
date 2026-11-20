@@ -194,7 +194,7 @@ public static class FpsOverlay
         warning.Foreground = new SolidColorBrush(Color.Parse("#FF7A1A"));
         p.Children.Add(warning);
 
-        p.Children.Add(Ui.Text("Windows가 기록하는 화면 출력 횟수로 재요 (PresentMon, Xbox Game Bar와 같은 방식). 게임 파일과 메모리는 건드리지 않아요. " +
+        p.Children.Add(Ui.Text("Windows가 기록하는 화면 출력 기록(ETW)으로 재요. PresentMon 같은 측정 도구도 이 기록을 써요. 게임 파일과 메모리는 건드리지 않아요. " +
                                "이 기록은 관리자 권한이 있어야 읽을 수 있어서, 앱을 켠 뒤 처음 켤 때 관리자 권한을 물어봐요.", "muted", wrap: true));
         p.Children.Add(Ui.Text("FPS 창은 클릭이 통과하는 별도 창이에요. 전체 화면 전용 모드 게임에서는 안 보일 수 있으니 테두리 없는 창 모드를 쓰세요.", "muted", wrap: true));
         bool setting = false;

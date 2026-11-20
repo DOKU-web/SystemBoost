@@ -38,8 +38,8 @@ public static class BoostCatalog
         new("gpu.highperf", BoostCategory.Gpu, "게임을 고성능 GPU로 지정", "노트북·듀얼 GPU, 다음 게임 실행부터 적용", false),
         new("gpu.hags", BoostCategory.Gpu, "하드웨어 가속 GPU 스케줄링", "지원하는 GPU에서만 동작해요", true, NeedsReboot: true),
         new("gpu.driver", BoostCategory.Gpu, "드라이버 게임 프로필", AmdBuild.DriverFeatures
-            ? "NVIDIA 공식 API로 게임의 전원 관리 모드를 '최대 성능 선호'로 · AMD 공식 SDK(ADLX)로 게임 중에만 Anti-Lag 켜기, Radeon Chill 끄기 · 인텔 Arc 드라이버 기능은 아직 지원하지 않아요"
-            : "NVIDIA 공식 API로 게임의 전원 관리 모드를 '최대 성능 선호'로 · AMD·Intel은 아직 지원하지 않아요", true),
+            ? "NVIDIA가 공개한 드라이버 API(NVAPI)로 게임의 전원 관리 모드를 '최대 성능 선호'로 · AMD가 배포하는 ADLX SDK로 게임 중에만 Anti-Lag 켜기, Radeon Chill 끄기 · 인텔 Arc 드라이버 기능은 아직 지원하지 않아요"
+            : "NVIDIA가 공개한 드라이버 API(NVAPI)로 게임의 전원 관리 모드를 '최대 성능 선호'로 · AMD·Intel은 아직 지원하지 않아요", true),
         new("gpu.oc", BoostCategory.Gpu, "오버클럭 / 전력 제한", AmdBuild.DriverFeatures
             ? "NVIDIA · AMD. 앱이 켜져 있는 동안만 적용. 온도 초과·드라이버 오류 시 자동 복구, 기본 꺼짐"
             : "NVIDIA 전용. 앱이 켜져 있는 동안만 적용. 온도 초과·드라이버 오류 시 자동 복구, 기본 꺼짐", true, Needs: PremiumFeature.Overclock),
