@@ -491,7 +491,7 @@ button.todoRow:hover{border-color:var(--or)}
     <h2>사전예약 <small id="preNote">불러오는 중이에요</small></h2>
     <div class="stats in" id="preStats"></div>
     <div class="row"><button class="p" id="preSeen">새 신청 확인</button><button id="preCsv">메일 목록 CSV 내려받기</button><span class="mut" id="preMsg"></span></div>
-    <p class="mut">사이트 팝업에서 받은 출시 알림 신청이에요. 메일 주소는 목록에 보이지 않고, CSV로 내려받을 때만 보여요(내려받으면 기록과 관리자 접속 기록에 남아요). 출시 알림 메일 1회에만 쓰고, 2027년 2월 28일에 서버가 모두 지워요. 처리방침에 내려받은 파일도 그날 지운다고 적었으니, 늦어도 2027년 2월 28일에는 내려받은 파일을 모두 지워 주세요.</p>
+    <p class="mut">사이트 팝업에서 받은 출시 알림 신청이에요. 메일 주소는 목록에 보이지 않고, CSV로 내려받을 때만 보여요(내려받으면 기록과 관리자 접속 기록에 남아요). 출시 알림 메일 1회에만 쓰고, 2027년 2월 28일에 서버가 모두 지워요. 처리방침에 내려받은 파일과 네이버 메일의 보낸 메일도 그날 지운다고 적었으니, 늦어도 2027년 2월 28일에는 내려받은 파일과 보낸 메일을 모두 지워 주세요.</p>
   </div>
   <div class="card" id="paCard">
     <h2>새 신청 브라우저 알림 <small id="paState">꺼짐</small></h2>
@@ -501,7 +501,14 @@ button.todoRow:hover{border-color:var(--or)}
     </div>
     <div class="row" style="margin-top:8px"><button class="p" id="paOn" aria-describedby="paState">알림 켜기</button><button id="paSave">기간 저장</button><span class="mut" id="paMsg" role="status"></span></div>
     <p id="paPeriod" style="margin:10px 0 4px"></p>
-    <p class="mut" style="margin:0">대시보드 창(탭)이 열려 있어야 알림이 와요. 최소화하거나 다른 탭을 봐도 돼요. 브라우저를 닫으면 오지 않아요.</p>
+    <p class="mut" style="margin:0">대시보드 창(탭)이 열려 있어야 알림이 와요. 최소화하거나 다른 탭을 봐도 돼요. 브라우저를 닫으면 오지 않아요. 창을 닫아도 받으려면 아래 디스코드 알림을 켜 주세요.</p>
+  </div>
+  <div class="card" id="phCard">
+    <h2>새 신청 디스코드 알림 <small id="phState" role="status">불러오는 중이에요</small></h2>
+    <p class="mut" style="margin:0 0 8px">대시보드를 닫아 두어도 새 신청이 오면 디스코드로 알려 드려요. 20초 동안 온 신청을 한 번에 묶어 신청 수, 관심 플랜, 언어만 보내요. 메일 주소는 보내지 않아요.</p>
+    <div class="row"><input id="phHook" type="password" placeholder="사장님만 보는 채널의 웹후크 주소" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px" aria-label="디스코드 웹후크 주소"><button class="p" id="phSave">연결</button><button id="phTest">시험 알림 보내기</button><button id="phClear">끄기</button></div>
+    <p class="mut" id="phMsg" role="status" style="margin:8px 0 0"></p>
+    <p class="mut" style="margin:8px 0 0">웹후크 만드는 법: 디스코드에서 사장님만 볼 수 있는 비공개 채널을 만들고 → 채널 설정 → 연동 → 웹후크 → 새 웹후크 → 웹후크 URL 복사. 공지 채널처럼 모두가 보는 채널의 웹후크는 받지 않아요. 넣은 주소는 서버에만 저장되고 이 화면에 다시 보이지 않아요.</p>
   </div>
   <div class="card">
     <h2>최근 신청 <small>최근 100건, 새 신청은 주황색</small></h2>
@@ -615,6 +622,7 @@ async function loadPre() {
                                          : `<tr><td colspan="3" class="mut">아직 신청이 없어요</td></tr>`;
   $("preSeen").disabled = !r.fresh;
   $("preCsv").disabled = !r.count;   // an empty file would still be logged as an export of personal data
+  phShow(r);
   paCheck(r);
   if (sumCounts) renderTodo(sumCounts);
 }
@@ -627,7 +635,7 @@ $("preSeen").onclick = async () => {
 // the 기록 and 접속 기록 tabs get the new rows an export or a deletion writes, without 새로고침
 const preLogs = () => { loadLog().catch(() => {}); loadAccess(); };
 $("preCsv").onclick = async () => {
-  if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 기록과 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 늦어도 2027년 2월 28일에는 지워 주세요. 메일 발송 서비스로 보내려면 먼저 처리방침에 그 회사를 적어야 해요.", "내려받기"))) return;
+  if (!(await ask("메일 목록 내려받기", "사전예약한 사람의 메일 주소가 모두 들어 있는 파일이에요. 내려받으면 기록과 관리자 접속 기록에 남아요. 출시 알림을 보내는 데만 쓰고, 늦어도 2027년 2월 28일에는 지워 주세요. 처리방침에는 네이버 메일로 숨은 참조로 보낸다고 적혀 있어요. 다른 메일 서비스로 보내려면 먼저 처리방침에 그 회사를 적어야 해요.", "내려받기"))) return;
   try {
     const r = await api("/preorders/export", {});
     const a = document.createElement("a");
@@ -649,6 +657,32 @@ $("preDelGo").onclick = async () => {
     if (r.deleted) { preSay("지웠어요"); $("preDel").value = ""; loadPre(); preLogs(); }
     else preSay("그 메일로 된 신청이 없어요. 주소를 확인해 주세요", "err");   // the address stays in the box, to fix a typo
   } catch (e) { if (e.message !== "401") preSay(e.message, "err"); }
+};
+// The Discord alert (src/preorder.js): the server keeps the webhook and only says whether there is one (r.hook) and the
+// last failed post (r.note); this page never gets the address back.
+function phSay(t, cls) { $("phMsg").textContent = t; $("phMsg").className = cls || "mut"; }
+function phShow(r) {
+  const n = r.note;
+  $("phState").textContent = r.hook === null ? "확인하지 못했어요" : !r.hook ? "꺼짐"
+    : n && n.gone ? "웹후크가 없어졌어요. 다시 연결해 주세요" : n ? "켜짐 · 마지막 알림 실패 (" + preWhen(n.at) + ")" : "켜짐";
+  $("phState").style.color = r.hook && !n ? "var(--or)" : "";
+  $("phTest").disabled = $("phClear").disabled = !r.hook;
+  if (r.hook && n && !$("phMsg").textContent) phSay("실패 이유: " + n.error + (n.gone ? "" : ". 10분마다 다시 보내 봐요(하루까지)."), "err");
+}
+$("phSave").onclick = async () => {
+  const hook = $("phHook").value.trim();
+  if (!hook) { phSay("웹후크 주소를 넣어 주세요", "err"); $("phHook").focus(); return; }
+  try { await api("/preorders/hook", { hook }); $("phHook").value = ""; phSay("연결했어요. '시험 알림 보내기'로 확인해 보세요"); await loadPre(); preLogs(); }
+  catch (e) { if (e.message !== "401") phSay(e.message, "err"); }
+};
+$("phTest").onclick = async () => {
+  try { await api("/preorders/hook/test", {}); phSay("시험 알림을 보냈어요. 디스코드 채널을 확인해 주세요"); }
+  catch (e) { if (e.message !== "401") phSay(e.message, "err"); }
+};
+$("phClear").onclick = async () => {
+  if (!(await ask("디스코드 알림 끄기", "저장된 웹후크 주소를 서버에서 지워요. 다시 켜려면 주소를 다시 넣어야 해요.", "끄기"))) return;
+  try { await api("/preorders/hook/clear", {}); phSay("껐어요"); await loadPre(); preLogs(); }
+  catch (e) { if (e.message !== "401") phSay(e.message, "err"); }
 };
 // GET /preorders reads the Stats object's SQLite (a daily rows-read budget): every 60 s only while this tab is the one
 // shown in a visible page, or while the browser alert is on and in its period (paActive, below; a hidden page too), one
@@ -2147,6 +2181,11 @@ function demoApi(path, b) {
     }
     const rows = demo.pre.rows, isNew = x => Date.parse(x.at) > demo.pre.seenAt;
     const cnt = k => rows.reduce((o, x) => (o[x[k]] = (o[x[k]] || 0) + 1, o), {});
+    // the Discord alert: nothing is sent from the demo
+    if (p === "/preorders/hook") { if (!/^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/\d+\/[\w-]+$/.test(String(b.hook || "").trim())) return Promise.reject(new Error("디스코드 웹후크 주소가 아니에요"));
+      demo.pre.hook = true; L("사전예약 디스코드 알림", "연결"); return R({ ok: true, hook: true }); }
+    if (p === "/preorders/hook/test") return demo.pre.hook ? R({ ok: true }) : Promise.reject(new Error("연결된 웹후크가 없어요"));
+    if (p === "/preorders/hook/clear") { demo.pre.hook = false; L("사전예약 디스코드 알림", "끊음"); return R({ ok: true, hook: false }); }
     if (p === "/preorders/seen") { const top = rows.length ? Math.max(...rows.map(x => Date.parse(x.at))) : t, up = Date.parse(b.upTo);
       demo.pre.seenAt = Number.isFinite(up) ? Math.min(top, up) : top; return R({ ok: true }); }
     if (p === "/preorders/export") { L("사전예약 내보내기", rows.length + "건"); return R({ count: rows.length, csv: "email,plan,lang,at\r\n" + rows.map(x => [x.email, x.plan, x.lang, x.at].join(",")).join("\r\n") }); }
@@ -2155,7 +2194,7 @@ function demoApi(path, b) {
       const i = rows.findIndex(x => x.email === e); if (i >= 0) { rows.splice(i, 1); L("사전예약 삭제", "1건"); } return R({ ok: true, deleted: i >= 0 }); }
     const since = Date.parse(new Date(t + 9 * 36e5).toISOString().slice(0, 10) + "T00:00:00+09:00");
     return R({ count: rows.length, fresh: rows.filter(isNew).length, today: rows.filter(x => Date.parse(x.at) >= since).length, byPlan: cnt("plan"), byLang: cnt("lang"),
-               recent: rows.slice(0, 100).map(x => ({ plan: x.plan, lang: x.lang, at: x.at, fresh: isNew(x) })), open: t <= Date.parse(until) && t < Date.parse(deleteAt), until, deleteAt, shown: t < Date.parse(deleteAt) });
+               recent: rows.slice(0, 100).map(x => ({ plan: x.plan, lang: x.lang, at: x.at, fresh: isNew(x) })), note: null, hook: !!demo.pre.hook, open: t <= Date.parse(until) && t < Date.parse(deleteAt), until, deleteAt, shown: t < Date.parse(deleteAt) });
   }
   if (p === "/stats") {
     const dayAgo = n => new Date(Date.now() - n * 864e5 + 9 * 36e5).toISOString().slice(0, 10);

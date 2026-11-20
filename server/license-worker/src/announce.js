@@ -32,6 +32,10 @@ const OTHERS = {   // only so the preview can name a channel a post links to
   "1568552127369056256": "📦・beta-builds", "1568552144016113764": "🗣️・beta-feedback", "1568552095852920832": "🛠️・premium-support",
 };
 
+// Every channel of the public server this file knows: the pre-registration alert (preorder.js) refuses a webhook in one.
+export const PUBLIC_CHANNEL_IDS = [...CHANNELS.map(c => c.id), ...Object.keys(OTHERS)];
+export { HOOK_RE };
+
 const fail = (error, status = 400) => ({ error, status });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const parsed = (text, empty) => { try { return JSON.parse(text) || empty; } catch { return empty; } };
@@ -64,6 +68,10 @@ async function discord(hook, method, path, body) {
   }
   return fail("요청이 너무 많아요. 잠시 뒤 다시 시도해 주세요", 503);
 }
+
+/** The owner's own alert channel (preorder.js): reading the webhook, or a plain text post that pings nobody. */
+export const readHook = hook => discord(hook, "GET", "");
+export const postText = (hook, content) => discord(hook, "POST", "", { username: BOT, content: String(content).slice(0, 2000), allowed_mentions: { parse: [] } });
 
 // What goes out is built here, so a post cannot ping anyone unless the page said so.
 function clean(p) {

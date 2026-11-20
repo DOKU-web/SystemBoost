@@ -18,8 +18,17 @@
 //                    {ok} also when the address had signed up already: the answer must not tell anyone whether an
 //                    address is on the list (the notice promises it is given to nobody else).
 //   admin (index.js): GET /preorders (counts and recent rows without emails), POST /preorders/seen,
-//                     POST /preorders/export (every email, as CSV text; logged), POST /preorders/delete {email}
+//                     POST /preorders/export (every email, as CSV text; logged), POST /preorders/delete {email},
+//                     POST /preorders/hook {hook}, /preorders/hook/test, /preorders/hook/clear (the Discord alert below)
 // env PREORDER = "off" (any case) closes sign-ups early; env PREORDER_UNTIL (ISO time) moves the deadline.
+//
+// The Discord alert: the owner may give a webhook of a channel only they can see (KV PRE_HOOK, like announce.js keeps
+// its addresses: never in a reply, an error or a log line). A new row wakes the Stats object's alarm PRE.noteWait later,
+// and that one alarm posts every row since the last alert as one message of counts: how many, by plan, by language,
+// today's and all. Never an email address, so no personal data goes to Discord (the notice names no one for it).
+// A failed post is tried again PRE.noteRetry later for a day at most; a webhook Discord no longer has is not.
+import { HOOK_RE, PUBLIC_CHANNEL_IDS, readHook, postText } from "./announce.js";
+
 export const PRE = {
   until: "2026-11-27T14:59:59Z",      // 2026-11-27 23:59:59 KST
   deleteAt: "2027-02-27T15:00:00Z",   // 2027-02-28 00:00 KST: the Stats object deletes every row (hourly tick and every call)
@@ -28,8 +37,19 @@ export const PRE = {
   origins: ["https://doku-web.github.io"],
   plans: ["undecided", "free", "premium", "ultra", "biz"],
   langs: ["en", "ko", "ja", "zh", "es", "pt", "ru", "de", "fr"],
+  noteWait: 20e3, noteRetry: 10 * 60e3, noteGiveUp: 864e5,
 };
 export const PRE_PLAN_KO = { undecided: "아직 모름", free: "무료", premium: "프로", ultra: "울트라", biz: "산업" };
+export const PRE_LANG_KO = { en: "영어", ko: "한국어", ja: "일본어", zh: "중국어", es: "스페인어", pt: "포르투갈어", ru: "러시아어", de: "독일어", fr: "프랑스어" };
+export const PRE_HOOK = "config:preorder_hook";
+
+/** The alert for rows [{plan, lang}] that came since the last one, with the totals s ({n, today}): counts only. */
+export function preNoteText(rows, s) {
+  const by = (f, names) => Object.entries(rows.reduce((o, r) => (o[r[f]] = (o[r[f]] || 0) + 1, o), {}))
+    .sort((a, b) => b[1] - a[1]).map(([k, n]) => (names[k] || k) + " " + n).join(" · ");
+  return [`🔔 사전예약 새 신청 ${rows.length}건`, "관심 플랜: " + by("plan", PRE_PLAN_KO), "언어: " + by("lang", PRE_LANG_KO),
+          `오늘(한국 시간) ${s.today}명 · 모두 ${s.n}명`, "자세한 건 관리자 패널의 사전예약 탭에서 볼 수 있어요."].join("\n");
+}
 
 export function preUntil(env) {
   const v = env?.PREORDER_UNTIL;
@@ -137,12 +157,44 @@ const csvCell = v => {
   return formula || /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 
+const TEST_NOTE = "🔔 시험 알림이에요. 사전예약 새 신청이 오면 이 채널에 신청 수, 관심 플랜, 언어를 알려 드려요. 메일 주소는 보내지 않아요.";
+
+// The webhook for the alert: a Discord webhook Discord has, in a channel that is not one of the public server's.
+async function saveHook(env, body, deps) {
+  const hook = String(body?.hook ?? "").trim();
+  if (!HOOK_RE.test(hook)) return { status: 400, error: "디스코드 웹후크 주소가 아니에요" };
+  const r = await readHook(hook);   // reads the webhook; nothing is posted
+  if (r.status === 404) return { status: 400, error: "디스코드에 없는 웹후크예요" };
+  if (r.error) return { status: 502, error: "웹후크를 확인하지 못했어요: " + r.error };
+  if (PUBLIC_CHANNEL_IDS.includes(String(r.data?.channel_id))) return { status: 400, error: "모두가 보는 채널의 웹후크예요. 사장님만 보는 채널의 웹후크를 넣어 주세요" };
+  // from now on: the rows already there are not sent as new (first, so a failure below leaves nothing half done)
+  await deps.stats(env, "/pre/noted", {});
+  try { await env.LICENSES.put(PRE_HOOK, hook); } catch { return { status: 503, error: "저장하지 못했어요. 잠시 뒤 다시 시도해 주세요" }; }
+  await deps.audit("사전예약 디스코드 알림", "연결");
+  return { ok: true, hook: true };
+}
+
 // deps: { stats, audit(action, detail) }. Returns { status?, ...body } like supportAdmin.
 export async function preorderAdmin(env, route, body, deps) {
   const until = preUntil(env);
   if (route === "GET /preorders") {
     const r = await deps.stats(env, "/pre/read", { recent: PRE.recent });
-    return { ...r, open: preOpen(env), until, deleteAt: PRE.deleteAt, shown: preShown() };
+    let hook = null;   // null: KV did not answer
+    try { hook = !!(await env.LICENSES.get(PRE_HOOK)); } catch { /* the rest still shows */ }
+    return { ...r, hook, open: preOpen(env), until, deleteAt: PRE.deleteAt, shown: preShown() };
+  }
+  if (route === "POST /preorders/hook") return await saveHook(env, body, deps);
+  if (route === "POST /preorders/hook/test") {
+    const hook = await env.LICENSES.get(PRE_HOOK);
+    if (!hook) return { status: 400, error: "연결된 웹후크가 없어요" };
+    const r = await postText(hook, TEST_NOTE);
+    if (r.error) return { status: r.status === 404 ? 400 : 502, error: r.status === 404 ? "디스코드에 없는 웹후크예요. 다시 연결해 주세요" : r.error };
+    return { ok: true };
+  }
+  if (route === "POST /preorders/hook/clear") {
+    await env.LICENSES.delete(PRE_HOOK);
+    await deps.audit("사전예약 디스코드 알림", "끊음");
+    return { ok: true, hook: false };
   }
   if (route === "POST /preorders/seen") {
     // {upTo}: the newest sign-up the dashboard showed (ms or ISO time); without it, everything there is now

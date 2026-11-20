@@ -23,7 +23,8 @@
 //                 action, target (a key id, ticket number or member id; "검색" for a search, never the search text),
 //                 kept GUARD.accessDays (one year and a day).
 
-import { PRE } from "./preorder.js";
+import { PRE, PRE_HOOK, preNoteText } from "./preorder.js";
+import { postText } from "./announce.js";
 
 const REPO = "DOKU-web/SystemBoost";
 const MINUTE = 60e3, HOUR = 36e5, DAY = 864e5;
@@ -123,7 +124,9 @@ function ranked(counts, keep = 8) {
 const reply = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 
 export class Stats {
-  constructor(state) {
+  constructor(state, env) {
+    this.storage = state.storage;   // setAlarm and getAlarm for the pre-registration alert (the tests' fake has none)
+    this.env = env;                 // KV for that alert's webhook
     this.sql = state.storage.sql;
     this.sql.exec(SCHEMA);
     this.scan = null;           // last full scan of recent installs
@@ -150,7 +153,11 @@ export class Stats {
     if (path === "/audit/read") return reply(this.auditRead());
     if (path === "/access") { const r = this.access(body, Date.now()); return reply(r, r.error ? 400 : 200); }
     if (path === "/access/read") return reply(this.accessRead(body));
-    if (path.startsWith("/pre/")) { const r = this.pre(path, body || {}); return reply(r, r.error && r.error !== "full" && r.error !== "ip" ? 400 : 200); }
+    if (path.startsWith("/pre/")) {
+      const r = this.pre(path, body || {});
+      if (r.added) { delete r.added; await this.preWake(Date.now()); }
+      return reply(r, r.error && r.error !== "full" && r.error !== "ip" ? 400 : 200);
+    }
     return reply({ error: "not found" }, 404);
   }
 
@@ -260,7 +267,7 @@ export class Stats {
   prePurge(t = Date.now()) {
     if (t < Date.parse(PRE.deleteAt)) return;
     this.sql.exec("DELETE FROM preorders");
-    this.sql.exec("DELETE FROM meta WHERE k IN ('pre_seen', 'pre_totals')");
+    this.sql.exec("DELETE FROM meta WHERE k IN ('pre_seen', 'pre_totals', 'pre_noted', 'pre_note_err')");
   }
   preSeen() { return Number(this.one("SELECT v FROM meta WHERE k = 'pre_seen'")?.v || 0); }
   /** Count one row {plan, lang, at} into the totals s (by 1) or out of them (by -1). */
@@ -314,14 +321,20 @@ export class Stats {
       this.sql.exec("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)", b.id, b.email, b.plan, b.lang, t);
       this.preTally(s, { plan: b.plan, lang: b.lang, at: t }, 1, t, this.preSeen());
       this.preSave(s);
-      return { ok: true };
+      return { ok: true, added: true };   // fetch drops `added` after waking the alert
     }
     if (path === "/pre/read") {
       const seen = this.preSeen(), s = this.preTotals(t);
       const n = Math.min(Math.max(Number(b.recent) || 0, 0), 500);
       const recent = this.sql.exec("SELECT plan, lang, at FROM preorders ORDER BY at DESC LIMIT ?", n).toArray()
         .map(r => ({ plan: r.plan, lang: r.lang, at: new Date(r.at).toISOString(), fresh: r.at > seen }));
-      return { count: s.n, fresh: s.fresh, today: s.today, byPlan: { ...s.plan }, byLang: { ...s.lang }, recent };
+      return { count: s.n, fresh: s.fresh, today: s.today, byPlan: { ...s.plan }, byLang: { ...s.lang }, recent, note: this.preNoteErr() };
+    }
+    if (path === "/pre/noted") {
+      // the alert was (re)connected: it starts from now, and an old error is forgotten
+      this.preMeta("pre_noted", String(Math.max(this.one("SELECT MAX(at) AS m FROM preorders").m || 0, this.preNoted())));
+      this.sql.exec("DELETE FROM meta WHERE k = 'pre_note_err'");
+      return { ok: true };
     }
     if (path === "/pre/seen") {
       // up to the newest row the dashboard showed (upTo, when given), so a sign-up that came after its last refresh
@@ -350,6 +363,34 @@ export class Stats {
       return { ok: true, deleted: !!r };
     }
     return { error: "bad" };
+  }
+  preMeta(k, v) { this.sql.exec("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", k, v); }
+  preNoted() { return Number(this.one("SELECT v FROM meta WHERE k = 'pre_noted'")?.v || 0); }
+  /** The last failed alert {at, since, error, gone} (the dashboard shows it), or null. */
+  preNoteErr() { try { return JSON.parse(this.one("SELECT v FROM meta WHERE k = 'pre_note_err'")?.v || "null"); } catch { return null; } }
+  // A new row: one alarm PRE.noteWait later (one already set takes this row too). Only where storage has alarms and the
+  // object has KV, i.e. on Cloudflare; a failure here never fails the sign-up.
+  async preWake(t) {
+    if (typeof this.storage?.setAlarm !== "function" || !this.env?.LICENSES) return;
+    try { if ((await this.storage.getAlarm()) == null) await this.storage.setAlarm(t + PRE.noteWait); } catch { /* the next sign-up tries again */ }
+  }
+  async alarm() {
+    try { await this.preNote(Date.now()); } catch { /* the next sign-up wakes it again */ }
+  }
+  // Every row since the last alert, as one message of counts. No webhook: those rows are passed over, so connecting one
+  // later does not send them as new (saving one sets pre_noted too).
+  async preNote(t) {
+    this.prePurge(t);
+    const rows = this.sql.exec("SELECT plan, lang, at FROM preorders WHERE at > ? ORDER BY at", this.preNoted()).toArray();
+    if (!rows.length) return;
+    const last = String(rows[rows.length - 1].at);
+    const hook = await this.env?.LICENSES?.get(PRE_HOOK);
+    if (!hook) { this.preMeta("pre_noted", last); return; }
+    const r = await postText(hook, preNoteText(rows, this.preTotals(t)));
+    if (!r.error) { this.preMeta("pre_noted", last); this.sql.exec("DELETE FROM meta WHERE k = 'pre_note_err'"); return; }
+    const old = this.preNoteErr(), since = old?.since || t, gone = r.status === 404;
+    this.preMeta("pre_note_err", JSON.stringify({ at: new Date(t).toISOString(), since: since, error: String(r.error).slice(0, 200), gone }));
+    if (!gone && t - since < PRE.noteGiveUp && typeof this.storage?.setAlarm === "function") await this.storage.setAlarm(t + PRE.noteRetry);
   }
   pruneGuard(t = Date.now()) {
     this.sql.exec("DELETE FROM counters WHERE exp <= ?", t);

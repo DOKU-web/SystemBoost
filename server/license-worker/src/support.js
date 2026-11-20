@@ -862,10 +862,11 @@ const PRIVACY_PRE = {
           ["처리하는 항목", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각"],
           ["목적", "정식 출시 알림 메일을 한 번 보내기. 그 밖의 메일은 보내지 않고, 다른 사람에게 제공하지 않아요"],
           ["받는 방법과 기간", "사전예약 창에서 동의 칸에 체크한 경우만, " + until + "(한국 시간)까지 받아요. 만 14세 이상만 신청할 수 있어요"],
-          ["보유 기간과 파기", del + "에 서버에서 모두 지워요. 그 전에 지워 달라고 하면 바로 지워요. 판매자가 알림 메일을 보내려고 내려받은 메일 목록 파일도 그날 지워요. " +
+          ["보유 기간과 파기", del + "에 서버에서 모두 지워요. 그 전에 지워 달라고 하면 바로 지워요. 판매자가 알림 메일을 보내려고 내려받은 메일 목록 파일과 네이버 메일의 보낸 메일도 그날 지워요. " +
                                "지운 기록은 Cloudflare 데이터베이스의 복구 기능에 최대 30일 남았다가 저절로 사라지고, 복구가 필요한 장애 때만 써요"],
           ["처리 위탁과 국외 이전", "판매자 서버를 운영하는 Cloudflare(제4조)가 처리하고 보관해요. 어느 나라의 데이터센터인지는 Cloudflare가 정해요. " +
-                                   "알림 메일을 메일 발송 서비스에 맡겨 보내게 되면, 보내기 전에 그 회사와 이전 내용을 이 페이지에 적어요"],
+                                   "출시 알림 메일은 판매자의 네이버 메일로 받는 분끼리 주소가 보이지 않게 숨은 참조로 보내요. 이때 받는 메일 주소와 메일 내용은 네이버 주식회사(대한민국)가 메일을 보내는 데 처리해요(처리 위탁, 국외 이전이 아니에요). 그 밖의 메일 발송 서비스는 쓰지 않아요. " +
+                                   "판매자가 켠 경우 판매자만 보는 디스코드 채널로 새 신청 수(관심 플랜과 언어별 수)를 알려요. 메일 주소는 보내지 않아요"],
           ["너무 많은 신청 막기", "같은 곳에서 온 신청 수를 IP 주소와 그 주소가 속한 네트워크(같은 회사나 학교 등)로 만든 해시값(서버만 아는 값을 섞어 만들어요)으로 세고, 마지막 신청 뒤 1시간까지만 둬요. IP 주소와 브라우저 정보는 저장하지 않아요"],
           ["동의를 거부할 권리", "동의하지 않아도 돼요. 그러면 사전예약을 할 수 없을 뿐, 앱을 받거나 쓰는 데는 영향이 없어요"],
           ["열람 · 삭제 · 동의 철회", "제5조의 방법(웹 /help, 제10조의 메일)으로 언제든 요구할 수 있어요. 신청한 메일 주소로 본인을 확인해요"],
@@ -878,10 +879,11 @@ const PRIVACY_PRE = {
           ["What is processed", "Email address, plan of interest, site language, time of sign-up"],
           ["Purpose", "To send one launch email. No other mail, and nothing is given to anyone else"],
           ["How and until when", "Only when the consent box is ticked, until " + until + " (Korean time). 14 or older only"],
-          ["Kept for", "All deleted from the server on " + del + ", or at once on request. Email lists the seller downloads to send the launch email are deleted that day too. " +
+          ["Kept for", "All deleted from the server on " + del + ", or at once on request. Email lists the seller downloads to send the launch email, and the sent copies in the seller's Naver Mail, are deleted that day too. " +
                     "Deleted records stay up to 30 days in the recovery feature of Cloudflare's database, then go by themselves; it is used only to recover from a failure"],
           ["Processors and transfer abroad", "Processed and stored by Cloudflare, which runs the seller's server (see Sharing, processors and transfers abroad); Cloudflare chooses the data centre and country. " +
-                                             "If the launch email is sent through a mail service, that company and the transfer are listed on this page before it is sent"],
+                                             "The launch email is sent from the seller's Naver Mail account as blind copies, so recipients do not see each other's addresses: NAVER Corporation (Republic of Korea) processes the addresses and the email to send it (as a processor; not a transfer abroad). No other mail service is used. " +
+                                             "If the seller turns it on, a Discord channel only the seller reads gets the number of new sign-ups (by plan and language), never an email address"],
           ["Abuse limits", "Sign-ups from one place are counted with hashes made from the IP address and its network, such as one company or school (mixed with a value only the server knows), kept up to 1 hour after the last sign-up. The IP address and browser details are not stored"],
           ["Right to refuse", "You may refuse. You then can't pre-register; downloading and using the app are not affected"],
           ["Access, deletion, withdrawal", "Ask at any time as under Your rights (web /help or the email under Contact). The email address you signed up with is used to confirm it is you"],
