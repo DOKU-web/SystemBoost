@@ -9,8 +9,6 @@ header{padding:20px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brand img{width:30px;height:30px}.brand b{font-size:18px}.brand b span{color:var(--or)}
 header nav{margin-left:auto;display:flex;gap:18px;font-size:14px;flex-wrap:wrap}
 header nav a{text-decoration:none;color:var(--mut)}header nav a:hover{color:var(--txt)}header nav a.dc{color:var(--txt)}
-.lang{display:flex;align-items:center;gap:4px;font-size:14px;color:var(--mut)}
-.lang select{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font:inherit;font-size:14px;cursor:pointer}
 @media(max-width:640px){header nav a:not(.dc){display:none}header nav{margin-left:auto}}
 .hero{text-align:center;padding:48px 0 36px}
 .hero img{width:112px;height:112px;margin-bottom:18px}
@@ -34,6 +32,7 @@ h2{font-size:20px;margin:0 0 12px}
 ol{margin:6px 0 0;padding-left:20px;color:var(--mut)}
 footer{color:var(--mut);font-size:13px;padding:30px 0 20px;border-top:1px solid var(--line);margin-top:30px}
 footer .tm{font-size:12px}
+footer .seller{margin-top:10px;font-size:12px}footer .seller b{color:var(--txt);font-weight:600}footer .seller .sr:not(:last-child)::after{content:" · "}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:11px 8px;border-bottom:1px solid var(--line);text-align:center}th:first-child,td:first-child{text-align:left}
 th{color:var(--mut);font-weight:500;font-size:14px}td.p{color:var(--or)}td.n{color:#55545a}
 .discord{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:linear-gradient(135deg,#1b1530,#141416);border:1px solid #2e2650;border-radius:16px;padding:22px 24px;margin:34px 0 10px}
@@ -74,7 +73,6 @@ p.chg{border-left:3px solid var(--ul);background:#17121f;padding:6px 12px;border
 p.cont{padding-left:18px}
 .rev{display:inline-block;font-size:11px;background:var(--ul);color:#111;border-radius:99px;padding:1px 8px;margin-left:4px;font-weight:700}
 .revbox{background:#17121f;border:1px solid #4b2f6e;border-radius:14px;padding:14px 18px;margin:0 0 18px;font-size:15px;color:#d8d4e0}
-.langnote{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:0 0 14px;font-size:14px;color:var(--mut)}
 body.license p.note{color:var(--mut);font-size:14px;background:none;border:0;padding:0}
 .sum{background:var(--card);border-left:3px solid var(--or);border-radius:8px;padding:10px 16px;margin:10px 0;font-size:15px}
 body.license .tbl{padding:0}body.license table{font-size:14px}body.license th,body.license td{text-align:left;vertical-align:top;padding:9px 8px}

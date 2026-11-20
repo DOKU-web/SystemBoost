@@ -1,8 +1,11 @@
 # Pre-registration popup (사전예약), open until 2026-11-27 23:59 KST.
 # The popup only appears when the license server answers GET /preorder with {"open": true}, so the page is safe to
 # publish before the server route is deployed: until then nothing shows. PRE_UNTIL also closes it in the browser.
+# Korean only. Two required boxes: personal information (consent) and the one launch mail, which is advertising
+# (adConsent); the server refuses a sign-up without either with 400 {"error": "consent"}.
 PRE_API = "https://systemboost-license.euning97.workers.dev/preorder"
 PRE_UNTIL = "2026-11-27T14:59:59Z"   # 2026-11-27 23:59:59 KST
+PRE_UNSUB = "https://systemboost-license.euning97.workers.dev/preorder/unsubscribe"   # the launch mail's unsubscribe page (license.html privacy table)
 PRE_KEEP = "2027-02-28"              # the server deletes the entries on this day (src/preorder.js PRE.deleteAt, the Stats object's SQLite)
 
 # plan values sent to the server, in this order: undecided, free, premium (Pro), ultra, biz
@@ -17,148 +20,21 @@ PRE["ko"] = dict(
   free="결제는 하지 않아요. 사전예약은 출시 알림 신청이에요.",
   email="메일 주소", plan="관심 있는 플랜",
   plans=["아직 모르겠어요", "무료", "프로", "울트라", "산업"],
-  consent="<b>만 14세 이상이고, 개인정보 수집 · 이용에 동의해요 (필수)</b><br>메일 주소, 관심 플랜, 사이트 언어, 신청 시각을 받아 정식 출시 알림 메일을 한 번 보내는 데만 써요. 2027년 2월 28일에 모두 지워요. 동의하지 않을 수 있지만, 그러면 사전예약을 할 수 없어요(앱 이용에는 영향 없음). 만 14세 이상만 신청할 수 있어요. <a href=\"https://systemboost-license.euning97.workers.dev/privacy#preorder\" target=\"_blank\" rel=\"noopener\">자세한 안내</a>",
+  consent="<b>만 14세 이상이고, 개인정보 수집 · 이용에 동의해요 (필수)</b><br>메일 주소, 관심 플랜, 사이트 언어, 신청 시각, 광고성 정보 수신 동의 시각을 받아 정식 출시 알림 메일을 한 번 보내는 데만 써요. 2027년 2월 28일에 모두 지워요. 동의하지 않을 수 있지만, 그러면 사전예약을 할 수 없어요(앱 이용에는 영향 없음). 만 14세 이상만 신청할 수 있어요. <a href=\"https://systemboost-license.euning97.workers.dev/privacy#preorder\" target=\"_blank\" rel=\"noopener\">자세한 안내</a>",
+  adconsent="<b>출시 알림 메일(광고성 정보)을 한 번 받는 데 동의해요 (필수)</b><br>제목이 (광고)로 시작하는 메일을 출시일에 한 번 보내요. 언제든 수신을 거부할 수 있어요.",
   send="사전예약 신청", later="다음에 할게요", close="닫기",
   done="신청됐어요. 출시되면 메일로 알려 드릴게요.", already="이미 신청된 메일이에요. 출시되면 알려 드릴게요.",
   e_mail="메일 주소를 확인해 주세요.", e_consent="만 14세 이상이고 개인정보 수집 · 이용에 동의해야 신청할 수 있어요.",
+  e_ad="출시 알림 메일(광고성 정보)을 받는 데 동의해야 신청할 수 있어요.",
+  e_both="개인정보 수집 · 이용과 출시 알림 메일(광고성 정보) 수신에 모두 동의해야 신청할 수 있어요.",
   e_closed="사전예약이 마감됐어요.", e_busy="신청이 몰려 지금은 받지 못했어요. 잠시 뒤 다시 시도해 주세요.",
   e_net="지금 신청을 받지 못했어요. 잠시 뒤 다시 시도하거나 공식 디스코드 #help에 남겨 주세요.",
   left="{d}일 남음", left1="1일 남음", today="오늘 마감",
-  prow=["공식 사이트 사전예약 (선택, 만 14세 이상, 2026년 11월 27일 23:59 한국 시간까지)", "판매자 서버", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각. 출시 알림을 한 번 보내는 데만 써요. 너무 많은 신청을 막으려고 IP 주소로 만든 해시값을 잠깐 쓰고, IP 주소는 저장하지 않아요.", "2027년 2월 28일에 삭제"],
+  prow=["공식 사이트 사전예약 (선택, 만 14세 이상, 2026년 11월 27일 23:59 한국 시간까지)", "판매자 서버", "메일 주소, 관심 플랜, 사이트 언어, 신청 시각, 광고성 정보 수신 동의 시각. 출시 알림 메일(제목이 (광고)로 시작)을 출시일에 한 번 보내는 데만 써요. 수신 거부는 <a href=\"https://systemboost-license.euning97.workers.dev/preorder/unsubscribe\">https://systemboost-license.euning97.workers.dev/preorder/unsubscribe</a>에서 언제든 할 수 있어요. 너무 많은 신청을 막으려고 IP 주소로 만든 해시값을 잠깐 쓰고, IP 주소는 저장하지 않아요.", "2027년 2월 28일에 삭제"],
 )
-PRE["en"] = dict(
-  bar="Pre-registration is open until Nov 27, 23:59 KST · we'll email you at launch", go='Sign up',
-  nav="Pre-register", badge="Pre-register", title="Pre-register for SystemBoost",
-  lead="SystemBoost launches on December 4, 2026. Pre-register and we'll email you once on launch day.",
-  until="Closes: November 27, 2026, 23:59 KST (UTC+9)",
-  free="No payment. Pre-registering only signs you up for the launch email.",
-  email="Email address", plan="Plan you're interested in",
-  plans=["Not sure yet", "Free", "Pro", "Ultra", "Business"],
-  consent="<b>I am 14 or older and agree to the collection and use of my personal information (required)</b><br>Your email address, plan of interest, site language and sign-up time are used only to send one launch email, and are all deleted on February 28, 2027. You may refuse, but then you can't pre-register (the app is not affected). You must be 14 or older. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Details</a>",
-  send="Pre-register", later="Maybe later", close="Close",
-  done="You're signed up. We'll email you at launch.", already="This email is already signed up. We'll email you at launch.",
-  e_mail="Please check your email address.", e_consent="To pre-register, you must be 14 or older and agree to the collection and use of your information.",
-  e_closed="Pre-registration has closed.", e_busy="Too many sign-ups right now. Please try again a little later.",
-  e_net="We couldn't take your sign-up right now. Try again later, or post in #help on the official Discord.",
-  left="{d} days left", left1="1 day left", today="Closes today",
-  prow=["Pre-registration on this site (optional, 14+, until Nov 27, 2026, 23:59 KST)", "Seller's server", "Email address, plan of interest, site language, time of sign-up. Used only to send one launch email. A hash made from the IP address is used briefly to stop abuse; the IP address is not stored.", "Deleted on Feb 28, 2027"],
-)
-PRE["ja"] = dict(
-  bar='事前登録受付中 · 11月27日（金）23:59まで · リリース時にメールでお知らせします', go='登録する',
-  nav="事前登録", badge="事前登録", title="SystemBoost 事前登録",
-  lead="SystemBoostは2026年12月4日（金）に正式リリースします。事前登録すると、リリース日に入力したメールへ一度だけお知らせします。",
-  until="締め切り：2026年11月27日（金）23:59（日本時間・韓国時間）",
-  free="お支払いはありません。事前登録はリリースのお知らせの申し込みです。",
-  email="メールアドレス", plan="気になるプラン",
-  plans=["まだ決めていない", "無料", "プロ", "ウルトラ", "ビジネス"],
-  consent="<b>14歳以上であり、個人情報の収集・利用に同意します（必須）</b><br>メールアドレス、気になるプラン、サイトの言語、登録日時は、リリースのお知らせを1回送るためだけに使い、2027年2月28日にすべて削除します。同意しないこともできますが、その場合は登録できません（アプリの利用には影響しません）。14歳以上の方のみ登録できます。<a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">詳しい案内（英語）</a>",
-  send="事前登録する", later="あとで", close="閉じる",
-  done="登録しました。リリースしたらメールでお知らせします。", already="このメールはすでに登録されています。リリースしたらお知らせします。",
-  e_mail="メールアドレスを確認してください。", e_consent="登録するには、14歳以上であり、個人情報の収集・利用に同意していただく必要があります。",
-  e_closed="事前登録は締め切りました。", e_busy="申し込みが集中しています。少し時間をおいてもう一度お試しください。",
-  e_net="今は登録できませんでした。しばらくしてからもう一度お試しいただくか、公式Discordの#helpにご連絡ください。",
-  left="残り{d}日", left1="残り1日", today="本日締め切り",
-)
-PRE["zh"] = dict(
-  bar='预约登记进行中 · 截至 11 月 27 日 23:59（韩国时间）· 发布时邮件通知你', go='立即预约',
-  nav="预约", badge="预约", title="SystemBoost 预约登记",
-  lead="SystemBoost 将于 2026 年 12 月 4 日（周五）正式发布。预约后，我们会在发布当天给你填写的邮箱发一次通知。",
-  until="截止：2026 年 11 月 27 日（周五）23:59（韩国时间，UTC+9）",
-  free="无需付款。预约只是登记发布通知。",
-  email="邮箱地址", plan="感兴趣的套餐",
-  plans=["还没想好", "免费", "专业版", "至尊版", "商业版"],
-  consent="<b>我已年满 14 岁，并同意收集和使用我的个人信息（必选）</b><br>邮箱地址、感兴趣的套餐、网站语言和预约时间仅用于发送一次发布通知，并将在 2027 年 2 月 28 日全部删除。你可以不同意，但那样就无法预约（不影响使用应用）。须年满 14 岁。<a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">详细说明（英文）</a>",
-  send="提交预约", later="以后再说", close="关闭",
-  done="预约成功。发布时我们会发邮件通知你。", already="这个邮箱已经预约过了。发布时会通知你。",
-  e_mail="请检查邮箱地址。", e_consent="须年满 14 岁并同意收集和使用个人信息才能预约。",
-  e_closed="预约已截止。", e_busy="当前预约人数过多，请稍后再试。",
-  e_net="暂时无法提交预约。请稍后再试，或在官方 Discord 的 #help 留言。",
-  left="还剩 {d} 天", left1="还剩 1 天", today="今天截止",
-)
-PRE["es"] = dict(
-  bar='Prerregistro abierto hasta el 27 de noviembre, 23:59 KST · te avisamos por correo en el lanzamiento', go='Registrarme',
-  nav="Prerregistro", badge="Prerregistro", title="Prerregistro de SystemBoost",
-  lead="SystemBoost sale el 4 de diciembre de 2026. Regístrate antes y te avisaremos una vez por correo el día del lanzamiento.",
-  until="Cierra: 27 de noviembre de 2026, 23:59 KST (UTC+9)",
-  free="No se paga nada. El prerregistro solo te apunta al aviso de lanzamiento.",
-  email="Correo electrónico", plan="Plan que te interesa",
-  plans=["Aún no lo sé", "Gratis", "Pro", "Ultra", "Business"],
-  consent="<b>Tengo 14 años o más y acepto la recogida y el uso de mis datos personales (obligatorio)</b><br>Tu correo, el plan que te interesa, el idioma del sitio y la hora del registro solo se usan para enviar un único aviso de lanzamiento y se borran todos el 28 de febrero de 2027. Puedes no aceptar, pero entonces no podrás registrarte (la app no se ve afectada). Debes tener 14 años o más. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Más información (en inglés)</a>",
-  send="Registrarme", later="Más tarde", close="Cerrar",
-  done="¡Listo! Te avisaremos por correo en el lanzamiento.", already="Este correo ya está registrado. Te avisaremos en el lanzamiento.",
-  e_mail="Revisa tu correo electrónico.", e_consent="Para registrarte debes tener 14 años o más y aceptar la recogida y el uso de tus datos.",
-  e_closed="El prerregistro ha cerrado.", e_busy="Hay muchos registros ahora mismo. Inténtalo de nuevo en un rato.",
-  e_net="No pudimos registrarte ahora. Inténtalo más tarde o escribe en #help del Discord oficial.",
-  left="Quedan {d} días", left1="Queda 1 día", today="Cierra hoy",
-)
-PRE["pt"] = dict(
-  bar='Pré-cadastro aberto até 27 de novembro, 23:59 KST · avisamos por e-mail no lançamento', go='Cadastrar',
-  nav="Pré-cadastro", badge="Pré-cadastro", title="Pré-cadastro do SystemBoost",
-  lead="O SystemBoost será lançado em 4 de dezembro de 2026. Faça o pré-cadastro e avisaremos uma vez por e-mail no dia do lançamento.",
-  until="Encerra: 27 de novembro de 2026, 23:59 KST (UTC+9)",
-  free="Nada é cobrado. O pré-cadastro só inscreve você no aviso de lançamento.",
-  email="E-mail", plan="Plano de interesse",
-  plans=["Ainda não sei", "Grátis", "Pro", "Ultra", "Business"],
-  consent="<b>Tenho 14 anos ou mais e concordo com a coleta e o uso dos meus dados pessoais (obrigatório)</b><br>Seu e-mail, o plano de interesse, o idioma do site e a hora do cadastro são usados só para enviar um único aviso de lançamento e são todos apagados em 28 de fevereiro de 2027. Você pode não concordar, mas aí não poderá se cadastrar (o app não é afetado). É preciso ter 14 anos ou mais. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Mais detalhes (em inglês)</a>",
-  send="Fazer pré-cadastro", later="Depois", close="Fechar",
-  done="Pronto! Avisaremos por e-mail no lançamento.", already="Este e-mail já está cadastrado. Avisaremos no lançamento.",
-  e_mail="Confira o seu e-mail.", e_consent="Para se cadastrar, é preciso ter 14 anos ou mais e concordar com a coleta e o uso dos dados.",
-  e_closed="O pré-cadastro foi encerrado.", e_busy="Muitos cadastros agora. Tente de novo daqui a pouco.",
-  e_net="Não foi possível fazer o cadastro agora. Tente mais tarde ou escreva em #help no Discord oficial.",
-  left="Faltam {d} dias", left1="Falta 1 dia", today="Encerra hoje",
-)
-PRE["ru"] = dict(
-  bar='Предрегистрация открыта до 27 ноября, 23:59 KST · напишем вам, когда SystemBoost выйдет', go='Записаться',
-  nav="Предрегистрация", badge="Предрегистрация", title="Предрегистрация SystemBoost",
-  lead="SystemBoost выходит 4 декабря 2026 года. Зарегистрируйтесь заранее, и мы один раз напишем вам на почту в день выхода.",
-  until="Приём до: 27 ноября 2026 г., 23:59 KST (UTC+9)",
-  free="Ничего платить не нужно. Предрегистрация — это только подписка на письмо о выходе.",
-  email="Электронная почта", plan="Интересующий тариф",
-  plans=["Пока не знаю", "Бесплатно", "Pro", "Ultra", "Business"],
-  consent="<b>Мне есть 14 лет, и я даю согласие на сбор и использование моих персональных данных (обязательно)</b><br>Адрес электронной почты, интересующий тариф, язык сайта и время регистрации используются только для одного письма о выходе и будут полностью удалены 28 февраля 2027 года. Можно не соглашаться, но тогда зарегистрироваться нельзя (на работу приложения это не влияет). Только для лиц от 14 лет. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Подробнее (на английском)</a>",
-  send="Зарегистрироваться", later="Позже", close="Закрыть",
-  done="Готово! Мы напишем вам, когда SystemBoost выйдет.", already="Эта почта уже зарегистрирована. Мы напишем вам, когда SystemBoost выйдет.",
-  e_mail="Проверьте адрес почты.", e_consent="Чтобы зарегистрироваться, нужно подтвердить, что вам есть 14 лет, и дать согласие на сбор и использование данных.",
-  e_closed="Предрегистрация закрыта.", e_busy="Сейчас слишком много заявок. Попробуйте чуть позже.",
-  e_net="Сейчас не удалось принять заявку. Попробуйте позже или напишите в #help на официальном Discord.",
-  left="Осталось дней: {d}", left1="Остался 1 день", today="Последний день",
-)
-PRE["de"] = dict(
-  bar='Vorregistrierung offen bis 27. November, 23:59 KST · wir schreiben dir zum Start', go='Anmelden',
-  nav="Vorregistrierung", badge="Vorregistrierung", title="Vorregistrierung für SystemBoost",
-  lead="SystemBoost erscheint am 4. Dezember 2026. Registriere dich vorab, dann schreiben wir dir am Starttag einmal eine E-Mail.",
-  until="Schluss: 27. November 2026, 23:59 KST (UTC+9)",
-  free="Es wird nichts bezahlt. Die Vorregistrierung ist nur die Anmeldung für die Start-E-Mail.",
-  email="E-Mail-Adresse", plan="Plan, der dich interessiert",
-  plans=["Weiß ich noch nicht", "Kostenlos", "Pro", "Ultra", "Business"],
-  consent="<b>Ich bin mindestens 14 Jahre alt und willige in die Erhebung und Nutzung meiner personenbezogenen Daten ein (erforderlich)</b><br>E-Mail-Adresse, der Plan, für den du dich interessierst, die Sprache der Website und der Zeitpunkt der Anmeldung werden nur für eine einzige Start-E-Mail verwendet und am 28. Februar 2027 vollständig gelöscht. Du kannst ablehnen, kannst dich dann aber nicht vorab registrieren (die App ist davon nicht betroffen). Nur ab 14 Jahren. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">Mehr dazu (auf Englisch)</a>",
-  send="Vorregistrieren", later="Später", close="Schließen",
-  done="Fertig! Wir schreiben dir zum Start.", already="Diese E-Mail ist schon registriert. Wir schreiben dir zum Start.",
-  e_mail="Bitte prüfe deine E-Mail-Adresse.", e_consent="Für die Registrierung musst du mindestens 14 Jahre alt sein und in die Datennutzung einwilligen.",
-  e_closed="Die Vorregistrierung ist beendet.", e_busy="Gerade gibt es zu viele Anmeldungen. Bitte versuche es gleich noch einmal.",
-  e_net="Die Anmeldung hat gerade nicht geklappt. Versuche es später noch einmal oder schreib in #help auf dem offiziellen Discord.",
-  left="Noch {d} Tage", left1="Noch 1 Tag", today="Endet heute",
-)
-PRE["fr"] = dict(
-  bar='Pré-inscription ouverte jusqu’au 27 novembre, 23:59 KST · nous vous écrirons à la sortie', go='M’inscrire',
-  nav="Pré-inscription", badge="Pré-inscription", title="Pré-inscription à SystemBoost",
-  lead="SystemBoost sort le 4 décembre 2026. Pré-inscrivez-vous et nous vous enverrons un seul e-mail le jour de la sortie.",
-  until="Clôture : 27 novembre 2026, 23:59 KST (UTC+9)",
-  free="Aucun paiement. La pré-inscription vous inscrit seulement à l’e-mail de sortie.",
-  email="Adresse e-mail", plan="Offre qui vous intéresse",
-  plans=["Je ne sais pas encore", "Gratuit", "Pro", "Ultra", "Business"],
-  consent="<b>J’ai 14 ans ou plus et j’accepte la collecte et l’utilisation de mes données personnelles (obligatoire)</b><br>Votre e-mail, l’offre qui vous intéresse, la langue du site et l’heure de l’inscription servent uniquement à envoyer un seul e-mail de sortie et seront tous supprimés le 28 février 2027. Vous pouvez refuser, mais la pré-inscription sera alors impossible (l’app n’est pas concernée). Réservé aux 14 ans et plus. <a href=\"https://systemboost-license.euning97.workers.dev/privacy?lang=en#preorder\" target=\"_blank\" rel=\"noopener\">En savoir plus (en anglais)</a>",
-  send="Me pré-inscrire", later="Plus tard", close="Fermer",
-  done="C’est fait ! Nous vous écrirons à la sortie.", already="Cet e-mail est déjà inscrit. Nous vous écrirons à la sortie.",
-  e_mail="Vérifiez votre adresse e-mail.", e_consent="Pour vous pré-inscrire, vous devez avoir 14 ans ou plus et accepter la collecte et l’utilisation de vos données.",
-  e_closed="La pré-inscription est close.", e_busy="Trop d’inscriptions en ce moment. Réessayez dans un instant.",
-  e_net="Impossible d’enregistrer votre inscription pour le moment. Réessayez plus tard ou écrivez dans #help sur le Discord officiel.",
-  left="Encore {d} jours", left1="Encore 1 jour", today="Dernier jour",
-)
-
 PREJS = r'''<script>
 const PRE_API = %(api)s, PRE_UNTIL = Date.parse(%(until)s), PRE = %(pre)s, PRE_PLANS = %(plans)s;
-let preOpen = false, preLang = "en", preRet = null;
+let preOpen = false, preRet = null;
 const preEl = document.getElementById("pre"), preRoot = document.getElementById("root");
 function preLeft() { const ms = PRE_UNTIL - Date.now(); return ms <= 0 ? -1 : Math.floor(ms / 86400000); }
 // A page left open past the deadline: the bar and the nav link go instead of offering a popup that says "-1 days left".
@@ -183,6 +59,7 @@ function preRender(t) {
   <form method="post" novalidate><label>${t.email}<input type="email" name="email" autocomplete="email" maxlength="254" required></label>
   <label>${t.plan}<select name="plan">${PRE_PLANS.map((p, i) => `<option value="${p}">${t.plans[i]}</option>`).join("")}</select></label>
   <label class="pc"><input type="checkbox" name="consent"><span>${t.consent}</span></label>
+  <label class="pc"><input type="checkbox" name="adConsent"><span>${t.adconsent}</span></label>
   <div class="pm" role="status" aria-live="polite"></div>
   <div class="pb"><button class="btn" type="submit">${t.send}</button><button class="pl2" type="button">${t.later}</button></div></form></div>`;
   // Closing gives the page back (inert off) and returns focus to whatever opened the popup.
@@ -199,17 +76,19 @@ function preRender(t) {
     e.preventDefault();
     const email = form.email.value.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 254) return say(t.e_mail);
+    if (!form.consent.checked && !form.adConsent.checked) return say(t.e_both);
     if (!form.consent.checked) return say(t.e_consent);
+    if (!form.adConsent.checked) return say(t.e_ad);
     if (preLeft() < 0) return say(t.e_closed);
     btn.disabled = true;
     try {
       const r = await fetch(PRE_API, { method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, plan: form.plan.value, lang: preLang, consent: true }) });
+        body: JSON.stringify({ email, plan: form.plan.value, lang: "ko", consent: true, adConsent: true }) });
       const j = await r.json().catch(() => ({}));
       if (j.ok) { say(j.already ? t.already : t.done, true); form.querySelectorAll("input,select").forEach(x => x.disabled = true);
                   btn.hidden = true; const c = preEl.querySelector(".pl2"); c.textContent = t.close; c.focus();
                   try { localStorage.setItem("sbPreDone", "1"); } catch (e) {} return; }
-      say(j.error === "email" ? t.e_mail : j.error === "consent" ? t.e_consent : j.error === "closed" ? t.e_closed
+      say(j.error === "email" ? t.e_mail : j.error === "consent" ? t.e_both : j.error === "closed" ? t.e_closed
           : r.status === 429 || j.error === "busy" ? t.e_busy : t.e_net);
     } catch (err) { say(t.e_net); }
     btn.disabled = false;
@@ -226,21 +105,20 @@ function preBar(t) {
 function preShow(force) {
   if (!preLive()) return;
   if (preEl.hidden) preRet = document.activeElement;
-  preRender(PRE[preLang] || PRE.en);
+  preRender(PRE);
   // Modal: the page behind is inert, so Tab stays in the popup and the page cannot be clicked or read meanwhile.
   preEl.hidden = false; preRoot.inert = true; const i = preEl.querySelector("input[type=email]"); if (i) i.focus();
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !preEl.hidden) preEl.querySelector(".px").click(); });
-function preAfter(lang) {
-  preLang = lang;
+function preAfter() {
   if (!preLive()) return;
-  preNav(PRE[lang] || PRE.en); preBar(PRE[lang] || PRE.en);
+  preNav(PRE); preBar(PRE);
   if (!preEl.hidden) preShow(true);
 }
 if (preLeft() >= 0 && document.body.classList.contains("index")) {
   fetch(PRE_API, { cache: "no-store" }).then(r => r.ok ? r.json() : {}).then(j => {
     if (!j || j.open !== true) return;
-    preOpen = true; preAfter(preLang);
+    preOpen = true; preAfter();
     // Auto-open once per browser, but not over a popup already opened from the bar or the nav link (it would wipe the form).
     // It counts as seen when it opens by itself, so a reload or a visitor who left without closing it does not get it again.
     if (!preSeen()) setTimeout(() => { if (preEl.hidden && !preSeen()) { preShow(); try { localStorage.setItem("sbPreSeen", "1"); } catch (e) {} } }, 1200);
@@ -269,6 +147,4 @@ PRECSS = '''
 .prebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card);border:1px solid #4a2c10;border-left:4px solid var(--or);border-radius:14px;padding:12px 16px;margin:8px 0 0}
 .prebar .pt{flex:1;min-width:200px;font-size:15px}.prebar .btn{padding:9px 18px;font-size:15px;border:0;cursor:pointer}
 header nav a.prenav{color:var(--or);font-weight:700}
-/* below the content width the extra link pushed the language menu (ru, de, fr, en, zh) to a second line; the bar's button stays */
-@media(max-width:880px){header nav a.prenav{display:none}}
 '''
