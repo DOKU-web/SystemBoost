@@ -5,9 +5,9 @@ import { accountsV2Open } from "./accounts_gate.js";
 import { mailOn } from "./mail.js";
 import { announce } from "./announce.js";
 import { cleanPing } from "./stats.js";
-import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
+import { budgetNames, DEPOSIT_HOURS, DEPOSIT_WARN_HOURS, helpPage, ipBucket, LIMITS as SUPPORT_LIMITS, privacyPage, sellerGaps, sellerPublic, support, supportConfig, termsPage, supportAdmin, supportCounts, webhookRefund, webhookRefundSub } from "./support.js";
 import { ipTags, overIp } from "./iplimit.js";
-import { preorderAdmin, preorderPublic } from "./preorder.js";
+import { preorderAdmin, preorderPublic, preorderUnsubscribe } from "./preorder.js";
 import { purchaseNote } from "./purchase_note.js";
 import { alertOn, dueForReminder, paidText, reminderText, sellerAlert } from "./seller_alert.js";
 export { Stats } from "./stats.js";
@@ -342,6 +342,8 @@ export default {
       if (req.method === "POST" && url.pathname === "/sub/price") return await subPrice(req, env);
       if (req.method === "POST" && url.pathname === "/sub/price/choose") return await subPriceChoose(req, env);
       if (url.pathname === "/preorder") return await preorderPublic(req, env, { stats, ipTags, json });
+      if (url.pathname === "/preorder/unsubscribe") return await preorderUnsubscribe(req, env, { stats, ipTags, json, audit: (action, detail) => audit(env, "app", action, detail) });
+      if (url.pathname === "/seller") return await sellerPublic(req, env);
       if (req.method === "GET" && url.pathname === "/status") return json({ sales: await salesMode(env), ...(await openPlans(env)) });
       if (req.method === "POST" && url.pathname === "/order") return await order(req, url, env);
       if (req.method === "POST" && url.pathname === "/order/paid") return await orderPaid(req, url, env, ctx);
@@ -354,7 +356,7 @@ export default {
       if (url.pathname.startsWith("/support/")) return await support(req, url, env, SUPPORT, ctx);
       if (req.method === "GET" && url.pathname === "/help") return helpPage(url);
       if (req.method === "GET" && url.pathname === "/privacy") return await privacyPage(url, env);
-      if (req.method === "GET" && url.pathname === "/terms") return termsPage(url);
+      if (req.method === "GET" && url.pathname === "/terms") return await termsPage(url, env);
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return await admin(req, url, env, ctx);
       return json({ error: "not found" }, 404);
     } catch (e) {

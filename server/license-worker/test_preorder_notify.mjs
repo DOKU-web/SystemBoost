@@ -51,9 +51,9 @@ const call = (path, init = {}) => worker.fetch(new Request("https://lic.example"
   { ...init, headers: { "CF-Connecting-IP": "10.8." + (++ip & 255) + ".1", ...(init.headers || {}) } }), env);
 const j = async (path, init) => { const r = await call(path, init); return { http: r.status, ...(await r.json()) }; };
 const pre = email => j("/preorder", { method: "POST", headers: { Origin: SITE, "Content-Type": "application/json" },
-                                      body: JSON.stringify({ email, plan: "premium", lang: "ko", consent: true }) });
+                                      body: JSON.stringify({ email, plan: "premium", lang: "ko", consent: true, adConsent: true }) });
 const preAs = (email, plan, lang) => j("/preorder", { method: "POST", headers: { Origin: SITE, "Content-Type": "application/json" },
-                                                     body: JSON.stringify({ email, plan, lang, consent: true }) });
+                                                     body: JSON.stringify({ email, plan, lang, consent: true, adConsent: true }) });
 const adm = (path, body) => j("/admin/api" + path, { method: body ? "POST" : "GET", headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" },
                                                       body: body ? JSON.stringify(body) : undefined });
 const audit = () => st.rows("SELECT action, detail FROM audit_log ORDER BY rowid").map(r => r.action + " " + r.detail);
@@ -115,7 +115,7 @@ assert.equal(sent.length, 1);
 const text = sent[0].body.content;
 assert.match(text, /새 신청 2건/);
 assert.match(text, /울트라 1/); assert.match(text, /프로 1/);
-assert.match(text, /영어 1/); assert.match(text, /한국어 1/);
+assert.match(text, /언어: 한국어 2/, "every row is stored as ko, whatever the site sent"); assert.ok(!/영어/.test(text));
 assert.match(text, /모두 4명/);
 assert.ok(!/@|example/.test(text), "never an email address");
 assert.deepEqual(sent[0].body.allowed_mentions, { parse: [] });

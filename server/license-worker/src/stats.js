@@ -129,12 +129,23 @@ export class Stats {
     this.env = env;                 // KV for that alert's webhook
     this.sql = state.storage.sql;
     this.sql.exec(SCHEMA);
+    this.migrate();
     this.scan = null;           // last full scan of recent installs
     this.githubTried = 0;
     this.githubError = "";
   }
 
   one(query, ...args) { return this.sql.exec(query, ...args).toArray()[0]; }
+
+  // Columns added after a table was first made (CREATE TABLE IF NOT EXISTS leaves an old table as it is): added as
+  // nullable, so every row already there stays and reads null. preorders.adAt (ms): when the advertising-mail consent
+  // was given (POST /preorder adConsent); null for rows taken before it was asked.
+  migrate() {
+    let cols = null;
+    try { cols = this.sql.exec("SELECT name FROM pragma_table_info('preorders')").toArray().map(r => r.name); } catch { /* below */ }
+    if (cols && cols.includes("adAt")) return;
+    try { this.sql.exec("ALTER TABLE preorders ADD COLUMN adAt INTEGER"); } catch { /* there already (the list above could not be read) */ }
+  }
 
   async fetch(req) {
     const path = new URL(req.url).pathname;
@@ -312,13 +323,14 @@ export class Stats {
       if (s.today >= max) return { error: "full" };
       // then this address (IPv4, IPv6 /64) and its network (IPv4 /24, IPv6 /48) for the hour, counted in this same step:
       // salted hashes from the Worker, never an address. Counted for an address on the list too.
-      this.sql.exec("DELETE FROM counters WHERE exp <= ? AND name LIKE 'pre:%'", t);
-      const start = Math.floor((t - 7 * MINUTE) / HOUR) * HOUR + 7 * MINUTE, ttl = Math.max(1, Math.ceil((start + HOUR - t) / 1000));
-      const w = new Date(start).toISOString().slice(0, 16);
-      const lim = this.take({ items: [{ name: `pre:ip:${b.ip}:${w}`, ttl, max: PRE.perIpHour }, { name: `pre:net:${b.net}:${w}`, ttl, max: PRE.perNetHour }] });
-      if (lim.ok !== true) return { error: "ip" };
-      if (this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id)) return { ok: true, already: true };
-      this.sql.exec("INSERT INTO preorders (id, email, plan, lang, at) VALUES (?, ?, ?, ?, ?)", b.id, b.email, b.plan, b.lang, t);
+      if (!this.preLimit("pre", b, PRE.perIpHour, PRE.perNetHour, t)) return { error: "ip" };
+      // ad: the advertising-mail consent came with it. A row taken before that was asked gets its time now (same answer).
+      const ad = b.ad === true ? t : null;
+      if (this.one("SELECT 1 AS x FROM preorders WHERE id = ?", b.id)) {
+        if (ad) this.sql.exec("UPDATE preorders SET adAt = ? WHERE id = ? AND adAt IS NULL", ad, b.id);
+        return { ok: true, already: true };
+      }
+      this.sql.exec("INSERT INTO preorders (id, email, plan, lang, at, adAt) VALUES (?, ?, ?, ?, ?, ?)", b.id, b.email, b.plan, b.lang, t, ad);
       this.preTally(s, { plan: b.plan, lang: b.lang, at: t }, 1, t, this.preSeen());
       this.preSave(s);
       return { ok: true, added: true };   // fetch drops `added` after waking the alert
@@ -347,7 +359,7 @@ export class Stats {
       return { ok: true };
     }
     if (path === "/pre/export") {
-      const rows = this.sql.exec("SELECT email, plan, lang, at FROM preorders ORDER BY at").toArray();
+      const rows = this.sql.exec("SELECT email, plan, lang, at, adAt FROM preorders ORDER BY at").toArray();
       this.preSave(this.preCount(rows, t));
       return { rows };
     }
@@ -362,7 +374,22 @@ export class Stats {
       }
       return { ok: true, deleted: !!r };
     }
+    if (path === "/pre/unsub") {
+      // the unsubscribe page (preorder.js preorderUnsubscribe): counted per address and network before the row is
+      // looked at, so an address on the list and one that is not cost the same; then deleted like the dashboard's delete
+      if (!/^[0-9a-f]{32}$/.test(b.id) || !/^[0-9a-f]{16}$/.test(b.ip) || !/^[0-9a-f]{16}$/.test(b.net)) return { error: "bad" };
+      if (!this.preLimit("pre:unsub", b, PRE.unsubIpHour, PRE.unsubNetHour, t)) return { error: "ip" };
+      return this.pre("/pre/delete", { id: b.id }, t);
+    }
     return { error: "bad" };
+  }
+  // One more request of `kind` from this address (b.ip, IPv4 or IPv6 /64) and network (b.net) in the hour window that
+  // ends at minute 7 (the cron's tick prunes it); false when either is at its max (nothing counted).
+  preLimit(kind, b, ipMax, netMax, t) {
+    this.sql.exec("DELETE FROM counters WHERE exp <= ? AND name LIKE 'pre:%'", t);
+    const start = Math.floor((t - 7 * MINUTE) / HOUR) * HOUR + 7 * MINUTE, ttl = Math.max(1, Math.ceil((start + HOUR - t) / 1000));
+    const w = new Date(start).toISOString().slice(0, 16);
+    return this.take({ items: [{ name: `${kind}:ip:${b.ip}:${w}`, ttl, max: ipMax }, { name: `${kind}:net:${b.net}:${w}`, ttl, max: netMax }] }).ok === true;
   }
   preMeta(k, v) { this.sql.exec("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", k, v); }
   preNoted() { return Number(this.one("SELECT v FROM meta WHERE k = 'pre_noted'")?.v || 0); }

@@ -14,9 +14,18 @@
 // A script can send any Origin; the counts above hold it.
 //
 //   GET  /preorder   {open, until}   — the site shows the popup only while open is true; anyone may ask (CORS *)
-//   POST /preorder   {email, plan, lang, consent: true} -> {ok} | {error: origin|type|body|consent|email|closed|busy}
+//   POST /preorder   {email, plan, lang, consent: true, adConsent: true} -> {ok} | {error: origin|type|body|consent|email|closed|busy}
 //                    {ok} also when the address had signed up already: the answer must not tell anyone whether an
 //                    address is on the list (the notice promises it is given to nobody else).
+//                    adConsent: the separate consent to receive advertising information (the launch email); without it
+//                    (missing or not true) 400 {error: "consent"} like consent. Its time is kept with the row (adAt, ms,
+//                    like at); rows taken before it have adAt null. lang is stored as "ko" whatever is sent.
+//   GET  /preorder/unsubscribe   a page (Korean and English) with one email field; POST it (a same-origin form) to
+//                    delete that address's row. The answer is the same whether or not the address was on the list
+//                    (sender Riye, the request's Korean date, deleted and not sent again). Counted per address and
+//                    network an hour in the Stats object (PRE.unsubIpHour, PRE.unsubNetHour). The audit log gets
+//                    "사전예약 수신 거부 1건" when a row went, never the address. Open until PRE.unsubUntil (410 after),
+//                    not tied to the sign-up deadline or PREORDER=off.
 //   admin (index.js): GET /preorders (counts and recent rows without emails), POST /preorders/seen,
 //                     POST /preorders/export (every email, as CSV text; logged), POST /preorders/delete {email},
 //                     POST /preorders/hook {hook}, /preorders/hook/test, /preorders/hook/clear (the Discord alert below)
@@ -32,7 +41,9 @@ import { HOOK_RE, PUBLIC_CHANNEL_IDS, readHook, postText } from "./announce.js";
 export const PRE = {
   until: "2026-11-27T14:59:59Z",      // 2026-11-27 23:59:59 KST
   deleteAt: "2027-02-27T15:00:00Z",   // 2027-02-28 00:00 KST: the Stats object deletes every row (hourly tick and every call)
+  unsubUntil: "2027-02-28T14:59:59Z", // 2027-02-28 23:59:59 KST: the unsubscribe page answers until then, 410 after
   perIpHour: 5, perNetHour: 20, perDay: 3000, recent: 100,
+  unsubIpHour: 10, unsubNetHour: 30,  // unsubscribe requests an hour per address / per network (as the sign-up's)
   body: 2048,                         // bytes of a POST body read at most; the site's is under 400
   origins: ["https://doku-web.github.io"],
   plans: ["undecided", "free", "premium", "ultra", "biz"],
@@ -94,8 +105,14 @@ export async function preId(email) {
 // The body as a JSON object ({} when it is not one), read no further than PRE.body bytes, so a huge body costs nothing
 // past that; null when it is larger.
 async function readSmall(req) {
+  const text = await readText(req);
+  if (text === null) return null;
+  try { const b = JSON.parse(text); return b && typeof b === "object" ? b : {}; } catch { return {}; }
+}
+// The body as text, read no further than PRE.body bytes; null when it is larger.
+async function readText(req) {
   if (Number(req.headers.get("Content-Length")) > PRE.body) return null;
-  if (!req.body) return {};
+  if (!req.body) return "";
   const reader = req.body.getReader(), parts = [];
   let size = 0;
   for (;;) {
@@ -108,7 +125,7 @@ async function readSmall(req) {
   const all = new Uint8Array(size);
   let at = 0;
   for (const p of parts) { all.set(p, at); at += p.byteLength; }
-  try { const b = JSON.parse(new TextDecoder().decode(all)); return b && typeof b === "object" ? b : {}; } catch { return {}; }
+  return new TextDecoder().decode(all);
 }
 
 // deps: { stats(env, path, body), ipTags(req, env, what) -> {ip, net}, json(o, status) }
@@ -132,19 +149,132 @@ export async function preorderPublic(req, env, deps) {
   if ((req.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase() !== "application/json") return out({ error: "type" }, 415);
   const b = await readSmall(req);
   if (!b) return out({ error: "body" }, 413);
-  if (b.consent !== true) return out({ error: "consent" }, 400);
+  if (b.consent !== true || b.adConsent !== true) return out({ error: "consent" }, 400);
   const email = preEmail(b.email);
   if (!email) return out({ error: "email" }, 400);
   const plan = PRE.plans.includes(b.plan) ? b.plan : "undecided";
-  const lang = PRE.langs.includes(b.lang) ? b.lang : "en";
+  const lang = "ko";   // sold in Korea only: whatever the site sends, the row says ko
   let r;
   try {
     const { ip, net } = await deps.ipTags(req, env, "preorder");
-    r = await deps.stats(env, "/pre/add", { id: await preId(email), email, plan, lang, max: PRE.perDay, ip, net });
+    r = await deps.stats(env, "/pre/add", { id: await preId(email), email, plan, lang, ad: true, max: PRE.perDay, ip, net });
   } catch { return out({ error: "busy" }, 503); }
   if (r?.error === "full" || r?.error === "ip") return out({ error: "busy" }, 429);
   if (!r?.ok) return out({ error: "busy" }, 503);
   return out({ ok: true });   // the same whether it is new or was there (see the top)
+}
+
+// ---- GET/POST /preorder/unsubscribe: opt-out of the pre-registration (advertising) mail, explained in Korean and English
+// on one page as Korean rules on advertising mail ask. Static HTML, no script; every value put in is escaped.
+const escHtml = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** The Korean (KST) date of t, as Korean and English text. */
+export function kstDay(t) {
+  const d = new Date(t + 9 * 36e5), y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
+  return { ko: `${y}년 ${m + 1}월 ${day}일`, en: `${MONTHS_EN[m]} ${day}, ${y}` };
+}
+export const UNSUB_SENDER = "Riye";
+const UNSUB_CSS = `:root{--bg:#0b0b0c;--card:#141416;--line:#2a2a2e;--text:#e8e6e3;--muted:#8b8a88;--accent:#ff7a1a;--bad:#ff6b6b}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;max-width:640px;margin:0 auto;padding:32px 16px 64px;line-height:1.6;overflow-wrap:anywhere}
+h1{color:var(--accent);font-size:24px;margin:0}h2{font-size:18px;margin:0 0 8px}.sub{color:var(--muted);margin:2px 0 0}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:16px}
+section.done{border-color:var(--accent)}p{margin:6px 0}.m{color:var(--muted);font-size:14px}.err{color:var(--bad);font-weight:600}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:8px 0 0}dt{color:var(--muted)}dd{margin:0}
+label{display:block;font-size:14px;color:var(--muted);margin-top:4px}
+input{width:100%;margin-top:4px;background:#0f0f11;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}
+button{margin-top:12px;background:var(--accent);color:#111;border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}
+`;
+const UNSUB_TX = {
+  ko: { title: "사전예약 수신 거부",
+        lead: "SystemBoost 공식 사이트에서 사전예약한 메일 주소를 넣고 '수신 거부'를 누르세요. 그 주소의 사전예약 정보를 지우고, 앞으로 그 주소로 출시 알림 등 광고성 메일을 보내지 않아요.",
+        from: UNSUB_SENDER + " (SystemBoost 판매자)", who: "보내는 사람: " + UNSUB_SENDER + " (SystemBoost 판매자)", ask: "메일 주소 말고는 아무것도 묻지 않아요.",
+        until: "이 페이지는 2027년 2월 28일까지 열려 있어요. 남은 사전예약 정보는 그날 모두 지워요.",
+        doneTitle: "수신 거부를 처리했어요", sender: "보낸 사람", date: "요청한 날짜", result: "처리 결과",
+        resultText: "입력한 메일 주소의 사전예약 정보를 지웠어요(목록에 있었다면). 앞으로 이 주소로 사전예약 · 출시 알림 등 광고성 메일을 보내지 않아요.",
+        kst: " (한국 시간)", bad: "메일 주소를 확인해 주세요.", busy: "요청이 많아 지금은 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.",
+        down: "지금은 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.", closed: "사전예약 수신 거부 페이지는 2027년 2월 28일에 닫혔어요. 사전예약 정보는 그날 모두 지웠고, 사전예약 메일은 더 보내지 않아요." },
+  en: { title: "Unsubscribe from pre-registration mail",
+        lead: "Enter the email address you pre-registered with on the SystemBoost official site and press 'Unsubscribe'. Its pre-registration is deleted, and no launch notice or other advertising email will be sent to it.",
+        from: UNSUB_SENDER + " (seller of SystemBoost)", who: "Sender: " + UNSUB_SENDER + " (seller of SystemBoost)", ask: "Nothing but the email address is asked.",
+        until: "This page is open until February 28, 2027 (Korean time). All remaining pre-registrations are deleted that day.",
+        doneTitle: "Your unsubscribe request is done", sender: "Sender", date: "Date of request", result: "Result",
+        resultText: "The pre-registration of the address you entered has been deleted (if it was on the list). No pre-registration, launch or other advertising email will be sent to it again.",
+        kst: " (Korean time)", bad: "Please check the email address.", busy: "Too many requests right now. Please try again in a while.",
+        down: "This could not be done right now. Please try again in a while.", closed: "The pre-registration unsubscribe page closed on February 28, 2027. All pre-registrations were deleted that day, and no pre-registration mail is sent any more." },
+};
+function unsubResponse(status, body) {
+  const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  const T = UNSUB_TX;
+  const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SystemBoost ${escHtml(T.ko.title)} · Unsubscribe</title>
+<style nonce="${nonce}">
+${UNSUB_CSS}</style>
+</head>
+<body>
+<main>
+<h1>SystemBoost ${escHtml(T.ko.title)}</h1>
+<p class="sub" lang="en">${escHtml(T.en.title)}</p>
+${body}
+</main>
+</body>
+</html>
+`;
+  return new Response(html, { status, headers: {
+    "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+    "content-security-policy": `default-src 'none'; style-src 'nonce-${nonce}'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+    "x-frame-options": "DENY", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-robots-tag": "noindex" } });
+}
+const both = f => `<section><p>${escHtml(f(UNSUB_TX.ko))}</p></section>\n<section lang="en"><p>${escHtml(f(UNSUB_TX.en))}</p></section>`;
+function unsubForm(error = "") {
+  const T = UNSUB_TX;
+  const err = error ? `<p class="err" role="alert">${escHtml(T.ko[error])} <span lang="en">${escHtml(T.en[error])}</span></p>\n` : "";
+  const info = L => `<p>${escHtml(L.lead)}</p><p>${escHtml(L.who)}</p><p class="m">${escHtml(L.ask)} ${escHtml(L.until)}</p>`;
+  return `<section>${info(T.ko)}</section>
+<section lang="en">${info(T.en)}</section>
+<section>
+${err}<form method="post" action="/preorder/unsubscribe">
+<label for="email">메일 주소 · Email address</label>
+<input id="email" name="email" type="email" required maxlength="254" autocomplete="email" inputmode="email">
+<button type="submit">수신 거부 / Unsubscribe</button>
+</form>
+</section>`;
+}
+/** The one answer to every accepted request, whether or not the address was on the list. */
+export function unsubDoneHtml(t) {
+  const day = kstDay(t);
+  const block = (L, d, attr) => `<section class="done"${attr}><h2>${escHtml(L.doneTitle)}</h2><dl>` +
+    `<dt>${escHtml(L.sender)}</dt><dd>${escHtml(L.from)}</dd>` +
+    `<dt>${escHtml(L.date)}</dt><dd>${escHtml(d + L.kst)}</dd>` +
+    `<dt>${escHtml(L.result)}</dt><dd>${escHtml(L.resultText)}</dd></dl></section>`;
+  return block(UNSUB_TX.ko, day.ko, "") + "\n" + block(UNSUB_TX.en, day.en, ' lang="en"');
+}
+
+// deps: { stats(env, path, body), ipTags(req, env, what), audit(action, detail), json(o, status) }
+export async function preorderUnsubscribe(req, env, deps) {
+  const t = Date.now();
+  if (t > Date.parse(PRE.unsubUntil)) return unsubResponse(410, both(L => L.closed));
+  if (req.method === "GET" || req.method === "HEAD") return unsubResponse(200, unsubForm());
+  if (req.method !== "POST") return deps.json({ error: "method" }, 405);
+  const text = await readText(req);
+  let email = null;
+  if (text !== null) { try { email = preEmailStored(new URLSearchParams(text).get("email")); } catch { email = null; } }
+  if (!email) return unsubResponse(400, unsubForm("bad"));
+  let r;
+  try {
+    const { ip, net } = await deps.ipTags(req, env, "preorder-unsub");
+    r = await deps.stats(env, "/pre/unsub", { id: await preId(email), ip, net });
+  } catch { return unsubResponse(503, unsubForm("down")); }
+  if (r?.error === "ip") return unsubResponse(429, unsubForm("busy"));
+  if (!r?.ok) return unsubResponse(503, unsubForm("down"));
+  // the address is never logged: only that one row went
+  if (r.deleted) { try { await deps.audit("사전예약 수신 거부", "1건"); } catch { /* the row is gone; the record is extra */ } }
+  return unsubResponse(200, unsubDoneHtml(t));
 }
 
 // Quotes alone do not stop Excel or Sheets from running a cell that starts with = + - @ (or a tab or CR) as a formula,
@@ -205,7 +335,9 @@ export async function preorderAdmin(env, route, body, deps) {
     const r = await deps.stats(env, "/pre/export", {});
     const rows = r.rows || [];
     await deps.audit("사전예약 내보내기", rows.length + "건");
-    const csv = "email,plan,lang,at\r\n" + rows.map(x => [x.email, x.plan, x.lang, new Date(x.at).toISOString()].map(csvCell).join(",")).join("\r\n");
+    // adAt last (a Desktop script reads the columns before it by position); empty for a row taken before adConsent
+    const iso = v => v == null || v === "" ? "" : new Date(Number(v)).toISOString();
+    const csv = "email,plan,lang,at,adAt\r\n" + rows.map(x => [x.email, x.plan, x.lang, iso(x.at), iso(x.adAt)].map(csvCell).join(",")).join("\r\n");
     return { count: rows.length, csv };
   }
   if (route === "POST /preorders/delete") {
