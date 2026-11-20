@@ -149,8 +149,13 @@ public static class FpsOverlay
         if (read is not { } r || (pid != _shownPid && r.Steady < ShowAfterSeconds) || _run == null) { Hide(); return; }
         string big;
         string? small;
-        if (_frameGen is { Running: true, Generating: true } fg && int.TryParse(fg.OutFps, out var output) && output > 0)
-        { big = output.ToString(); small = Lang.T($"원본 {r.Fps:0}"); }
+        // While frame generation runs, the same two numbers as its page ("원본 FPS → 출력 FPS"): the engine counts the
+        // game frames it captured and the frames it showed over the same second. Event tracing counts every Present
+        // call of the game, also frames the screen never showed (above the refresh rate, or while the engine holds
+        // the GPU), so mixing the two made the window and the page disagree.
+        if (_frameGen is { Running: true } fg && int.TryParse(fg.OutFps, out var output) && output > 0
+            && int.TryParse(fg.SrcFps, out var source) && source > 0)
+        { big = output.ToString(); small = fg.Generating ? Lang.T($"원본 {source}") : $"1% {r.Low:0}"; }
         else { big = r.Fps.ToString("0"); small = $"1% {r.Low:0}"; }
         _window?.Show(front, Corner, big, Lower ? small : null);
         _shownPid = pid;
@@ -185,7 +190,7 @@ public static class FpsOverlay
         lower.IsCheckedChanged += (_, _) => Lower = lower.IsChecked == true;
         p.Children.Add(lower);
         p.Children.Add(Ui.Text("아래 줄은 최근 10초에서 가장 느린 1% 프레임으로 잰 1% 낮은 값이에요. 큰 숫자는 지난 1초의 FPS예요. " +
-                               "프레임 생성 중에는 큰 숫자가 출력 FPS, 아래 줄이 게임의 원본 FPS예요.", "muted", wrap: true));
+                               "프레임 생성을 켠 동안에는 프레임 생성 화면과 같은 값을 보여 줘요. 큰 숫자가 출력 FPS, 아래 줄이 원본 FPS예요.", "muted", wrap: true));
         var hide = new CheckBox { Content = "방송 · 캡처에서 숨기기", IsChecked = HideFromCapture };
         hide.IsCheckedChanged += (_, _) => HideFromCapture = hide.IsChecked == true;
         p.Children.Add(hide);
