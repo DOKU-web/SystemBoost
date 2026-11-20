@@ -16,12 +16,15 @@ namespace SystemBoost.App.Pages;
 
 public sealed class EulaDialog : Window
 {
+    // "꼭 확인할 내용": a summary shown above the contract, not contract text. Changing it does not change
+    // Eula.Version, so nobody is asked to agree again; the agreement itself is Assets/eula.txt.
     private static readonly string[] Important =
     {
         "잠금을 풀거나 프로그램과 키를 재배포하면 안 돼요. 어기면 키가 막히고 사용권이 끝날 수 있어요.",
         "안티치트를 쓰는 게임에서는 시험하지 않았어요. 게임 정책은 쓰기 전에 직접 확인해 주세요.",
         "오버클럭은 게임 강제 종료, 시스템 멈춤, 드라이버 오류를 일으킬 수 있고 보증에 영향을 줄 수 있어요.",
-        "키를 등록해 유료 기능을 쓰기 시작하면 청약철회가 제한될 수 있어요.",
+        "키를 받은 날부터 7일 안에 청약을 철회할 수 있어요. 키를 등록해 유료 기능을 쓰기 시작하면 청약철회가 제한될 수 있어요(제9조).",
+        "판매자의 고의나 중대한 과실로 생긴 손해는 배상해요. 경과실로 생긴 손해는 통상의 손해까지, 지급한 금액과 10만 원 가운데 큰 금액을 한도로 배상해요(무료 플랜만 쓰면 10만 원, 제10조).",
         "사용 통계는 선택이고 처음에는 꺼져 있어요. 아래 '사용 통계 보내기'를 켜면 앱이 켜져 있는 동안 무작위 설치 번호로 판매자 서버에 보내고, 끄면 아무것도 보내지 않아요. 키, 메일, 게임 이름은 보내지 않아요.",
         "추천 코드를 입력하면 코드와 무작위 기기 번호를 판매자 서버로 보내요. 기기 번호는 90일 뒤 지워요.",
     };

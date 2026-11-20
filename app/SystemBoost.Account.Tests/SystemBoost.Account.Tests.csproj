@@ -15,5 +15,8 @@
     <Compile Include="..\SystemBoost.App\Services\AccountRules.cs" Link="App\AccountRules.cs" />
     <Compile Include="..\SystemBoost.App\Services\AccountReplies.cs" Link="App\AccountReplies.cs" />
     <Compile Include="..\SystemBoost.App\Services\QrCode.cs" Link="App\QrCode.cs" />
+    <Compile Include="..\SystemBoost.App\Services\SellerInfo.cs" Link="App\SellerInfo.cs" />
+    <!-- the seller rows' labels must have English entries -->
+    <None Include="..\SystemBoost.App\Assets\lang.en.json" Link="lang.en.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

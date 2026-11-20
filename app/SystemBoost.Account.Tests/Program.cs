@@ -1,5 +1,5 @@
 // Tests for the account logic of the app (accounts v2): input rules, recovery code normalising, the server's error
-// words, reply parsing and the QR encoder. Run: dotnet run --project app/SystemBoost.Account.Tests -c Release
+// words, reply parsing, the QR encoder and the seller's details (SellerInfo.cs). Run: dotnet run --project app/SystemBoost.Account.Tests -c Release
 // Prints each failure, then "N passed, M failed"; the exit code is 1 when anything failed.
 using System;
 using System.Collections.Generic;
@@ -44,6 +44,7 @@ internal static class Program
             ("backup codes", BackupCodes), ("authenticator codes", TotpCodes), ("email", Emails), ("new passwords", Passwords),
             ("device", Device), ("small helpers", Helpers), ("error words", ErrorWords), ("replies", Replies),
             ("QR building blocks", QrBlocks), ("QR against python-qrcode", QrSweep), ("QR otpauth address", QrUri),
+            ("seller details", SellerDetails),
         };
         foreach (var (name, run) in groups)
         {
@@ -317,5 +318,46 @@ internal static class Program
             Same(QrReference.UriHashes[m], Hash(QrCode.FromBytes(Encoding.UTF8.GetBytes(QrReference.Uri), QrCode.Ecc.Medium, mask: m)), $"otpauth: mask {m}");
         var longer = "otpauth://totp/SystemBoost:" + new string('a', 240) + "%40example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=SystemBoost&digits=6&period=30";
         Check(QrCode.FromText(longer).Version <= 15, "otpauth with the longest email still fits a scannable version");
+    }
+
+    // ------------------------------------------------------------ SellerInfo (★ 플랜, 고객센터, 구매 확인서)
+    private static void SellerDetails()
+    {
+        static string Show(List<(string Label, string Value)> rows) => string.Join("|", rows.Select(r => r.Label + "=" + r.Value));
+
+        // all eight, in the order of the screen
+        var full = SupportSeller.Parse(J("""{"name":"N","rep":"R","address":"A","bizNo":"B","mailOrderNo":"M","email":"e@x","phone":"P","hours":"H"}"""));
+        Same("상호=N|대표자=R|주소=A|사업자등록번호=B|통신판매업 신고번호=M|메일=e@x|전화=P|문의 받는 시간=H", Show(full.Rows()), "all fields");
+        Check(!full.Empty, "all fields: not empty");
+
+        // GET /seller sends only the fields that are set
+        var some = SupportSeller.Parse(J("""{"name":"Riye","email":"a@b"}"""));
+        Same("상호=Riye|메일=a@b", Show(some.Rows()), "only name and email");
+        Same("", some.BizNo, "a missing field is empty");
+
+        // empty, blank, null, not a string: no row, nothing made up
+        var blanks = SupportSeller.Parse(J("""{"name":"","rep":"   ","address":null,"bizNo":123,"mailOrderNo":{"x":1},"email":[],"phone":true,"hours":"\t"}"""));
+        Same("", Show(blanks.Rows()), "blank or wrong-typed fields give no rows");
+        Check(blanks.Empty, "blank fields: empty");
+
+        // the values are trimmed; unknown fields are ignored
+        var trimmed = SupportSeller.Parse(J("""{"name":"  Riye \n","extra":"x","phone":" 010 "}"""));
+        Same("상호=Riye|전화=010", Show(trimmed.Rows()), "trimmed, unknown ignored");
+
+        // nothing set ({}), or not an object at all (offline: the caller passes default)
+        Same(0, SupportSeller.Parse(J("{}")).Rows().Count, "{} gives no rows");
+        Check(SupportSeller.Parse(J("{}")).Empty, "{} is empty");
+        Same(0, SupportSeller.Parse(J("[]")).Rows().Count, "an array gives no rows");
+        Same(0, SupportSeller.Parse(J("\"x\"")).Rows().Count, "a string gives no rows");
+        Same(0, SupportSeller.Parse(default).Rows().Count, "no element gives no rows");
+        Same(0, new SupportSeller().Rows().Count, "the fallback has no rows");
+
+        // the /support/info "seller" object parses the same as GET /seller's body
+        Same(full, SupportSeller.Parse(J("""{"name":"N","rep":"R","address":"A","bizNo":"B","mailOrderNo":"M","email":"e@x","phone":"P","hours":"H","notice":"n"}""")), "same record");
+
+        // every label has an English entry
+        var en = JsonSerializer.Deserialize<Dictionary<string, string>>(System.IO.File.ReadAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "lang.en.json")))!;
+        foreach (var (label, _) in full.Rows()) Check(en.ContainsKey(label), $"lang.en.json has [{label}]");
+        Check(en.ContainsKey("SystemBoost는 대한민국에서만 판매해요."), "lang.en.json has the Korea-only notice");
     }
 }

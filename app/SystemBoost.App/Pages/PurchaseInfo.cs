@@ -30,18 +30,12 @@ internal static class PurchaseInfo
     public const string MinorsNotice = "미성년자가 법정대리인의 동의 없이 결제하면 미성년자 본인이나 법정대리인이 그 계약을 취소할 수 있어요(사용권 계약 제3조 제11항).";
     private const string Limited = "결제가 확인되면 앱이 키를 이 PC에 바로 등록해요. 등록한 키로 유료 기능을 쓰기 시작하면 청약철회가 제한될 수 있어요(사용권 계약 제9조 제2항).";
     private const string NotAsShown = "표시·광고와 다르거나 계약과 다르게 제공되면 받은 날부터 3개월, 그 사실을 안 날부터 30일 안에 철회할 수 있어요(제9조 제3항).";
-    private const string HowToAsk = "환불은 앱의 고객센터 → '환불 요청'이나 판매자 서버의 도움말 페이지(/help)에서 요청해요.";
+    public const string KoreaOnly = "SystemBoost는 대한민국에서만 판매해요.";
+    private const string HowToAsk ="환불은 앱의 고객센터 → '환불 요청'이나 판매자 서버의 도움말 페이지(/help)에서 요청해요.";
 
     // ------------------------------------------------------------ the seller
     /// Only the fields the seller filled in, labelled as on 고객센터 and /help.
-    public static List<(string Label, string Value)> SellerRows(SupportSeller s)
-    {
-        var rows = new List<(string, string)>();
-        void Add(string label, string value) { if (!string.IsNullOrWhiteSpace(value)) rows.Add((label, value.Trim())); }
-        Add("상호", s.Name); Add("대표자", s.Rep); Add("주소", s.Address); Add("사업자등록번호", s.BizNo);
-        Add("통신판매업 신고번호", s.MailOrderNo); Add("메일", s.Email); Add("전화", s.Phone); Add("문의 받는 시간", s.Hours);
-        return rows;
-    }
+    public static List<(string Label, string Value)> SellerRows(SupportSeller s) => s.Rows();   // SellerInfo.cs
 
     /// The filled-in fields as rows; with none, one line that says why.
     public static Control Seller(SupportSeller s, bool reachable)
@@ -77,6 +71,7 @@ internal static class PurchaseInfo
         var days = Ui.Text(DaysLine(LegalDays), "label", wrap: true);
         p.Children.Add(days);
         foreach (var line in new[] { Limited, NotAsShown, HowToAsk, MinorsNotice }) p.Children.Add(Ui.Text(line, "muted", wrap: true));
+        p.Children.Add(Ui.Text(KoreaOnly, "muted", wrap: true));   // a notice, not contract text
         p.Children.Add(Links());
         p.AttachedToVisualTree += async (_, _) =>
         {

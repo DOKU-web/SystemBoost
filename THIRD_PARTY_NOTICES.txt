@@ -6440,6 +6440,7 @@ five statements with the same variable names, the comment "Set app user model ID
 property" and a link to Microsoft's documentation. Those shared parts are treated here
 as covered by MPL-2.0. Their Source Code Form is Velopack's source at tag 0.0.1298:
 https://github.com/velopack/velopack/blob/0.0.1298/src/bins/src/windows/shortcuts.rs
+(copy: https://github.com/DOKU-web/velopack (tag 0.0.1298))
 A copy of that file is also available from the seller on request (support page in the
 app). The MPL-2.0 text is at https://mozilla.org/MPL/2.0/. Nothing in the SystemBoost
 licence agreement limits the rights MPL-2.0 gives in that Source Code Form.
