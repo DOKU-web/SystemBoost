@@ -18,6 +18,14 @@ using System.Text.RegularExpressions;
 
 namespace SystemBoost.App.Services;
 
+/// A TextBlock whose text is shown as given, never translated: file contents such as THIRD_PARTY_NOTICES.txt, which
+/// is Korean and English already (a Korean line that is also a key in lang.en.json would otherwise turn English and
+/// repeat the English line under it).
+public sealed class VerbatimText : TextBlock
+{
+    protected override Type StyleKeyOverride => typeof(TextBlock);
+}
+
 public static class Lang
 {
     public const string Korean = "ko";
@@ -63,7 +71,7 @@ public static class Lang
 
     private static void Apply<T>(T target, Avalonia.StyledProperty<string?> property, string? text) where T : Avalonia.AvaloniaObject
     {
-        if (text == null) return;
+        if (text == null || target is VerbatimText) return;
         var done = T_(text);
         if (done != text) target.SetCurrentValue(property, done);
     }

@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Media;
 using Avalonia.Platform;
+using SystemBoost.App.Services;
 
 namespace SystemBoost.App.Pages;
 
@@ -26,7 +27,7 @@ public sealed class NoticesDialog : Window
             ItemsSource = lines,
             Margin = new Thickness(24, 20, 30, 20),   // ScrollViewer padding would push the text past the right edge
             ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel()),
-            ItemTemplate = new FuncDataTemplate<string>((s, _) => new TextBlock { Text = s, TextWrapping = TextWrapping.Wrap }),
+            ItemTemplate = new FuncDataTemplate<string>((s, _) => new VerbatimText { Text = s, TextWrapping = TextWrapping.Wrap }),
         };
         var scroll = new ScrollViewer { Content = list };
         scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
